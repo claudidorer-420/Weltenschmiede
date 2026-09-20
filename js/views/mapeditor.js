@@ -934,14 +934,16 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const m = t.dark != null ? Number(t.dark) : darkMeters({ senses: st?.senses || '', feet: held?.darkvision || 0 });
       return { x: t.x, y: t.y, size: t.size || 1, dark: cellsOf(m) };
     });
-    s.sicht = späher.length ? visibleCells(grid, licht, späher, { limit: cellsOf(Number(s.doc.sightLimit) || 0) }) : null;
-    s.sichtBereit = true;
+    // Immer rechnen – auch ohne Späher. Dann ist alles dunkel, statt versehentlich die ganze Karte zu zeigen.
+    s.sicht = visibleCells(grid, licht, späher, { limit: cellsOf(Number(s.doc.sightLimit) || 0) });
+    // Fertig ist die Sicht erst, wenn die Tokens wirklich geladen sind (useCol liefert vorher null)
+    s.sichtBereit = Array.isArray(tokensRaw);
     if (s.sicht) {
       if (!s.erkundet || s.erkundet.length !== s.sicht.length) s.erkundet = loadExplored(cid, params.id, s.sicht.length);
       if (rememberSeen(s.erkundet, s.sicht)) saveExplored(cid, params.id, s.erkundet);
     }
     s.dirty = true;
-  }, [tokens, grid, licht, mode]);
+  }, [tokensRaw, tokens, grid, licht, mode]);
   // Bildkarten kennen kein Land/Belag – dann auf Auswählen wechseln
   useEffect(() => {
     if (isImageMap(s.doc) && (tool === 'land' || tool === 'terrain')) setTool('select');
