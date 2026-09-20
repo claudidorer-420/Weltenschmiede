@@ -33,6 +33,8 @@ import { STYLES, isReal, isImageMap, MATS, SETS, SCRAWL_GENERATORS, r2, rnd, pic
 import { userAssets, userAssetInfo, userThumb, importAssetFiles, deleteUserAssets, updateUserAsset, ensureUserImages } from '../core/userassets.js';
 
 const PX = 40; // Bildschirm-Pixel pro Feld bei Zoom 1
+// Zwischenablage der Kartenwerkstatt (Strg+C/Strg+V) – bleibt über Kartenwechsel hinweg bestehen
+let ABLAGE = null;
 const MAX_CACHE_PX = 7e6;
 const REAL_CACHE_PX = 4.2e6;
 
@@ -924,7 +926,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   useEffect(() => { s.dirty = true; }, [tokensRaw, gm, mode, sel]);
   // Sichtfeld der Gruppe: alle Tokens mit Besitzer sehen für alle (geteilte Gruppensicht)
   useEffect(() => {
-    if (mode === 'build') { s.sicht = null; s.dirty = true; return; }
+    if (mode === 'build') { s.sicht = null; s.sichtBereit = true; s.dirty = true; return; }
     const späher = tokens.filter((t) => t.ownerUid && t.visibility !== 'gm').map((t) => {
       // Dunkelsicht: eigener Wert am Token, sonst aus dem Statblock, sonst aus dem Volk des Charakters
       const st = statFor(B, t);
@@ -933,6 +935,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       return { x: t.x, y: t.y, size: t.size || 1, dark: cellsOf(m) };
     });
     s.sicht = späher.length ? visibleCells(grid, licht, späher, { limit: cellsOf(Number(s.doc.sightLimit) || 0) }) : null;
+    s.sichtBereit = true;
     if (s.sicht) {
       if (!s.erkundet || s.erkundet.length !== s.sicht.length) s.erkundet = loadExplored(cid, params.id, s.sicht.length);
       if (rememberSeen(s.erkundet, s.sicht)) saveExplored(cid, params.id, s.erkundet);
@@ -1226,6 +1229,42 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     setSel(next);
   }
 
+  // ── Kopieren & Einfügen (Strg+C / Strg+V) ──
+  // Die Ablage lebt im Modul, nicht im Dokument: so lässt sich auch zwischen zwei Karten einfügen.
+  function kopierenSel() {
+    if (!sel.length) return;
+    const stuecke = sel.map((x) => {
+      const it = itemsOf(x.kind).find((o) => o.id === x.id);
+      return it ? { kind: x.kind, it: JSON.parse(JSON.stringify(it)) } : null;
+    }).filter(Boolean);
+    if (!stuecke.length) return;
+    // Bezugspunkt: linke obere Ecke der Auswahl – beim Einfügen liegt alles wieder gleich zueinander
+    const box = s.selBox();
+    ABLAGE = { stuecke, ox: box ? box.cx : 0, oy: box ? box.cy : 0 };
+    toast(`${stuecke.length} ${stuecke.length === 1 ? 'Element' : 'Elemente'} kopiert`, 'success');
+  }
+
+  function einfuegenSel({ x: zx, y: zy } = {}) {
+    if (!ABLAGE?.stuecke?.length) return;
+    // Ziel: die Mausposition, sonst leicht versetzt neben dem Original
+    const zielX = zx ?? ABLAGE.ox + 1;
+    const zielY = zy ?? ABLAGE.oy + 1;
+    const dx = r2(zielX - ABLAGE.ox);
+    const dy = r2(zielY - ABLAGE.oy);
+    const add = { objects: [...s.doc.objects], lights: [...(s.doc.lights || [])], labels: [...s.doc.labels], shapes: [...s.doc.shapes], terrain: [...s.doc.terrain] };
+    const next = [];
+    for (const st of ABLAGE.stuecke) {
+      const copy = { ...JSON.parse(JSON.stringify(st.it)), id: uid(6) };
+      if (copy.pts) copy.pts = copy.pts.map((v, i) => r2(v + (i % 2 ? dy : dx)));
+      else { copy.x = r2((Number(copy.x) || 0) + dx); copy.y = r2((Number(copy.y) || 0) + dy); }
+      add[listOf(st.kind)].push(copy);
+      next.push({ kind: st.kind, id: copy.id });
+    }
+    commit(add, { geom: ABLAGE.stuecke.some((st) => st.kind === 'shape' || st.kind === 'terrain') });
+    setSel(next);
+    setTool('select');
+  }
+
   // ── Zeichenschleife ──
   useEffect(() => {
     if (!active) return undefined;
@@ -1408,12 +1447,18 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
         }
       }
-      // Spielersicht: nie gesehen = schwarz, schon erkundet aber gerade nicht im Blick = 75 % dunkel
-      if (!s.gm && s.sicht) {
-        for (let i = 0; i < s.sicht.length; i++) {
-          if (s.sicht[i]) continue;
-          ctx.fillStyle = s.erkundet?.[i] ? 'rgba(0,0,0,.75)' : '#05070a';
-          ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
+      // Spielersicht: nie gesehen = schwarz, schon erkundet aber gerade nicht im Blick = 75 % dunkel.
+      // Solange das Sichtfeld noch nicht steht, bleibt alles schwarz – sonst blitzt die ganze Karte auf.
+      if (!s.gm) {
+        if (!s.sichtBereit) {
+          ctx.fillStyle = '#05070a';
+          ctx.fillRect(-1, -1, d.w + 2, d.h + 2);
+        } else if (s.sicht) {
+          for (let i = 0; i < s.sicht.length; i++) {
+            if (s.sicht[i]) continue;
+            ctx.fillStyle = s.erkundet?.[i] ? 'rgba(0,0,0,.75)' : '#05070a';
+            ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
+          }
         }
       }
     }
@@ -1899,6 +1944,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       const w = toW(p);
+      s.lastW = w;                      // letzte Zeigerposition – u. a. Ziel beim Einfügen (Strg+V)
       const a = s.act;
       if (!a) {
         if (s.mode !== 'build' && s.B) {
@@ -2162,6 +2208,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       if (e.key === 'Enter' && s.draft) { s.finishDraft?.(); return; }
       if ((e.key === 'Delete' || e.key === 'Backspace') && s.sel.length) { e.preventDefault(); deleteSel(); return; }
       if (mod && e.key.toLowerCase() === 'd' && s.sel.length) { e.preventDefault(); duplicateSel(); return; }
+      if (mod && e.key.toLowerCase() === 'c' && s.sel.length) { e.preventDefault(); kopierenSel(); return; }
+      if (mod && e.key.toLowerCase() === 'v' && ABLAGE) { e.preventDefault(); einfuegenSel(s.lastW || undefined); return; }
       if (e.key.toLowerCase() === 'r' && s.sel.length && !mod) { rotateSel(e.shiftKey ? 15 : 90); return; }
       if (e.key.toLowerCase() === 'f' && s.sel.length && !mod) { flipSel(); return; }
       if ((e.key === '+' || e.key === '-') && s.sel.length && !mod) { scaleSel(e.key === '+' ? 1.1 : 1 / 1.1); return; }
@@ -2429,7 +2477,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           ${it.roof ? html`<button type="button" class="ws-link tiny" onClick=${() => updSel({ roof: '' }, true)}>→ Dach entfernen</button>` : null}` : null}
         ${kind === 'terrain' && real ? html`<div class="tex-grid mini">${terrainGroups(matMod).flatMap((g) => g.items).map((i2) => html`<button key=${i2.key} type="button" class=${it.mat === i2.key ? 'active' : ''} title=${i2.label} onClick=${() => updSel({ mat: i2.key }, true)}>
           ${i2.tex ? html`<img src=${texThumb(i2.tex)} alt="" loading="lazy" />` : html`<span class="sw" style=${{ background: i2.color }}></span>`}<span>${i2.label}</span></button>`)}</div>` : null}` : null}
-      <div class="btn-row"><${Btn} size="sm" icon="copy" onClick=${duplicateSel}>Duplizieren<//><${Btn} size="sm" kind="danger" icon="trash" onClick=${deleteSel}>Löschen<//></div>
+      <div class="btn-row"><${Btn} size="sm" icon="copy" onClick=${duplicateSel}>Duplizieren<//><${Btn} size="sm" icon="clipboard" title="Strg+C" onClick=${kopierenSel}>Kopieren<//><${Btn} size="sm" kind="danger" icon="trash" onClick=${deleteSel}>Löschen<//></div>
     <//>`;
   };
 

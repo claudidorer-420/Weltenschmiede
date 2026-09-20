@@ -305,17 +305,10 @@ export function exploreCb(B, t) {
 }
 export const cbForBar = (B, t) => cbOfTok(B, t) || (B.explore ? exploreCb(B, t) : null);
 
-async function armAction(B, t, a) {
+function armAction(B, t, a) {
   const cb = cbForBar(B, t);
   if (!cb) { toast('Dieser Token ist nicht im Kampf.', 'error'); return; }
   if (!a.state?.ok) { toast(a.state?.why || 'Gerade nicht möglich', 'info'); return; }
-  // Ein Angriff beim Erkunden beginnt den Kampf – danach entscheidet die Initiative
-  if (a.state?.startsCombat && !B.combat.active) {
-    toast('Angriff! Der Kampf beginnt, die Initiative wird gewürfelt.', 'info');
-    B.pending = null;
-    await startCombat(B);
-    return;
-  }
   const char = B.ctx.charOf(cb);
   let slots = [];
   // Aus einer Schriftrolle wird ohne Zauberplatz gewirkt – also auch keinen abfragen
@@ -611,6 +604,8 @@ async function execute(B) {
   B._tv = null;
   B.rerender();
   B.redraw();
+  // Ein Angriff beim Erkunden beginnt den Kampf – erst jetzt, mit dem fertigen Wurf
+  if (a.state?.startsCombat && !B.combat.active) toast('Angriff! Der Kampf beginnt, die Initiative wird gewürfelt.', 'info');
   if (char) await A.consumeOnUse(cb, char, a, ev);
   await sendEvent(ev).catch((e) => toast(e.message, 'error'));
 }
@@ -1158,11 +1153,16 @@ export function drawBattle(ctx, s, k) {
   const H = s.doc.h;
   const tm = performance.now();
   // Spieler sehen nur, was im Sichtfeld der Gruppe liegt (und was der Nebel freigibt)
+  // Eine Figur ist zu sehen, sobald irgendeines ihrer Felder im Blick liegt – nicht nur die linke obere Ecke
+  const irgendeinFeld = (t, pruef) => {
+    const n = t.size || 1;
+    for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) if (pruef((Math.floor(t.y) + dy) * W + Math.floor(t.x) + dx)) return true;
+    return false;
+  };
   const hidden = (t) => {
     if (B.gm) return false;
-    const i = Math.floor(t.y) * W + Math.floor(t.x);
-    if (s.fogOn && s.fog && s.fog[i] !== '1') return true;
-    if (s.sicht && !s.sicht[i] && !t.ownerUid) return true;   // eigene Gruppe bleibt immer sichtbar
+    if (s.fogOn && s.fog && !irgendeinFeld(t, (i) => s.fog[i] === '1')) return true;
+    if (s.sicht && !t.ownerUid && !irgendeinFeld(t, (i) => s.sicht[i])) return true;   // eigene Gruppe bleibt immer sichtbar
     return false;
   };
   B._condHit = [];                       // Trefferflächen der Zustandsquadrate für die Infoblase

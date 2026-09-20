@@ -1394,16 +1394,49 @@ function resolveCounter(x, c, a, ev, ctx, cs) {
   return countered;
 }
 
+// Ein Angriff im Erkunden-Modus löst den Kampf aus – erst jetzt, nicht schon beim Anvisieren.
+// Wer zuschlägt, hat den ersten Zug; seine Aktion ist damit für Runde 1 verbraucht.
+export async function starteKampf(angreiferId = null) {
+  await mutateCombat((x) => {
+    if (x.active) return x;
+    const ctx = makeCtx(x);
+    for (const c of x.combatants) if (c.init == null) E.rollInitiative(x, c, ctx);
+    x.combatants = E.sortInitiative(x.combatants);
+    x.zones = [];
+    x.results = [];
+    x.prompts = [];
+    E.beginCombat(x, ctx);
+    const i = x.combatants.findIndex((c) => c.id === angreiferId);
+    if (i >= 0 && i !== x.turn) {
+      x.turn = i;
+      E.beginTurn(x, x.combatants[i], ctx);
+      E.log(x, `▶ ${x.combatants[i].name} schlägt zuerst zu`, 'turn');
+    }
+    return x;
+  });
+}
+
 export async function handleAct(ev) {
-  const x0 = await loadCombat();
+  let x0 = await loadCombat();
   await ensureBattleContext(x0.mapId);
   const posOpt = ev.pos ? { override: ev.pos } : {};
-  const ctx0 = makeCtx(x0, posOpt);
-  const actor = cbOf(x0, ev.actor);
+  let ctx0 = makeCtx(x0, posOpt);
+  let actor = cbOf(x0, ev.actor);
   if (!actor) return;
-  const acts = await catalog(x0, actor, ctx0);
-  const a = acts.find((y) => y.key === ev.key);
+  let acts = await catalog(x0, actor, ctx0);
+  let a = acts.find((y) => y.key === ev.key);
   if (!a) { await reject(ev, actor, 'Diese Aktion ist nicht (mehr) verfügbar.'); return; }
+  // Angriff im Erkunden-Modus: jetzt beginnt der Kampf, danach alles frisch einlesen
+  if (!x0.active && a.state?.startsCombat) {
+    await starteKampf(actor.id);
+    x0 = await loadCombat();
+    ctx0 = makeCtx(x0, posOpt);
+    actor = cbOf(x0, ev.actor);
+    if (!actor) return;
+    acts = await catalog(x0, actor, ctx0);
+    a = acts.find((y) => y.key === ev.key);
+    if (!a) { await reject(ev, actor, 'Diese Aktion ist nicht (mehr) verfügbar.'); return; }
+  }
   if (!x0.active && !a.state?.prep) return;
   // Zauberplätze und Ladungen verbucht der Spieler schon im eigenen Bogen – bei Charakteren prüft die SL sie nicht noch einmal
   const clientPaid = actor.isPC && (a.state.slot || a.state.uses);

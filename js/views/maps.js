@@ -47,25 +47,41 @@ async function maskiere(src, bits, w, h) {
   return cv.toDataURL('image/webp', 0.8);
 }
 
-function MapCard({ m, gm }) {
+function MapCard({ m, gm, active }) {
   const cid = useStore(app, (s) => s.cid);
-  const [thumb, setThumb] = useState(m.type === 'scrawl' ? m.thumb || '' : '');
+  // Spieler bekommen die Vorschau erst zu sehen, wenn sie maskiert ist – sonst blitzt die ganze Karte auf
+  const eigene = gm || m.type !== 'scrawl';
+  const [thumb, setThumb] = useState(eigene ? m.thumb || '' : '');
+  const [fertig, setFertig] = useState(eigene);
   useEffect(() => {
     let lebt = true;
     if (m.type !== 'scrawl') {
+      setFertig(true);
       if (m.fileId) fileUrl(cid, m.fileId).then((u) => lebt && setThumb(u));
       return () => { lebt = false; };
     }
-    const bits = gm ? '' : exploredBits(cid, m.id);
-    // Spieler sehen nur, was sie erkundet haben – der Rest der Vorschau bleibt schwarz
-    if (!gm && m.thumb && bits.includes('1')) {
-      maskiere(m.thumb, bits, m.w || 36, m.h || 26).then((u) => lebt && setThumb(u)).catch(() => lebt && setThumb(''));
-    } else setThumb(m.thumb || '');
+    if (gm) {
+      setThumb(m.thumb || '');
+      setFertig(true);
+      return () => { lebt = false; };
+    }
+    // Erkundetes Gebiet frisch lesen – es wächst, während die Gruppe die Karte begeht
+    const bits = exploredBits(cid, m.id);
+    if (!m.thumb || !bits.includes('1')) {
+      setThumb('');
+      setFertig(true);
+      return () => { lebt = false; };
+    }
+    setFertig(false);
+    maskiere(m.thumb, bits, m.w || 36, m.h || 26)
+      .then((u) => { if (lebt) { setThumb(u); setFertig(true); } })
+      .catch(() => { if (lebt) { setThumb(''); setFertig(true); } });
     return () => { lebt = false; };
-  }, [m.fileId, m.thumb, gm]);
-  // Spieler sehen die Vorschau erst, wenn die Gruppe die Karte betreten hat
+    // active: beim Zurückwechseln auf die Übersicht neu rechnen, sonst bliebe der alte Stand stehen
+  }, [m.fileId, m.thumb, gm, active]);
+
   const erkundet = gm || m.type !== 'scrawl' || wasExplored(cid, m.id);
-  const bild = erkundet ? thumb : '';
+  const bild = erkundet && fertig ? thumb : '';
   return html`<div class="card click" onClick=${() => openView('map', { id: m.id, title: m.name })}>
     <div class=${`map-card-img${erkundet ? '' : ' unerkundet'}`} style=${bild ? { backgroundImage: `url(${bild})` } : {}}>
       ${bild ? null : html`<${Icon} name=${erkundet ? (m.type === 'battle' ? 'grid' : m.type === 'scrawl' ? 'castle' : 'map') : 'compass'} size=${34} />`}
@@ -266,7 +282,7 @@ export async function openBattle() {
   openView('map', { id: r.id, title: r.title, play: 1 });
 }
 
-export function MapsView({ tabId }) {
+export function MapsView({ tabId, active }) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const cid = useStore(app, (s) => s.cid);
   const maps = useVisibleCol('maps');
@@ -347,7 +363,7 @@ export function MapsView({ tabId }) {
         ${gm ? html`<${Btn} kind="primary" icon="castle" onClick=${createScrawl}>Kartenwerkstatt<//><${Btn} icon="image" loading=${busy === 'img'} onClick=${createImageMap}>Karte aus Bild<//><${Btn} icon="map" loading=${busy === 'world'} onClick=${createWorld}>Weltkarte hochladen<//><${Btn} icon="sparkles" loading=${busy === 'ai'} onClick=${createAi}>Per KI malen<//><${Btn} kind="ghost" icon="grid" onClick=${createBattle}>Einfache Rasterkarte<//>` : null}
         <span class="sub">${gm ? 'Kartenwerkstatt: Räume, Gänge und Gelände aufziehen – texturierte Böden, Wände und Licht entstehen automatisch, dazu über 300 Objekte, Streu-Pinsel, Tokens und Nebel. Weltkarten mit verlinkten Pins (Farbcodes wie „(Blau 2)“ werden erkannt). Spieler sehen nur, was du freigibst.' : 'Karten, die die Spielleitung freigegeben hat.'}</span></div>
       ${!maps ? html`<div class="empty"><span class="spinner" /></div>` : !maps.length ? html`<${Empty} icon="map" title="Noch keine Karten">${gm ? 'Lade deine Weltkarte hoch oder erstelle eine Battlemap.' : 'Die Spielleitung hat noch keine Karte freigegeben.'}<//>`
-        : html`<div class="grid cards">${sortBy(maps, (m) => m.createdAt || 0, -1).map((m) => html`<${MapCard} key=${m.id} m=${m} gm=${gm} />`)}</div>`}
+        : html`<div class="grid cards">${sortBy(maps, (m) => m.createdAt || 0, -1).map((m) => html`<${MapCard} key=${m.id} m=${m} gm=${gm} active=${active !== false} />`)}</div>`}
     </div>
   <//>`;
 }

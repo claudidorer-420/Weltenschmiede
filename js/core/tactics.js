@@ -277,6 +277,8 @@ export function cellsOnLine(x0, y0, x1, y1) {
   }
   return out;
 }
+// Freie Sichtlinie zwischen zwei Punkten (Weltkoordinaten) – für Sichtfelder, die nicht in Quadraten denken
+export const rayFree = (grid, ax, ay, bx, by, blocks = null) => (!grid ? true : lineFree(grid, ax, ay, bx, by, (i) => !!grid.opaque?.[i] || !!blocks?.has(i)));
 function lineFree(grid, ax, ay, bx, by, opaque) {
   const cells = cellsOnLine(ax, ay, bx, by);
   for (let i = 1; i < cells.length - 1; i++) {

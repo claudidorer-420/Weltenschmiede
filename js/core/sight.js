@@ -1,6 +1,6 @@
 // Was sehen die Spieler? Lichtkarte, Sichtfeld (Sichtlinie + Dunkelsicht) und erkundetes Gebiet.
 // Wird von der Kartenansicht benutzt: unerkundet = schwarz, erkundet aber gerade nicht sichtbar = 75 % dunkel.
-import { pointInSight, CELL_M } from './tactics.js';
+import { pointInSight, rayFree, CELL_M } from './tactics.js';
 
 export const DARK_M = 18;                 // Dunkelsicht der meisten Völker: 18 m
 export const cellsOf = (m) => (Number(m) || 0) / CELL_M;
@@ -42,6 +42,11 @@ export function lightMap(doc, grid, { glows = [] } = {}) {
 // Sichtfeld aller Betrachter (Tokens der Gruppe).
 // viewer: { x, y, size, dark } – dark = Dunkelsicht in Feldern.
 // limit: Sichtweite in Feldern (0 = unbegrenzt, z. B. Nebel oder Regen).
+// Blickstrahlen gehen von der Mitte der Figur aus – ein Feld gilt als gesehen, sobald
+// irgendein Punkt darin getroffen wird (Mitte oder eine der vier Ecken). Dadurch franst die
+// Sicht nicht in Quadraten aus, sondern läuft an Kanten sauber entlang.
+const ZIELE = [[0.5, 0.5], [0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]];
+
 export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
   const W = grid.w;
   const H = grid.h;
@@ -52,11 +57,10 @@ export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
     const n = v.size || 1;
     const cx = v.x + n / 2;
     const cy = v.y + n / 2;
-    const reich = max;   // die eigentliche Grenze zieht unten das Licht bzw. die Dunkelsicht
-    const x0 = Math.max(0, Math.floor(cx - reich - 1));
-    const x1 = Math.min(W - 1, Math.ceil(cx + reich + 1));
-    const y0 = Math.max(0, Math.floor(cy - reich - 1));
-    const y1 = Math.min(H - 1, Math.ceil(cy + reich + 1));
+    const x0 = Math.max(0, Math.floor(cx - max - 1));
+    const x1 = Math.min(W - 1, Math.ceil(cx + max + 1));
+    const y0 = Math.max(0, Math.floor(cy - max - 1));
+    const y1 = Math.min(H - 1, Math.ceil(cy + max + 1));
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const i = idx(W, x, y);
@@ -65,12 +69,26 @@ export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
         if (d > max) continue;
         // Im Dunkeln reicht nur die Dunkelsicht; beleuchtete Felder sieht man, solange die Sicht frei ist
         if (!licht[i] && d > (v.dark || 0)) continue;
-        if (d > 0.8 && !pointInSight(grid, { x: v.x, y: v.y, size: n }, x + 0.5, y + 0.5)) continue;
-        out[i] = 1;
+        if (d <= 0.8) { out[i] = 1; continue; }
+        if (ZIELE.some(([fx, fy]) => rayFree(grid, cx, cy, x + fx, y + fy))) out[i] = 1;
       }
     }
   }
   return out;
+}
+
+// Sieht die Gruppe diese Figur? Es reicht, wenn irgendein Feld der Figur im Blick liegt –
+// ein Troll verschwindet nicht, nur weil seine linke obere Ecke hinter einer Wand steckt.
+export function tokenVisible(sicht, w, t) {
+  if (!sicht) return true;
+  const n = t.size || 1;
+  for (let dy = 0; dy < n; dy++) {
+    for (let dx = 0; dx < n; dx++) {
+      const i = (t.y + dy) * w + t.x + dx;
+      if (sicht[i]) return true;
+    }
+  }
+  return false;
 }
 
 // Erkundetes Gebiet je Karte und Nutzer – liegt im Gerätespeicher, wächst nur an
