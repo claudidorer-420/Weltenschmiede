@@ -12,8 +12,8 @@ import { generateImage } from '../core/ai.js';
 import { normalizeMonster } from '../ui/statblock.js';
 import { useCol } from '../core/hooks.js';
 import { ViewFrame } from '../ui/frame.js';
-import { Icon, Btn, Statblock, toast, confirmDialog, Empty, useMedia, openModal } from '../ui/components.js';
-import { MonsterArt, creatureType } from '../ui/art.js';
+import { Icon, Btn, Statblock, ViewToggle, toast, confirmDialog, Empty, useMedia, openModal } from '../ui/components.js';
+import { MonsterArt, PortraitArt, creatureType } from '../ui/art.js';
 import { CREATURE_TYPES } from '../data/artmap.js';
 import { crToNumber } from '../data/rules5e.js';
 import { ORIGINS, DND, originColor, originOf, originShort, namesFor, matchNames, hasNameList } from '../data/origins.js';
@@ -37,7 +37,7 @@ function MonsterDetail({ m, src, busy, onCopy, onCombat, onNote, onPaint, onDele
   const t = creatureType(m.type);
   return html`<div class="best-detail stack">
     <div class="best-hero" style=${{ '--mc': t.color }}>
-      <${MonsterArt} m=${m} size=${132} cr=${true} round=${false} />
+      <${PortraitArt} m=${m} w=${132} cr=${true} />
       <div class="stack sm" style="min-width:0">
         <h2>${m.name}</h2>
         <div class="muted small">${[m.size, m.type].filter(Boolean).join(' ')}${m.alignment ? `, ${m.alignment}` : ''}</div>
@@ -61,7 +61,60 @@ function MonsterDetail({ m, src, busy, onCopy, onCombat, onNote, onPaint, onDele
   </div>`;
 }
 
-export function BestiaryView({ tabId }) {
+// Spielerfassung: nur besiegte Monster, ohne Bearbeiten
+function KillBestiary({ tabId }) {
+  const cid = useStore(app, (s) => s.cid);
+  const kills = useCol(cid ? col('kills') : null, { where: [['visibility', '==', 'players']] });
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState(null);
+  const wide = useMedia('(min-width: 1000px)');
+  const [srd, setSrd] = useState(null);
+  useEffect(() => { import('../data/monsters-srd.js').then((m) => setSrd(m.MONSTERS)); }, []);
+  const liste = (kills || []).filter((k) => !q || k.name.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b2) => crToNumber(a.cr) - crToNumber(b2.cr) || a.name.localeCompare(b2.name, 'de'));
+  const voll = (k) => (k.srdId && srd ? srd.find((m) => m.id === k.srdId) : null) || { ...k, id: k.srdId || k.key };
+  const current = sel ? liste.find((k) => k.key === sel) : null;
+  const detail = (k) => html`<div class="best-detail stack">
+    <div class="best-hero" style=${{ '--mc': creatureType(k.type).color }}>
+      <${PortraitArt} m=${voll(k)} w=${132} cr=${true} />
+      <div class="stack sm" style="min-width:0">
+        <h2>${k.name}</h2>
+        <div class="muted small">${[k.size, k.type].filter(Boolean).join(' ')}</div>
+        <div class="chips"><span class="badge gold">HG ${k.cr || '?'}</span><span class="badge">${k.count || 1}× besiegt</span></div>
+      </div>
+    </div>
+    ${voll(k)?.actions ? html`<${Statblock} monster=${voll(k)} />` : html`<div class="small muted">Von dieser Kreatur kennt ihr bisher nur das Aussehen.</div>`}
+  </div>`;
+  const waehlen = (k) => {
+    setSel(k.key);
+    if (!wide) openModal(() => html`<div class="modal-body">${detail(k)}</div>`, { title: k.name, icon: 'ghost', size: 'lg' });
+  };
+  return html`<${ViewFrame} tabId=${tabId} title="Bestiarium">
+    <div class="page wide">
+      <div class="page-head"><h1><${Icon} name="ghost" size=${24} />Euer Bestiarium</h1>
+        <span class="sub">Jede Kreatur, die eure Gruppe besiegt hat – mit Bild und allem, was ihr über sie gelernt habt.</span></div>
+      <div class=${`best-layout${current && wide ? ' with-detail' : ''}`}>
+        <div class="stack">
+          <div class="search-box" style="margin:0"><${Icon} name="search" size=${15} class="i" /><input class="input" placeholder="Suchen …" value=${q} onInput=${(e) => setQ(e.target.value)} /></div>
+          ${!kills ? html`<div class="empty"><span class="spinner lg" /></div>`
+            : !liste.length ? html`<${Empty} icon="ghost" title="Noch nichts erlegt">Sobald ihr eine Kreatur besiegt, taucht sie hier mit Bild und Werten auf.<//>`
+            : html`<div class="best-grid">${liste.map((k) => html`<button type="button" key=${k.key} class=${`best-card${k.key === sel ? ' on' : ''}`} onClick=${() => waehlen(k)}>
+                <${MonsterArt} m=${voll(k)} size=${54} cr=${true} />
+                <span class="bc-main"><b>${k.name}</b><small>${[k.size, k.type].filter(Boolean).join(' ')}</small><small>${k.count || 1}× besiegt</small></span>
+              </button>`)}</div>`}
+        </div>
+        ${current && wide ? html`<aside class="best-side">${detail(current)}</aside>` : null}
+      </div>
+    </div>
+  <//>`;
+}
+
+export function BestiaryView(props) {
+  const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
+  return gm ? html`<${GmBestiary} ...${props} />` : html`<${KillBestiary} ...${props} />`;
+}
+
+function GmBestiary({ tabId }) {
   const cid = useStore(app, (s) => s.cid);
   const own = useCol(cid ? col('monsters') : null);
   const [srd, setSrd] = useState(null);
@@ -170,8 +223,9 @@ export function BestiaryView({ tabId }) {
 
   return html`<${ViewFrame} tabId=${tabId} title="Bestiarium">
     <div class="page wide">
-      <div class="page-head"><h1><${Icon} name="ghost" size=${24} />Bestiarium</h1>
-        <span class="sub">Alle Monster des SRD auf Deutsch plus deine eigenen Statblocks – sortiert nach Welten wie im Encounter-Generator, mit Bild, bereit für Kampf-Tracker und Kampfkarte.</span></div>
+      <div class="page-head head-tools"><h1><${Icon} name="ghost" size=${24} />Bestiarium</h1>
+        <span class="sub">Alle Monster des SRD auf Deutsch plus deine eigenen Statblocks – mit Bild, bereit für Kampf-Tracker und Kampfkarte.</span>
+        <div class="head-tools-btns"><${ViewToggle} value="bestiary" options=${[{ value: 'bestiary', label: 'Bestiarium', icon: 'ghost', view: 'bestiary' }, { value: 'encounter', label: 'Encounter-Generator', icon: 'swords', view: 'encounter' }]} /></div></div>
       <div class=${`best-layout${current && wide ? ' with-detail' : ''}`}>
         <div class="stack">
           <div class="sm-tabs">

@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-19-0618';
+const VERSION = 'ws-2026-09-20-1300';
 const CDN_CACHE = 'ws-cdn-v1';
 // Kartenbausteine (Texturen, Stempel) sind unveränderlich und überleben Updates
 const ASSET_CACHE = 'ws-assets-v1';
@@ -18,6 +18,7 @@ const SHELL = [
   './js/core/ai.js',
   './js/core/app.js',
   './js/core/archive.js',
+  './js/core/clock.js',
   './js/core/combat.js',
   './js/core/db.js',
   './js/core/db-cloud.js',
@@ -33,6 +34,7 @@ const SHELL = [
   './js/core/relay.js',
   './js/core/rolls.js',
   './js/core/settings.js',
+  './js/core/sight.js',
   './js/core/store.js',
   './js/core/tactics.js',
   './js/core/userassets.js',
@@ -48,8 +50,11 @@ const SHELL = [
   './js/data/mapgen.js',
   './js/data/monsternames.js',
   './js/data/monsters-srd.js',
+  './js/data/npcstat.js',
   './js/data/origins.js',
+  './js/data/portraits.js',
   './js/data/rules5e.js',
+  './js/data/scrolls.js',
   './js/data/spellfx.js',
   './js/data/spells.js',
   './js/data/spells-2014.js',
@@ -70,11 +75,13 @@ const SHELL = [
   './js/ui/account.js',
   './js/ui/aiout.js',
   './js/ui/art.js',
+  './js/ui/clock.js',
   './js/ui/components.js',
   './js/ui/dice3d.js',
   './js/ui/dicetray.js',
   './js/ui/frame.js',
   './js/ui/palette.js',
+  './js/ui/portraitcrop.js',
   './js/ui/prompthost.js',
   './js/ui/shell.js',
   './js/ui/statblock.js',
@@ -102,6 +109,9 @@ const SHELL = [
   './js/views/maprender.js',
   './js/views/maps.js',
   './js/views/npc.js',
+  './js/views/npcedit.js',
+  './js/views/npclib.js',
+  './js/views/npcnote.js',
   './js/views/oracle.js',
   './js/views/rules.js',
   './js/views/settings.js',

@@ -8,11 +8,16 @@ export const fmtMeters = (m) => `${String(Math.round((Number(m) || 0) * 10) / 10
 const num = (s) => parseFloat(String(s).replace(',', '.'));
 
 export function sizeCells(m) {
-  if (m?.sizeKey) return SIZE_CELLS[m.sizeKey] || 1;
+  // Die deutsche Größenangabe zählt zuerst – manche SRD-Einträge tragen ein falsches sizeKey
+  // („Großes Tier“ mit sizeKey medium). „Mittelgroß“ enthält „groß“ und wird daher vorher abgefangen.
   const t = String(m?.size || '').toLowerCase();
-  if (/gigant|gargant/.test(t)) return 4;
-  if (/riesig|huge/.test(t)) return 3;
-  if (/groß|large/.test(t)) return 2;
+  if (t) {
+    if (/gigant|gargant/.test(t)) return 4;
+    if (/riesig|huge/.test(t)) return 3;
+    if (/mittelgro|medium|klein|small|winzig|tiny/.test(t)) return 1;
+    if (/gro|large/.test(t)) return 2;
+  }
+  if (m?.sizeKey) return SIZE_CELLS[m.sizeKey] || 1;
   return 1;
 }
 
@@ -193,6 +198,11 @@ export function parseAttacks(m) {
     const damage = [];
     for (const mm of txt.matchAll(/\((\d+\s*[WwDd]\s*\d+(?:\s*[+−-]\s*\d+)?)\)\s*([^.,;()]{0,28}?)(?:schaden|damage)/gi)) {
       damage.push({ dice: mm[1].replace(/\s+/g, '').replace(/[Ww]/, 'd').replace('−', '-'), type: dmgType(`${mm[2]}schaden`) });
+    }
+    // Fester Schaden ohne Würfel („Treffer: 1 Wuchtschaden“) – kommt in eigenen Statblöcken vor
+    if (!damage.length) {
+      const fm = /(?:Treffer|Hit):\s*(\d+)\s*([^.,;()]{0,28}?)(?:schaden|damage)/i.exec(txt);
+      if (fm) damage.push({ dice: fm[1], type: dmgType(`${fm[2]}schaden`) });
     }
     const hit = /([+−-]\s*\d+)\s*(?:auf Treffer|zum Treffen|zum Treffer|to hit)/i.exec(txt);
     let range = null;

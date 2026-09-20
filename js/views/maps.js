@@ -3,6 +3,7 @@
 import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
 import { app, vault, col, myUid, getIndex, noteById, isGM, visFields } from '../core/app.js';
+import { SIGHT_LIMITS, wasExplored, exploredBits } from '../core/sight.js';
 import { db } from '../core/db.js';
 import { openView, openNote } from '../core/workspace.js';
 import { settings } from '../core/settings.js';
@@ -26,15 +27,50 @@ import { detectGrid, evenGrid } from '../lib/gridfind.js';
 const cssVar = (n, fb) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb;
 
 // ───────────────────────── Kartenliste ─────────────────────────
+// Vorschau für Spieler: alles, was die Gruppe noch nicht gesehen hat, wird geschwärzt
+async function maskiere(src, bits, w, h) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  const cv = document.createElement('canvas');
+  cv.width = img.width;
+  cv.height = img.height;
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const bw = img.width / w;
+  const bh = img.height / h;
+  ctx.fillStyle = '#05070a';
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (bits[y * w + x] === '1') continue;
+      ctx.fillRect(Math.floor(x * bw), Math.floor(y * bh), Math.ceil(bw) + 1, Math.ceil(bh) + 1);
+    }
+  }
+  return cv.toDataURL('image/webp', 0.8);
+}
+
 function MapCard({ m, gm }) {
   const cid = useStore(app, (s) => s.cid);
   const [thumb, setThumb] = useState(m.type === 'scrawl' ? m.thumb || '' : '');
   useEffect(() => {
-    if (m.type === 'scrawl') setThumb(m.thumb || '');
-    else if (m.fileId) fileUrl(cid, m.fileId).then(setThumb);
-  }, [m.fileId, m.thumb]);
+    let lebt = true;
+    if (m.type !== 'scrawl') {
+      if (m.fileId) fileUrl(cid, m.fileId).then((u) => lebt && setThumb(u));
+      return () => { lebt = false; };
+    }
+    const bits = gm ? '' : exploredBits(cid, m.id);
+    // Spieler sehen nur, was sie erkundet haben – der Rest der Vorschau bleibt schwarz
+    if (!gm && m.thumb && bits.includes('1')) {
+      maskiere(m.thumb, bits, m.w || 36, m.h || 26).then((u) => lebt && setThumb(u)).catch(() => lebt && setThumb(''));
+    } else setThumb(m.thumb || '');
+    return () => { lebt = false; };
+  }, [m.fileId, m.thumb, gm]);
+  // Spieler sehen die Vorschau erst, wenn die Gruppe die Karte betreten hat
+  const erkundet = gm || m.type !== 'scrawl' || wasExplored(cid, m.id);
+  const bild = erkundet ? thumb : '';
   return html`<div class="card click" onClick=${() => openView('map', { id: m.id, title: m.name })}>
-    <div class="map-card-img" style=${thumb ? { backgroundImage: `url(${thumb})` } : {}}>${thumb ? null : html`<${Icon} name=${m.type === 'battle' ? 'grid' : m.type === 'scrawl' ? 'castle' : 'map'} size=${34} />`}</div>
+    <div class=${`map-card-img${erkundet ? '' : ' unerkundet'}`} style=${bild ? { backgroundImage: `url(${bild})` } : {}}>
+      ${bild ? null : html`<${Icon} name=${erkundet ? (m.type === 'battle' ? 'grid' : m.type === 'scrawl' ? 'castle' : 'map') : 'compass'} size=${34} />`}
+      ${erkundet ? null : html`<span class="mc-hint">Noch nicht erkundet</span>`}
+    </div>
     <div class="row nowrap"><b class="grow ellipsis">${m.name}</b>
       <span class="badge">${m.type === 'scrawl' ? `Dungeon ${m.w}×${m.h}` : m.type === 'battle' ? `Rasterkarte ${m.cols}×${m.rows}` : 'Weltkarte'}</span>
       ${gm ? html`<span class=${`badge ${m.visibility === 'players' ? 'players' : 'gm'}`}>${m.visibility === 'players' ? 'sichtbar' : 'SL'}</span>` : null}</div>
@@ -346,7 +382,7 @@ function TokenForm({ close, token, members }) {
 
 function MapSettingsForm({ close, map }) {
   const members = Object.values(vault.get().members || {}).filter((x) => x.role !== 'gm');
-  const [f, setF] = useState({ name: map.name, visibility: map.visibility, only: map.only || [], grid: map.grid !== false, cols: map.cols, rows: map.rows, terrainAlpha: map.terrainAlpha ?? 1, scaleText: map.scale ? `${map.scale.value} ${map.scale.unit}` : '' });
+  const [f, setF] = useState({ name: map.name, visibility: map.visibility, only: map.only || [], grid: map.grid !== false, cols: map.cols, rows: map.rows, terrainAlpha: map.terrainAlpha ?? 1, scaleText: map.scale ? `${map.scale.value} ${map.scale.unit}` : '', sightLimit: Number(map.sightLimit) || 0 });
   return html`<div class="modal-body stack">
     <${Field} label="Name"><input class="input" value=${f.name} onInput=${(e) => setF({ ...f, name: e.target.value })} /><//>
     <${Field} label="Sichtbarkeit"><${Segmented} value=${f.visibility} onChange=${(v) => setF({ ...f, visibility: v, only: v === 'gm' ? [] : f.only })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Spieler sehen die Karte', icon: 'users' }]} /><//>
@@ -354,6 +390,9 @@ function MapSettingsForm({ close, map }) {
       <div class="stack sm">${members.map((p) => html`<label key=${p.uid || p.id} class="row nowrap share-row">
         <input type="checkbox" checked=${f.only.includes(p.uid || p.id)} onChange=${() => { const id = p.uid || p.id; setF({ ...f, only: f.only.includes(id) ? f.only.filter((x) => x !== id) : [...f.only, id] }); }} />
         <span class="grow">${p.name || 'Mitspieler'}</span></label>`)}</div><//>` : null}
+    ${map.type === 'scrawl' ? html`<${Field} label="Sichtweite (Wetter, Umgebung)" hint="Gilt nur im Freien – drinnen entscheidet das Licht. Wände und Dunkelsicht wirken zusätzlich.">
+      <${Select} value=${String(f.sightLimit)} onChange=${(v) => setF({ ...f, sightLimit: Number(v) })} options=${SIGHT_LIMITS.map((o) => ({ value: String(o.value), label: o.label }))} />
+    <//>` : null}
     ${map.type === 'battle' ? html`
       <div class="grid two" style="gap:8px">
         <${Field} label="Spalten"><input class="input" type="number" min="5" max="120" value=${f.cols} onInput=${(e) => setF({ ...f, cols: Number(e.target.value) })} /><//>
@@ -389,7 +428,7 @@ function ScrawlHost(props) {
       openView('maps', {}, { replace: true });
       return;
     }
-    await db.update(col('maps'), map.id, { name: r.name, ...visFields(r.visibility, r.only || []) });
+    await db.update(col('maps'), map.id, { name: r.name, sightLimit: Number(r.sightLimit) || 0, ...visFields(r.visibility, r.only || []) });
     if (map.fileId && r.visibility !== map.visibility) await updateFileMeta(cid, map.fileId, { visibility: r.visibility }).catch(() => {});
   };
   return html`<${DungeonMapView} ...${props} settingsDialog=${settingsDialog} />`;

@@ -14,7 +14,7 @@ import { calcEncounter, difficultyLabel, SRD_ATTRIBUTION } from '../data/rules5e
 import { lootFor } from '../data/tables.js';
 import { ViewFrame } from '../ui/frame.js';
 import {
-  Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, ModelPicker, AutoTextarea, Statblock, MarkdownView, toast, openModal,
+  Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, ViewToggle, ModelPicker, AutoTextarea, Statblock, MarkdownView, toast, openModal,
   confirmDialog, Empty, Spinner,
 } from '../ui/components.js';
 import { useGeneration, GenStatus } from '../ui/aiout.js';
@@ -249,7 +249,7 @@ export function EncounterView({ tabId, params = {} }) {
     <div class="page wide">
       <div class="split">
         <div class="stack lg">
-          <div class="page-head head-tools" style="margin:0"><h1><${Icon} name="swords" size=${26} />Encounter-Generator</h1><span class="sub">Monster aus jeder Welt – lore-getreu in 5e übertragen, mit Schwierigkeit 1–10 (KI + DMG-Formel), Taktik, Gelände und Beute.</span><div class="head-tools-btns"><${IconBtn} icon="ghost" title="Bestiarium" onClick=${() => openView('bestiary')} /></div></div>
+          <div class="page-head head-tools" style="margin:0"><h1><${Icon} name="swords" size=${26} />Encounter-Generator</h1><span class="sub">Monster aus jeder Welt – lore-getreu in 5e übertragen, mit Schwierigkeit 1–10 (KI + DMG-Formel), Taktik, Gelände und Beute.</span><div class="head-tools-btns"><${ViewToggle} value="encounter" options=${[{ value: 'bestiary', label: 'Bestiarium', icon: 'ghost', view: 'bestiary' }, { value: 'encounter', label: 'Encounter-Generator', icon: 'swords', view: 'encounter' }]} /></div></div>
 
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="users" size=${18} />Gruppe</h3><span class="grow"></span><${Btn} size="sm" icon="download" onClick=${importParty}>Aus Kampagne<//></div>

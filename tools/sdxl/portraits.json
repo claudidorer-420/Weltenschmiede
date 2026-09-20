@@ -1,0 +1,3176 @@
+[
+ {
+  "id": "aboleth",
+  "name": "Aboleth",
+  "en": "aboleth",
+  "size": "Groß",
+  "type": "Aberration",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "adeliger",
+  "name": "Adeliger",
+  "en": "noble",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in a steel breastplate over fine clothes",
+  "frame": "head and shoulders",
+  "neg": "full plate armour, helmet"
+ },
+ {
+  "id": "adler",
+  "name": "Adler",
+  "en": "eagle",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "akolyth",
+  "name": "Akolyth",
+  "en": "acolyte",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in simple peasant clothes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail, leather armour, jewellery, necklace, amulet"
+ },
+ {
+  "id": "androsphinx",
+  "name": "Androsphinx",
+  "en": "androsphinx",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ankheg",
+  "name": "Ankheg",
+  "en": "ankheg",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "assassine",
+  "name": "Assassine",
+  "en": "assassin",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in studded leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, pauldrons, helmet"
+ },
+ {
+  "id": "atterkopp",
+  "name": "Atterkopp",
+  "en": "ettercap",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-blauer-drache",
+  "name": "Ausgewachsener blauer Drache",
+  "en": "adult blue dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "head and long neck of a living blue dragon, horns and scales, glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "skull, bone, skeleton, dead, full body, wings"
+ },
+ {
+  "id": "ausgewachsener-bronzedrache",
+  "name": "Ausgewachsener Bronzedrache",
+  "en": "adult bronze dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-golddrache",
+  "name": "Ausgewachsener Golddrache",
+  "en": "adult gold dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-gruener-drache",
+  "name": "Ausgewachsener grüner Drache",
+  "en": "adult green dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-kupferdrache",
+  "name": "Ausgewachsener Kupferdrache",
+  "en": "adult copper dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-messingdrache",
+  "name": "Ausgewachsener Messingdrache",
+  "en": "adult brass dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-roter-drache",
+  "name": "Ausgewachsener roter Drache",
+  "en": "adult red dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-schwarzer-drache",
+  "name": "Ausgewachsener schwarzer Drache",
+  "en": "adult black dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-silberdrache",
+  "name": "Ausgewachsener Silberdrache",
+  "en": "adult silver dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ausgewachsener-weisser-drache",
+  "name": "Ausgewachsener weißer Drache",
+  "en": "adult white dragon",
+  "size": "Riesig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "axtschnabel",
+  "name": "Axtschnabel",
+  "en": "axe beak",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "azer",
+  "name": "Azer",
+  "en": "azer",
+  "size": "Mittelgroß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "balor",
+  "name": "Balor",
+  "en": "balor",
+  "size": "Riesig",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "bandit",
+  "name": "Bandit",
+  "en": "bandit",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "banditenhauptmann",
+  "name": "Banditenhauptmann",
+  "en": "bandit captain",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in studded leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, pauldrons, helmet"
+ },
+ {
+  "id": "bartteufel",
+  "name": "Bartteufel",
+  "en": "bearded devil",
+  "size": "Mittelgroß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "basilisk",
+  "name": "Basilisk",
+  "en": "basilisk",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "baumhirte",
+  "name": "Baumhirte",
+  "en": "treant",
+  "size": "Riesig",
+  "type": "Pflanze",
+  "look": "a body of bark, roots, vines and fungus",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "behir",
+  "name": "Behir",
+  "en": "behir",
+  "size": "Riesig",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "belebte-ruestung",
+  "name": "Belebte Rüstung",
+  "en": "animated armor",
+  "size": "Mittelgroßes",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "berserker",
+  "name": "Berserker",
+  "en": "berserker",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in fur and hide armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "blauer-drachennestling",
+  "name": "Blauer Drachennestling",
+  "en": "blue dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "blutfalke",
+  "name": "Blutfalke",
+  "en": "blood hawk",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "blutmuecke",
+  "name": "Blutmücke",
+  "en": "stirge",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "braunbaer",
+  "name": "Braunbär",
+  "en": "brown bear",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "bronzedrachennestling",
+  "name": "Bronzedrachennestling",
+  "en": "bronze dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "chimaere",
+  "name": "Chimäre",
+  "en": "chimera",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "chuul",
+  "name": "Chuul",
+  "en": "chuul",
+  "size": "Groß",
+  "type": "Aberration",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "couatl",
+  "name": "Couatl",
+  "en": "couatl",
+  "size": "Mittelgroßes",
+  "type": "celestisches Wesen",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "dachs",
+  "name": "Dachs",
+  "en": "badger",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "dampf-mephit",
+  "name": "Dampf-Mephit",
+  "en": "steam mephit",
+  "size": "Klein",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "deva",
+  "name": "Deva",
+  "en": "deva angel",
+  "size": "Mittelgroßes",
+  "type": "celestisches Wesen",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "dogge",
+  "name": "Dogge",
+  "en": "mastiff dog",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "doppelgaenger",
+  "name": "Doppelgänger",
+  "en": "doppelganger",
+  "size": "Mittelgroß",
+  "type": "Monstrosität (Gestaltwandler)",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "drachenschildkroete",
+  "name": "Drachenschildkröte",
+  "en": "dragon turtle",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "dretch",
+  "name": "Dretch",
+  "en": "dretch",
+  "size": "Klein",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "drinne",
+  "name": "Drinne",
+  "en": "sprite",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "drow-elf",
+  "name": "Drow (Elf)",
+  "en": "drow dark elf",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Elf)",
+  "look": "wearing chainmail armour over a tunic",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons, shoulder plates, breastplate"
+ },
+ {
+  "id": "druide",
+  "name": "Druide",
+  "en": "druid",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in long robes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail"
+ },
+ {
+  "id": "dryade",
+  "name": "Dryade",
+  "en": "dryad",
+  "size": "Mittelgroßes",
+  "type": "Feenwesen",
+  "look": "in long robes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail"
+ },
+ {
+  "id": "dschinni",
+  "name": "Dschinni",
+  "en": "djinni",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "duergar",
+  "name": "Duergar",
+  "en": "duergar dwarf",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Zwerg)",
+  "look": "in scale mail",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons"
+ },
+ {
+  "id": "duestermantel",
+  "name": "Düstermantel",
+  "en": "darkmantle",
+  "size": "Klein",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "eber",
+  "name": "Eber",
+  "en": "boar",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "echsenmensch",
+  "name": "Echsenmensch",
+  "en": "lizardfolk",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Echsenmensch)",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "eidechse",
+  "name": "Eidechse",
+  "en": "lizard",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "einhorn",
+  "name": "Einhorn",
+  "en": "unicorn",
+  "size": "Großes",
+  "type": "celestisches Wesen",
+  "look": "in plain travelling clothes",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, breastplate, pauldrons"
+ },
+ {
+  "id": "eis-mephit",
+  "name": "Eis-Mephit",
+  "en": "ice mephit",
+  "size": "Klein",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "eisbaer",
+  "name": "Eisbär",
+  "en": "polar bear",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "eisengolem",
+  "name": "Eisengolem",
+  "en": "iron golem",
+  "size": "Großes",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "eisteufel",
+  "name": "Eisteufel",
+  "en": "ice devil",
+  "size": "Groß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "elch",
+  "name": "Elch",
+  "en": "elk",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "elefant",
+  "name": "Elefant",
+  "en": "elephant",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "erdelementar",
+  "name": "Erdelementar",
+  "en": "earth elemental",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "erinnye",
+  "name": "Erinnye",
+  "en": "erinyes",
+  "size": "Mittelgroß",
+  "type": "Unhold (Teufel)",
+  "look": "in full steel plate armour",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "erwachter-baum",
+  "name": "Erwachter Baum",
+  "en": "awakened tree",
+  "size": "Riesig",
+  "type": "Pflanze",
+  "look": "a body of bark, roots, vines and fungus",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "erwachter-busch",
+  "name": "Erwachter Busch",
+  "en": "awakened shrub",
+  "size": "Klein",
+  "type": "Pflanze",
+  "look": "a body of bark, roots, vines and fungus",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "erzmagier",
+  "name": "Erzmagier",
+  "en": "archmage",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in long robes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail"
+ },
+ {
+  "id": "ettin",
+  "name": "Ettin",
+  "en": "ettin",
+  "size": "Groß",
+  "type": "Riese",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "eule",
+  "name": "Eule",
+  "en": "owl",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "eulenbaer",
+  "name": "Eulenbär",
+  "en": "owlbear",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "falke",
+  "name": "Falke",
+  "en": "hawk",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "feengeist",
+  "name": "Feengeist",
+  "en": "sprite",
+  "size": "Winziges",
+  "type": "Feenwesen",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "feuerelementar",
+  "name": "Feuerelementar",
+  "en": "fire elemental",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "feuerriese",
+  "name": "Feuerriese",
+  "en": "fire giant",
+  "size": "Riesig",
+  "type": "Riese",
+  "look": "in full steel plate armour",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "fledermaus",
+  "name": "Fledermaus",
+  "en": "bat",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "fledermausschwarm",
+  "name": "Fledermausschwarm",
+  "en": "swarm of bats",
+  "size": "Mittelgroß",
+  "type": "Schwarm winziger Tiere",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "fleischgolem",
+  "name": "Fleischgolem",
+  "en": "flesh golem",
+  "size": "Mittelgroßes",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "fliegende-schlange",
+  "name": "Fliegende Schlange",
+  "en": "flying snake",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "fliegendes-schwert",
+  "name": "Fliegendes Schwert",
+  "en": "flying sword",
+  "size": "Kleines",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "flimmerhund",
+  "name": "Flimmerhund",
+  "en": "blink dog",
+  "size": "Mittelgroßes",
+  "type": "Feenwesen",
+  "look": "a big shaggy wolfhound with shimmering blue-grey fur, bare fur only",
+  "frame": "head and shoulders",
+  "art": "a large wild dog",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, gem, jewel, amulet, collar, ornament, headpiece, crown, fey, human, humanoid, robe, cloak"
+ },
+ {
+  "id": "frosch",
+  "name": "Frosch",
+  "en": "frog",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "frostriese",
+  "name": "Frostriese",
+  "en": "frost giant",
+  "size": "Riesig",
+  "type": "Riese",
+  "look": "in scavenged mismatched armour scraps",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "gallertwuerfel",
+  "name": "Gallertwürfel",
+  "en": "gelatinous cube",
+  "size": "Groß",
+  "type": "Schlick",
+  "look": "a shapeless glistening blob of thick slime, no face, no limbs, no hair",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, hair, fur, face, eyes, limbs"
+ },
+ {
+  "id": "gargyl",
+  "name": "Gargyl",
+  "en": "gargoyle",
+  "size": "Mittelgroß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "geier",
+  "name": "Geier",
+  "en": "vulture",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "geist",
+  "name": "Geist",
+  "en": "ghost",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "geisternaga",
+  "name": "Geisternaga",
+  "en": "spirit naga",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "gemeiner",
+  "name": "Gemeiner",
+  "en": "commoner",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in simple peasant clothes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail, leather armour, jewellery, necklace, amulet"
+ },
+ {
+  "id": "ghul",
+  "name": "Ghul",
+  "en": "ghoul",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "giftschlange",
+  "name": "Giftschlange",
+  "en": "poisonous snake",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "giftschlangenschwarm",
+  "name": "Giftschlangenschwarm",
+  "en": "Giftschlangenschwarm",
+  "size": "Mittelgroß",
+  "type": "Schwarm winziger Tiere",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "glabrezu",
+  "name": "Glabrezu",
+  "en": "glabrezu",
+  "size": "Groß",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "gladiator",
+  "name": "Gladiator",
+  "en": "gladiator",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in studded leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, pauldrons, helmet"
+ },
+ {
+  "id": "gnoll",
+  "name": "Gnoll",
+  "en": "gnoll",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Gnoll)",
+  "look": "in fur and hide armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "gnom-tiefengnom-svirfneblin",
+  "name": "Gnom, Tiefengnom (Svirfneblin)",
+  "en": "deep gnome svirfneblin",
+  "size": "Klein",
+  "type": "Humanoide (Gnom)",
+  "look": "wearing chainmail armour over a tunic",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons, shoulder plates, breastplate"
+ },
+ {
+  "id": "goblin",
+  "name": "Goblin",
+  "en": "goblin",
+  "size": "Klein",
+  "type": "Humanoide (Goblinoide)",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "golddrachennestling",
+  "name": "Golddrachennestling",
+  "en": "gold dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "gorgone",
+  "name": "Gorgone",
+  "en": "gorgon",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "grauschlick",
+  "name": "Grauschlick",
+  "en": "gray ooze",
+  "size": "Mittelgroß",
+  "type": "Schlick",
+  "look": "a shapeless glistening blob of thick slime, no face, no limbs, no hair",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, hair, fur, face, eyes, limbs"
+ },
+ {
+  "id": "greif",
+  "name": "Greif",
+  "en": "griffon",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "grick",
+  "name": "Grick",
+  "en": "grick",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "grimlock",
+  "name": "Grimlock",
+  "en": "grimlock",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Grimlock)",
+  "look": "in simple peasant clothes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail, leather armour, jewellery, necklace, amulet"
+ },
+ {
+  "id": "grottenschrat",
+  "name": "Grottenschrat",
+  "en": "kuo-toa",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Goblinoide)",
+  "look": "in fur and hide armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "gruftschrecken",
+  "name": "Gruftschrecken",
+  "en": "wight",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in studded leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, pauldrons, helmet"
+ },
+ {
+  "id": "grul",
+  "name": "Grul",
+  "en": "ghast",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "gruene-vettel",
+  "name": "Grüne Vettel",
+  "en": "green hag",
+  "size": "Mittelgroßes",
+  "type": "Feenwesen",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "gruener-drachennestling",
+  "name": "Grüner Drachennestling",
+  "en": "green dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "gynosphinx",
+  "name": "Gynosphinx",
+  "en": "gynosphinx",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "halbroter-drachenveteran",
+  "name": "Halbroter Drachenveteran",
+  "en": "half-red dragonborn veteran",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Mensch)",
+  "look": "in full steel plate armour",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "harpyie",
+  "name": "Harpyie",
+  "en": "harpy",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "hezrou",
+  "name": "Hezrou",
+  "en": "hezrou",
+  "size": "Groß",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "hobgoblin",
+  "name": "Hobgoblin",
+  "en": "hobgoblin",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Goblinoide)",
+  "look": "wearing a full chainmail hauberk",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons"
+ },
+ {
+  "id": "hoellenhund",
+  "name": "Höllenhund",
+  "en": "hell hound",
+  "size": "Mittelgroß",
+  "type": "Unhold",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "hoellenschlundteufel",
+  "name": "Höllenschlundteufel",
+  "en": "pit fiend",
+  "size": "Groß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "homunkulus",
+  "name": "Homunkulus",
+  "en": "homunculus",
+  "size": "Winziges",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "hornteufel",
+  "name": "Hornteufel",
+  "en": "horned devil",
+  "size": "Groß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "huegelriese",
+  "name": "Hügelriese",
+  "en": "hill giant",
+  "size": "Riesig",
+  "type": "Riese",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "hyaene",
+  "name": "Hyäne",
+  "en": "hyena",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "hydra",
+  "name": "Hydra",
+  "en": "hydra",
+  "size": "Riesig",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ifriti",
+  "name": "Ifriti",
+  "en": "efreeti",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "insektenschwarm",
+  "name": "Insektenschwarm",
+  "en": "swarm of insects",
+  "size": "Mittelgroß",
+  "type": "Schwarm winziger Tiere",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "irrlicht",
+  "name": "Irrlicht",
+  "en": "will-o-wisp",
+  "size": "Winzig",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "jagdhai",
+  "name": "Jagdhai",
+  "en": "hunter shark",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-blauer-drache",
+  "name": "Junger blauer Drache",
+  "en": "young blue dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-bronzedrache",
+  "name": "Junger Bronzedrache",
+  "en": "young bronze dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-golddrache",
+  "name": "Junger Golddrache",
+  "en": "young gold dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-gruener-drache",
+  "name": "Junger grüner Drache",
+  "en": "young green dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-kupferdrache",
+  "name": "Junger Kupferdrache",
+  "en": "young copper dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-messingdrache",
+  "name": "Junger Messingdrache",
+  "en": "young brass dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-roter-drache",
+  "name": "Junger roter Drache",
+  "en": "young red dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-schwarzer-drache",
+  "name": "Junger schwarzer Drache",
+  "en": "young black dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-silberdrache",
+  "name": "Junger Silberdrache",
+  "en": "young silver dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "junger-weisser-drache",
+  "name": "Junger weißer Drache",
+  "en": "young white dragon",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "kamel",
+  "name": "Kamel",
+  "en": "camel",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "katze",
+  "name": "Katze",
+  "en": "cat",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "kettenteufel",
+  "name": "Kettenteufel",
+  "en": "chain devil",
+  "size": "Mittelgroß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "killerwal",
+  "name": "Killerwal",
+  "en": "killer whale",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "klingenteufel",
+  "name": "Klingenteufel",
+  "en": "barbed devil",
+  "size": "Mittelgroß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "knochenteufel",
+  "name": "Knochenteufel",
+  "en": "bone devil",
+  "size": "Groß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "kobold",
+  "name": "Kobold",
+  "en": "kobold",
+  "size": "Klein",
+  "type": "Humanoide (Kobold)",
+  "look": "in plain travelling clothes",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, breastplate, pauldrons"
+ },
+ {
+  "id": "krabbe",
+  "name": "Krabbe",
+  "en": "crab",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "kraken",
+  "name": "Kraken",
+  "en": "kraken",
+  "size": "Gigantisch",
+  "type": "Monstrosität (Titan)",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "kreischer",
+  "name": "Kreischer",
+  "en": "shrieker fungus",
+  "size": "Mittelgroß",
+  "type": "Pflanze",
+  "look": "a body of bark, roots, vines and fungus",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "krokodil",
+  "name": "Krokodil",
+  "en": "crocodile",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "kultfanatiker",
+  "name": "Kultfanatiker",
+  "en": "cult fanatic",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "kultist",
+  "name": "Kultist",
+  "en": "cultist",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "kupferdrachennestling",
+  "name": "Kupferdrachennestling",
+  "en": "copper dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "lamia",
+  "name": "Lamia",
+  "en": "lamia",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "landhai",
+  "name": "Landhai",
+  "en": "bulette",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "lehmgolem",
+  "name": "Lehmgolem",
+  "en": "clay golem",
+  "size": "Großes",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "lemure",
+  "name": "Lemure",
+  "en": "lemure",
+  "size": "Mittelgroß",
+  "type": "Unhold (Teufel)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "lich",
+  "name": "Lich",
+  "en": "lich",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "loewe",
+  "name": "Löwe",
+  "en": "lion",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "luftelementar",
+  "name": "Luftelementar",
+  "en": "air elemental",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a spinning tornado of howling wind, dust and lightning, two small glowing white lights inside the swirl",
+  "frame": "full shape",
+  "art": "a raging tornado of air",
+  "neg": "face, facial features, head, skull, snout, jaws, mouth, teeth, fangs, tongue, nose, hair, creature, beast, monster, dragon, human, humanoid, animal"
+ },
+ {
+  "id": "magier",
+  "name": "Magier",
+  "en": "mage",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in long robes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail"
+ },
+ {
+  "id": "magma-mephit",
+  "name": "Magma-Mephit",
+  "en": "magma mephit",
+  "size": "Klein",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "magmin",
+  "name": "Magmin",
+  "en": "magmin",
+  "size": "Klein",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "mammut",
+  "name": "Mammut",
+  "en": "mammoth",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "mantikor",
+  "name": "Mantikor",
+  "en": "manticore",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "mantler",
+  "name": "Mantler",
+  "en": "cloaker",
+  "size": "Groß",
+  "type": "Aberration",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "marilith",
+  "name": "Marilith",
+  "en": "marilith",
+  "size": "Groß",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "maultier",
+  "name": "Maultier",
+  "en": "mule",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "medusa",
+  "name": "Medusa",
+  "en": "medusa",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "meervolk",
+  "name": "Meervolk",
+  "en": "merfolk",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Meervolk)",
+  "look": "in simple peasant clothes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail, leather armour, jewellery, necklace, amulet"
+ },
+ {
+  "id": "menschenaffe",
+  "name": "Menschenaffe",
+  "en": "ape",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "messingdrachennestling",
+  "name": "Messingdrachennestling",
+  "en": "brass dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "mimik",
+  "name": "Mimik",
+  "en": "mimic",
+  "size": "Mittelgroß",
+  "type": "Monstrosität (Gestaltwandler)",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "minotaurus",
+  "name": "Minotaurus",
+  "en": "minotaur",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "minotaurus-skelett",
+  "name": "Minotaurus-Skelett",
+  "en": "minotaur skeleton",
+  "size": "Groß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "modernder-schlurfer",
+  "name": "Modernder Schlurfer",
+  "en": "shambling mound",
+  "size": "Groß",
+  "type": "Pflanze",
+  "look": "a body of bark, roots, vines and fungus",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "mumie",
+  "name": "Mumie",
+  "en": "mummy",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "mumienfuerst",
+  "name": "Mumienfürst",
+  "en": "mummy lord",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "nachtmahr",
+  "name": "Nachtmahr",
+  "en": "nightmare horse",
+  "size": "Groß",
+  "type": "Unhold",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "nachtvettel",
+  "name": "Nachtvettel",
+  "en": "night hag",
+  "size": "Mittelgroß",
+  "type": "Unhold",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "nalfeshnee",
+  "name": "Nalfeshnee",
+  "en": "nalfeshnee",
+  "size": "Groß",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "nashorn",
+  "name": "Nashorn",
+  "en": "rhinoceros",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ockergallerte",
+  "name": "Ockergallerte",
+  "en": "ochre jelly",
+  "size": "Groß",
+  "type": "Schlick",
+  "look": "a shapeless glistening blob of thick slime, no face, no limbs, no hair",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, hair, fur, face, eyes, limbs"
+ },
+ {
+  "id": "oger",
+  "name": "Oger",
+  "en": "ogre",
+  "size": "Groß",
+  "type": "Riese",
+  "look": "in fur and hide armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "ogerzombie",
+  "name": "Ogerzombie",
+  "en": "ogre zombie",
+  "size": "Groß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "oktopus",
+  "name": "Oktopus",
+  "en": "octopus",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "oni",
+  "name": "Oni",
+  "en": "oni ogre mage",
+  "size": "Groß",
+  "type": "Riese",
+  "look": "wearing a full chainmail hauberk",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons"
+ },
+ {
+  "id": "ork",
+  "name": "Ork",
+  "en": "orc",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Ork)",
+  "look": "in fur and hide armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "otyugh",
+  "name": "Otyugh",
+  "en": "otyugh",
+  "size": "Groß",
+  "type": "Aberration",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "panther",
+  "name": "Panther",
+  "en": "panther",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "pavian",
+  "name": "Pavian",
+  "en": "baboon",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "pegasus",
+  "name": "Pegasus",
+  "en": "pegasus",
+  "size": "Großes",
+  "type": "celestisches Wesen",
+  "look": "in plain travelling clothes",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, breastplate, pauldrons"
+ },
+ {
+  "id": "pferdegreif",
+  "name": "Pferdegreif",
+  "en": "hippogriff",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "phasenspinne",
+  "name": "Phasenspinne",
+  "en": "phase spider",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "planetar",
+  "name": "Planetar",
+  "en": "planetar angel",
+  "size": "Großes",
+  "type": "celestisches Wesen",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "plapperndes-hundertmaul",
+  "name": "Plapperndes Hundertmaul",
+  "en": "flameskull",
+  "size": "Mittelgroß",
+  "type": "Aberration",
+  "look": "in simple peasant clothes",
+  "frame": "head and shoulders",
+  "neg": "armour, plate armour, chainmail, leather armour, jewellery, necklace, amulet"
+ },
+ {
+  "id": "plesiosaurier",
+  "name": "Plesiosaurier",
+  "en": "plesiosaur",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "pony",
+  "name": "Pony",
+  "en": "pony",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "priester",
+  "name": "Priester",
+  "en": "priest",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "wearing chainmail armour over a tunic",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons, shoulder plates, breastplate"
+ },
+ {
+  "id": "pseudodrache",
+  "name": "Pseudodrache",
+  "en": "pseudodragon",
+  "size": "Winzig",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "purpurwurm",
+  "name": "Purpurwurm",
+  "en": "purple worm",
+  "size": "Gigantisch",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "quasit",
+  "name": "Quasit",
+  "en": "quasit",
+  "size": "Winzig",
+  "type": "Unhold (Dämon",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "quipper",
+  "name": "Quipper",
+  "en": "quipper fish",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "quippernschwarm",
+  "name": "Quippernschwarm",
+  "en": "swarm of quippers",
+  "size": "Mittelgroß",
+  "type": "Schwarm winziger Tiere",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rabe",
+  "name": "Rabe",
+  "en": "raven",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rabenschwarm-variante-insektenschwarm",
+  "name": "Rabenschwarm Variante: Insektenschwarm",
+  "en": "swarm of ravens",
+  "size": "Mittelgroß",
+  "type": "Schwarm winziger Tiere",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rakshasa",
+  "name": "Rakshasa",
+  "en": "rakshasa",
+  "size": "Mittelgroß",
+  "type": "Unhold",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "ratte",
+  "name": "Ratte",
+  "en": "rat",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rattenschwarm",
+  "name": "Rattenschwarm",
+  "en": "swarm of rats",
+  "size": "Mittelgroß",
+  "type": "Schwarm winziger Tiere",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "reh",
+  "name": "Reh",
+  "en": "deer",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "reitpferd",
+  "name": "Reitpferd",
+  "en": "riding horse",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "remorhaz",
+  "name": "Remorhaz",
+  "en": "remorhaz",
+  "size": "Riesig",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenadler",
+  "name": "Riesenadler",
+  "en": "giant eagle",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenaffe",
+  "name": "Riesenaffe",
+  "en": "giant ape",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesendachs",
+  "name": "Riesendachs",
+  "en": "giant badger",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rieseneber",
+  "name": "Rieseneber",
+  "en": "giant boar",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rieseneidechse",
+  "name": "Rieseneidechse",
+  "en": "giant lizard",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenelch",
+  "name": "Riesenelch",
+  "en": "giant elk",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rieseneule",
+  "name": "Rieseneule",
+  "en": "giant owl",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenfeuerkaefer",
+  "name": "Riesenfeuerkäfer",
+  "en": "giant fire beetle",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenfledermaus",
+  "name": "Riesenfledermaus",
+  "en": "giant bat",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenfrosch",
+  "name": "Riesenfrosch",
+  "en": "giant frog",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesengeier",
+  "name": "Riesengeier",
+  "en": "giant vulture",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesengiftschlange",
+  "name": "Riesengiftschlange",
+  "en": "giant poisonous snake",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenhai",
+  "name": "Riesenhai",
+  "en": "giant shark",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenhyaene",
+  "name": "Riesenhyäne",
+  "en": "giant hyena",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenkrabbe",
+  "name": "Riesenkrabbe",
+  "en": "giant crab",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenkrokodil",
+  "name": "Riesenkrokodil",
+  "en": "giant crocodile",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenkroete",
+  "name": "Riesenkröte",
+  "en": "giant toad",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenoktopus",
+  "name": "Riesenoktopus",
+  "en": "giant octopus",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenratte-variante-kranke-riesenratte",
+  "name": "Riesenratte Variante: Kranke Riesenratte",
+  "en": "giant rat",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenseepferdchen",
+  "name": "Riesenseepferdchen",
+  "en": "giant sea horse",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenskorpion",
+  "name": "Riesenskorpion",
+  "en": "giant scorpion",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenspinne",
+  "name": "Riesenspinne",
+  "en": "giant spider",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesentausendfuessler",
+  "name": "Riesentausendfüßler",
+  "en": "giant centipede",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenwespe",
+  "name": "Riesenwespe",
+  "en": "giant wasp",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenwiesel",
+  "name": "Riesenwiesel",
+  "en": "giant weasel",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenwolfsspinne",
+  "name": "Riesenwolfsspinne",
+  "en": "giant wolf spider",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenwuergeschlange",
+  "name": "Riesenwürgeschlange",
+  "en": "giant constrictor snake",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riesenziege",
+  "name": "Riesenziege",
+  "en": "giant goat",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "riffhai",
+  "name": "Riffhai",
+  "en": "reef shark",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ritter",
+  "name": "Ritter",
+  "en": "knight",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in full steel plate armour, empty hands",
+  "frame": "head and shoulders",
+  "neg": "sword, weapon, blade, floating object, shield"
+ },
+ {
+  "id": "roch",
+  "name": "Roch",
+  "en": "roc",
+  "size": "Gigantisch",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "rostmonster",
+  "name": "Rostmonster",
+  "en": "rust monster",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "roter-drachennestling",
+  "name": "Roter Drachennestling",
+  "en": "red dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "saebelzahntiger",
+  "name": "Säbelzahntiger",
+  "en": "saber-toothed tiger",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "sahuagin",
+  "name": "Sahuagin",
+  "en": "sahuagin",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Sahuagin)",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "salamander",
+  "name": "Salamander",
+  "en": "Salamander",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "satyr",
+  "name": "Satyr",
+  "en": "satyr",
+  "size": "Mittelgroßes",
+  "type": "Feenwesen",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "schakal",
+  "name": "Schakal",
+  "en": "jackal",
+  "size": "Kleines",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "schatten",
+  "name": "Schatten",
+  "en": "shadow",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "schildwaechter",
+  "name": "Schildwächter",
+  "en": "shield guardian",
+  "size": "Großes",
+  "type": "Konstrukt",
+  "look": "a hulking armoured golem construct, broad metal shoulders, holding a large shield in one fist",
+  "frame": "head and shoulders",
+  "neg": "only a shield, floating shield, human, face, skin"
+ },
+ {
+  "id": "schlaeger",
+  "name": "Schläger",
+  "en": "thug",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "schreckenswolf",
+  "name": "Schreckenswolf",
+  "en": "dire wolf",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "schreckgespenst",
+  "name": "Schreckgespenst",
+  "en": "specter",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "schreckhahn",
+  "name": "Schreckhahn",
+  "en": "cockatrice",
+  "size": "Klein",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "schwarzbaer",
+  "name": "Schwarzbär",
+  "en": "black bear",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "schwarzer-blob",
+  "name": "Schwarzer Blob",
+  "en": "black pudding",
+  "size": "Groß",
+  "type": "Schlick",
+  "look": "a glossy black mound of thick slime slowly dripping over stone, nothing else",
+  "frame": "full shape",
+  "art": "a puddle of tar-like ooze",
+  "neg": "face, facial features, head, skull, snout, jaws, mouth, teeth, fangs, tongue, nose, hair, creature, beast, monster, dragon, human, humanoid, animal, eyes, fur, limbs"
+ },
+ {
+  "id": "schwarzer-drachennestling",
+  "name": "Schwarzer Drachennestling",
+  "en": "black dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "seeoger",
+  "name": "Seeoger",
+  "en": "merrow",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "seepferdchen",
+  "name": "Seepferdchen",
+  "en": "sea horse",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "seevettel",
+  "name": "Seevettel",
+  "en": "sea hag",
+  "size": "Mittelgroßes",
+  "type": "Feenwesen",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "seiler",
+  "name": "Seiler",
+  "en": "roper",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "silberdrachennestling",
+  "name": "Silberdrachennestling",
+  "en": "silver dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "skelett",
+  "name": "Skelett",
+  "en": "skeleton",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in scavenged mismatched armour scraps",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "skorpion",
+  "name": "Skorpion",
+  "en": "scorpion",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "solar",
+  "name": "Solar",
+  "en": "solar angel",
+  "size": "Großes",
+  "type": "celestisches Wesen",
+  "look": "a radiant winged angel in flowing golden robes, fully covered chest and shoulders",
+  "frame": "head and shoulders",
+  "neg": "nudity, nipples, bare chest, topless, revealing clothing"
+ },
+ {
+  "id": "spaeher",
+  "name": "Späher",
+  "en": "scout",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in brown leather armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "spinne",
+  "name": "Spinne",
+  "en": "spider",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "spion",
+  "name": "Spion",
+  "en": "spy",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in plain travelling clothes",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, breastplate, pauldrons"
+ },
+ {
+  "id": "stammeskrieger",
+  "name": "Stammeskrieger",
+  "en": "tribal warrior",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in fur and hide armour",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, chainmail, breastplate, pauldrons, helmet"
+ },
+ {
+  "id": "staub-mephit",
+  "name": "Staub-Mephit",
+  "en": "dust mephit",
+  "size": "Klein",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "steingolem",
+  "name": "Steingolem",
+  "en": "stone golem",
+  "size": "Großes",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "steinriese",
+  "name": "Steinriese",
+  "en": "stone giant",
+  "size": "Riesig",
+  "type": "Riese",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "streitross",
+  "name": "Streitross",
+  "en": "warhorse",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "streitross-skelett",
+  "name": "Streitross-Skelett",
+  "en": "warhorse skeleton",
+  "size": "Groß",
+  "type": "Untoter",
+  "look": "in scavenged mismatched armour scraps",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "sturmriese",
+  "name": "Sturmriese",
+  "en": "storm giant",
+  "size": "Riesig",
+  "type": "Riese",
+  "look": "in scale mail",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons"
+ },
+ {
+  "id": "sukkubus-inkubus",
+  "name": "Sukkubus/Inkubus",
+  "en": "succubus incubus",
+  "size": "Mittelgroß",
+  "type": "Unhold (Gestaltwandler)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "tarraske",
+  "name": "Tarraske",
+  "en": "tarrasque",
+  "size": "Gigantisch",
+  "type": "Monstrosität (Titan)",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "teppich-des-erstickens",
+  "name": "Teppich des Erstickens",
+  "en": "rug of smothering",
+  "size": "Großes",
+  "type": "Konstrukt",
+  "look": "an artificial body of metal, stone or clay",
+  "frame": "head and shoulders",
+  "neg": "clothing, jewellery"
+ },
+ {
+  "id": "teufelchen",
+  "name": "Teufelchen",
+  "en": "imp",
+  "size": "Winzig",
+  "type": "Unhold (Teufel",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "tiger",
+  "name": "Tiger",
+  "en": "tiger",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "todesalb",
+  "name": "Todesalb",
+  "en": "wraith",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "todeshund",
+  "name": "Todeshund",
+  "en": "death dog",
+  "size": "Mittelgroß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "triceratops",
+  "name": "Triceratops",
+  "en": "triceratops",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "troll",
+  "name": "Troll",
+  "en": "troll",
+  "size": "Groß",
+  "type": "Riese",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "tyrannosaurus-rex",
+  "name": "Tyrannosaurus Rex",
+  "en": "tyrannosaurus rex",
+  "size": "Riesiges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "unsichtbarer-pirscher",
+  "name": "Unsichtbarer Pirscher",
+  "en": "invisible stalker",
+  "size": "Mittelgroß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "uralter-blauer-drache",
+  "name": "Uralter blauer Drache",
+  "en": "ancient blue dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-bronzedrache",
+  "name": "Uralter Bronzedrache",
+  "en": "ancient bronze dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-golddrache",
+  "name": "Uralter Golddrache",
+  "en": "ancient gold dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-gruener-drache",
+  "name": "Uralter grüner Drache",
+  "en": "ancient green dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-kupferdrache",
+  "name": "Uralter Kupferdrache",
+  "en": "ancient copper dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-messingdrache",
+  "name": "Uralter Messingdrache",
+  "en": "ancient brass dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-roter-drache",
+  "name": "Uralter roter Drache",
+  "en": "ancient red dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-schwarzer-drache",
+  "name": "Uralter schwarzer Drache",
+  "en": "ancient black dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-silberdrache",
+  "name": "Uralter Silberdrache",
+  "en": "ancient silver dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "uralter-weisser-drache",
+  "name": "Uralter weißer Drache",
+  "en": "ancient white dragon",
+  "size": "Gigantisch",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "vampir",
+  "name": "Vampir",
+  "en": "vampire",
+  "size": "Mittelgroß",
+  "type": "Untoter (Gestaltwandler)",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "vampirbrut",
+  "name": "Vampirbrut",
+  "en": "vampire spawn",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "veteran",
+  "name": "Veteran",
+  "en": "veteran",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "in splint mail",
+  "frame": "head and shoulders",
+  "neg": ""
+ },
+ {
+  "id": "violetter-pilz",
+  "name": "Violetter Pilz",
+  "en": "violet fungus",
+  "size": "Mittelgroß",
+  "type": "Pflanze",
+  "look": "a body of bark, roots, vines and fungus",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "vrock",
+  "name": "Vrock",
+  "en": "vrock",
+  "size": "Groß",
+  "type": "Unhold (Dämon)",
+  "look": "with bare demonic hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, armour, jewellery"
+ },
+ {
+  "id": "wache",
+  "name": "Wache",
+  "en": "guard",
+  "size": "Mittelgroß",
+  "type": "Humanoide (jedes Volk)",
+  "look": "wearing chainmail armour over a tunic",
+  "frame": "head and shoulders",
+  "neg": "plate armour, pauldrons, shoulder plates, breastplate"
+ },
+ {
+  "id": "waechternaga",
+  "name": "Wächternaga",
+  "en": "guardian naga",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "wasserelementar",
+  "name": "Wasserelementar",
+  "en": "water elemental",
+  "size": "Groß",
+  "type": "Elementar",
+  "look": "a tall coiling pillar of clear seawater and foam, two small glowing blue lights inside",
+  "frame": "full shape",
+  "art": "a rearing column of seawater",
+  "neg": "face, facial features, head, skull, snout, jaws, mouth, teeth, fangs, tongue, nose, hair, creature, beast, monster, dragon, human, humanoid, animal"
+ },
+ {
+  "id": "weisser-drachennestling",
+  "name": "Weißer Drachennestling",
+  "en": "white dragon wyrmling",
+  "size": "Mittelgroß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "werbaer",
+  "name": "Werbär",
+  "en": "werebear",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Mensch",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "wereber",
+  "name": "Wereber",
+  "en": "wereboar",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Mensch",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "werratte",
+  "name": "Werratte",
+  "en": "wererat",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Mensch",
+  "look": "in plain travelling clothes",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, breastplate, pauldrons"
+ },
+ {
+  "id": "wertiger",
+  "name": "Wertiger",
+  "en": "weretiger",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Mensch",
+  "look": "in plain travelling clothes",
+  "frame": "head and shoulders",
+  "neg": "plate armour, metal armour, breastplate, pauldrons"
+ },
+ {
+  "id": "werwolf",
+  "name": "Werwolf",
+  "en": "werewolf",
+  "size": "Mittelgroß",
+  "type": "Humanoide (Mensch",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "wiesel",
+  "name": "Wiesel",
+  "en": "weasel",
+  "size": "Winziges",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "winterwolf",
+  "name": "Winterwolf",
+  "en": "winter wolf",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "wolf",
+  "name": "Wolf",
+  "en": "wolf",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "wolkenriese",
+  "name": "Wolkenriese",
+  "en": "cloud giant",
+  "size": "Riesig",
+  "type": "Riese",
+  "look": "with thick natural hide and scales",
+  "frame": "head and shoulders",
+  "neg": "worn armour, plate armour, chainmail, clothing"
+ },
+ {
+  "id": "worg",
+  "name": "Worg",
+  "en": "worg",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "wuergeschlange",
+  "name": "Würgeschlange",
+  "en": "constrictor snake",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "wyvern",
+  "name": "Wyvern",
+  "en": "wyvern",
+  "size": "Groß",
+  "type": "Drache",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "xorn",
+  "name": "Xorn",
+  "en": "xorn",
+  "size": "Mittelgroß",
+  "type": "Elementar",
+  "look": "a body made purely of raw element, featureless head with two glowing eyes",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic, face, mouth, nose, human face, dragon head"
+ },
+ {
+  "id": "zentaur",
+  "name": "Zentaur",
+  "en": "centaur",
+  "size": "Groß",
+  "type": "Monstrosität",
+  "look": "with thick scaled hide",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "ziege",
+  "name": "Ziege",
+  "en": "goat",
+  "size": "Mittelgroßes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ },
+ {
+  "id": "zombie",
+  "name": "Zombie",
+  "en": "zombie",
+  "size": "Mittelgroß",
+  "type": "Untoter",
+  "look": "in rotten tattered rags",
+  "frame": "head and shoulders",
+  "neg": "intact armour, plate armour, jewellery"
+ },
+ {
+  "id": "zugpferd",
+  "name": "Zugpferd",
+  "en": "draft horse",
+  "size": "Großes",
+  "type": "Tier",
+  "look": "with natural fur, feathers or scales",
+  "frame": "head and shoulders",
+  "neg": "clothing, clothes, armour, jewellery, necklace, collar, saddle, harness, straps, helmet, humanoid, anthropomorphic"
+ }
+]

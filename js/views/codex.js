@@ -4,7 +4,7 @@ import { useStore } from '../core/store.js';
 import {
   app, vault, isGM, isRealGM, myUid, getIndex, noteById, updateNote, renameNote, moveNote, deleteNote, duplicateNote,
   createNote, createFolder, renameFolder, deleteFolder, allFolders, watchSecret, saveSecret, searchNotes, restoreNote,
-  purgeNote, setNoteVisibility, setSecretVisibility, nurTitelFuerMich, col, setFolderMeta,
+  purgeNote, setNoteVisibility, setSecretVisibility, nurTitelFuerMich, col, setFolderMeta, isNpcFolder,
 } from '../core/app.js';
 import { ws, openNote, openView, setEditMode, forgetNote, openSearch, currentOf, isMobile } from '../core/workspace.js';
 import { settings, updateSettings } from '../core/settings.js';
@@ -228,12 +228,17 @@ export function shareHint(n) {
   return nur ? `${wer} · ${nur}× nur Titel` : wer;
 }
 
+// NPC-Notizen bekommen die Werkzeuge der NPC-Schmiede – nachgeladen, wenn sie gebraucht werden
+const npcTools = (n) => import('./npcnote.js').then((m) => m.openNpcNoteTools(n));
+const isNpc = (n) => isNpcFolder(n?.folder || '') || /^\s*typ:\s*npc\s*$/mi.test(String(n?.body || '').slice(0, 400));
+
 export function noteMenu(e, n) {
   const gm = isGM();
   const bm = (settings.get().bookmarks || []).includes(n.id);
   openMenu(e, [
     { label: 'In neuem Tab öffnen', icon: 'plus', onClick: () => openNote(n.id, { newTab: true }) },
     gm && { label: 'Bearbeiten', icon: 'pencil', onClick: () => { setEditMode(n.id, true); openNote(n.id); } },
+    gm && isNpc(n) && { label: 'NPC-Werkzeuge …', icon: 'mask', hint: 'Spielwerte, Porträt, in den Kampf', onClick: () => npcTools(n) },
     gm && { divider: true },
     gm && { label: 'Umbenennen …', icon: 'edit-square', onClick: () => renameDialog(n) },
     gm && { label: 'Verschieben nach …', icon: 'folder', onClick: () => moveDialog([n.id]) },
@@ -294,6 +299,8 @@ async function folderStyleDialog(path) {
 
 function folderMenu(e, path) {
   const inside = () => Object.values(vault.get().notes).filter((n) => (n.folder || '') === path || (n.folder || '').startsWith(`${path}/`));
+  // Der NPC-Ordner bleibt bestehen: umbenennen nur zwischen „NPC“ und „NPCs“, löschen gar nicht
+  const npcHinweis = isNpcFolder(path) && allFolders().filter(isNpcFolder).length <= 1;
   openMenu(e, [
     { label: 'Farbe, Symbol & Etikett …', icon: 'palette', onClick: () => folderStyleDialog(path) },
     { divider: true },
@@ -301,18 +308,25 @@ function folderMenu(e, path) {
     { label: 'Aus Vorlage …', icon: 'file-text', onClick: () => templateMenu(e, path) },
     { label: 'Neuer Unterordner …', icon: 'folder-plus', onClick: () => newFolderDialog(path) },
     { divider: true },
-    { label: 'Umbenennen …', icon: 'edit-square', onClick: async () => {
+    { label: 'Umbenennen …', icon: 'edit-square', hint: npcHinweis ? 'nur „NPC“ oder „NPCs“' : '', onClick: async () => {
       const leaf = path.split('/').pop();
-      const t = await promptDialog('Neuer Ordnername', leaf, { title: 'Ordner umbenennen' });
-      if (t) await renameFolder(path, path.split('/').slice(0, -1).concat(t).join('/'));
+      const t = npcHinweis
+        ? (leaf.toLowerCase() === 'npcs' ? 'NPC' : 'NPCs')
+        : await promptDialog('Neuer Ordnername', leaf, { title: 'Ordner umbenennen' });
+      if (!t) return;
+      try {
+        await renameFolder(path, path.split('/').slice(0, -1).concat(t).join('/'));
+        if (npcHinweis) toast(`Ordner heißt jetzt „${t}“`, 'success');
+      } catch (err) { toast(err.message, 'error'); }
     } },
     { label: 'Freigabe für Spieler …', icon: 'users', hint: `${inside().length} Notizen`, onClick: () => shareManyDialog(inside(), path) },
     { divider: true },
-    { label: 'Ordner löschen', icon: 'trash', danger: true, onClick: async () => {
+    !npcHinweis && { label: 'Ordner löschen', icon: 'trash', danger: true, onClick: async () => {
       const count = inside().length;
       if (!(await confirmDialog(`Ordner „${path}“${count ? ` samt ${count} Notizen (→ Papierkorb)` : ''} löschen?`, { danger: true, ok: 'Löschen' }))) return;
-      await deleteFolder(path);
+      try { await deleteFolder(path); } catch (err) { toast(err.message, 'error'); }
     } },
+    npcHinweis && { label: 'Ordner löschen', icon: 'lock', disabled: true, hint: 'Der NPC-Ordner bleibt bestehen' },
   ]);
 }
 

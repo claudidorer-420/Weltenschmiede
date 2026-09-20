@@ -112,6 +112,8 @@ service cloud.firestore {
       match /gm/{id}         { allow read, write: if isGM(cid); }
       match /trash/{id}      { allow read, write: if isGM(cid); }
       match /monsters/{id}   { allow read, write: if isGM(cid); }
+      match /npcs/{id}       { allow read, write: if isGM(cid); }
+      match /kills/{id}      { allow read: if isMember(cid); allow write: if isGM(cid); }
       match /encounters/{id} { allow read, write: if isGM(cid); }
 
       // Kampf: vollständiger Zustand nur SL, öffentliche Projektion für alle Mitglieder

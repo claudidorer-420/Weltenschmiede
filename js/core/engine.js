@@ -654,7 +654,8 @@ export function tokenInZone(x, z, t, ctx) {
   for (let dy = 0; dy < n; dy++) for (let dx = 0; dx < n; dx++) if (inArea(tpl, t.x + dx + 0.5, t.y + dy + 0.5)) return true;
   return false;
 }
-const sideOf = (c) => (c.isPC || c.ally ? 'pc' : 'npc');
+// team: von der Spielleitung gesetzte Seite (Spieler gegen Spieler); sonst zählt Held oder Gegner
+const sideOf = (c) => c.team || (c.isPC || c.ally ? 'pc' : 'npc');
 function zoneApplies(x, z, c) {
   if (z.who === 'all' || !z.who) return true;
   const src = x.combatants.find((o) => o.id === z.src);

@@ -319,7 +319,7 @@ function McpCard() {
     <div class="small muted">${cur.hint}</div>
     <ol class="mcp-steps small">${cur.steps.map((s, i) => html`<li key=${i}>${s}</li>`)}</ol>
     <div class="small muted" style="line-height:1.6">
-      <b>Danach einfach reden:</b> „Zeig mir alle offenen Quests“, „Leg eine NSC-Notiz für den Schmied Borin an und
+      <b>Danach einfach reden:</b> „Zeig mir alle offenen Quests“, „Leg eine NPC-Notiz für den Schmied Borin an und
       verlinke ihn mit [[Eisenfurt]]“, „Baue eine Höhlenkarte mit drei Räumen“, „Würfle 4W6 sechsmal und poste es in den Chat“.
     </div>
     <div class="tiny faint" style="line-height:1.6">

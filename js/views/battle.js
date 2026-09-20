@@ -9,15 +9,17 @@ import { useCol, useDoc } from '../core/hooks.js';
 import { watchParty } from '../core/party.js';
 import { doRoll } from '../core/rolls.js';
 import { mutateCombat, combatantForToken, combatantFromCharacter, combatantsFromMonsters, makeCombatant, resort, hpState } from '../core/combat.js';
+import { npcStat } from '../data/npcstat.js';
 import { sendEvent } from '../core/relay.js';
 import * as E from '../core/engine.js';
 import * as A from '../core/actions.js';
 import { classLevel } from '../data/chargen.js';
 import { DAMAGE_ART } from '../data/artmap.js';
+import { CONDITIONS } from '../data/rules5e.js';
 import {
   CELL_M, sizeCells, cellDistance, pointCellDistance, tokenCenter, reachable, pathTo, templateFor, inArea, tokensInArea, monsterSpeed, fmtMeters, lineOfSight, pointInSight, areaReaches,
 } from '../core/tactics.js';
-import { MonsterArt, creatureType, monsterIconName, giImage } from '../ui/art.js';
+import { MonsterArt, creatureType, monsterIconName, giImage, portraitOf, loadPortraits } from '../ui/art.js';
 import { Icon, IconBtn, Btn, Statblock, toast, openModal, openMenu, promptDialog, confirmDialog } from '../ui/components.js';
 import { now, initials, clamp } from '../lib/util.js';
 import { BattleBar, ROMAN } from './battlebar.js';
@@ -54,13 +56,14 @@ function normCombat(raw, gm) {
   };
 }
 
-export function useBattle({ cid, mapId, gm, me, tokens, grid, gridKey, redraw, rerender }) {
+export function useBattle({ cid, mapId, gm, me, tokens, grid, gridKey, redraw, rerender, explore = false, active = true }) {
   const ref = useRef(null);
-  if (!ref.current) ref.current = { sel: null, pending: null, hover: null, drag: null, dismissed: new Set(), placing: null, placeHidden: false, showNames: false, logOpen: false, localMove: new Map() };
+  if (!ref.current) ref.current = { sel: null, pending: null, hover: null, drag: null, dismissed: new Set(), placing: null, placeHidden: false, showNames: false, logOpen: false, localMove: new Map(), floats: [], vorher: new Map() };
   const B = ref.current;
   const raw = useDoc(cid ? col('combat') : null, gm ? 'gm' : 'public');
   const overlays = useCol(cid ? col('party') : null, { where: [['mapId', '==', mapId]] });
   const bestiary = useCol(cid && gm ? col('monsters') : null);
+  const npcs = useCol(cid && gm ? col('npcs') : null);
   const [party, setParty] = useState([]);
   const [srd, setSrd] = useState(null);
   const [, setReady] = useState(0);
@@ -69,12 +72,53 @@ export function useBattle({ cid, mapId, gm, me, tokens, grid, gridKey, redraw, r
   useEffect(() => { if (needSrd && !srd) import('../data/monsters-srd.js').then((m) => setSrd(m.MONSTERS)); }, [needSrd]);
   // Zauberlisten für die Kampfleiste (Charakter-Regelwerk und SRD-2014 für Monster)
   useEffect(() => { Promise.all([A.spellsFor(A.edNow()), A.spellsFor('2014')]).then(() => setReady((n) => n + 1)).catch(() => {}); }, []);
-  useEffect(() => () => A.setBattleContext({ live: false }), []);
+  // Liste der gemalten Monsterporträts laden – die Karte zeichnet außerhalb von Preact
+  useEffect(() => { loadPortraits().then(() => { setReady((n) => n + 1); redraw(); }); }, []);
+  useEffect(() => () => { if (A.battle.mapId === mapId) A.setBattleContext({ live: false, explore: false }); }, [mapId]);
   const combat = normCombat(raw, gm);
-  Object.assign(B, { cid, mapId, gm, me, tokens, grid, gridKey, redraw, rerender, party, srd, overlays: overlays || [], bestiary: bestiary || [], combat });
-  A.setBattleContext({ tokens, grid, party, mapId, live: true });
-  B.ctx = A.makeCtx(combat.x, { tokens, grid, party });
+  Object.assign(B, { cid, mapId, gm, me, tokens, grid, gridKey, redraw, rerender, party, srd, overlays: overlays || [], bestiary: bestiary || [], npcs: npcs || [], combat, explore: explore && !combat.active });
+  // Nur der sichtbare Tab beschreibt den gemeinsamen Kampfkontext
+  if (active) A.setBattleContext({ tokens, grid, party, mapId, live: true, explore: B.explore });
+  B.ctx = A.makeCtx(combat.x, { tokens, grid, party, explore: B.explore });
+  sammleFloats(B);
   return B;
+}
+
+// Was hat sich seit dem letzten Stand geändert? Daraus entstehen die aufsteigenden Texte über den Tokens.
+function sammleFloats(B) {
+  const jetzt = now();
+  for (const cb of B.combat.list || []) {
+    const alt = B.vorher.get(cb.id);
+    const conds = (cb.conditions || []).map((c) => c.name || c);
+    const neu = { hp: cb.hp ?? null, conds };
+    if (alt) {
+      if (alt.hp != null && neu.hp != null && neu.hp !== alt.hp) {
+        const d = neu.hp - alt.hp;
+        B.floats.push({ id: `${cb.id}-${jetzt}-hp`, cbId: cb.id, text: d < 0 ? `${d}` : `+${d}`, color: d < 0 ? '#ff5b5b' : '#4ade80', ts: jetzt });
+      }
+      for (const c of conds) if (!alt.conds.includes(c)) B.floats.push({ id: `${cb.id}-${jetzt}-${c}`, cbId: cb.id, text: c, color: '#ffffff', ts: jetzt, klein: true });
+    }
+    B.vorher.set(cb.id, neu);
+  }
+  if (B.floats.length > 40) B.floats = B.floats.slice(-40);
+}
+
+// Aufsteigende Texte zeichnen: 2 Sekunden, 1,5 Felder nach oben, Deckkraft 100 → 0
+function drawFloats(ctx, B, k) {
+  const jetzt = now();
+  B.floats = B.floats.filter((f) => jetzt - f.ts < 2000);
+  if (!B.floats.length) return;
+  for (const f of B.floats) {
+    const cb = B.combat.list.find((c) => c.id === f.cbId);
+    const t = cb && tokenOfCb(B, cb);
+    if (!t) continue;
+    const p = (jetzt - f.ts) / 2000;
+    const n = t.size || 1;
+    ctx.globalAlpha = Math.max(0, 1 - p);
+    wtext(ctx, f.text, t.x + n / 2, t.y - 0.25 - p * 1.5, f.klein ? 0.34 : 0.46, f.color, 'rgba(0,0,0,.8)', 900);
+    ctx.globalAlpha = 1;
+  }
+  B.redraw();
 }
 
 const charOf = (B, t) => (t?.charId ? B.party.find((p) => p.char?.id === t.charId) || null : null);
@@ -83,13 +127,17 @@ export function statFor(B, t) {
   if (cb?.statblock) return cb.statblock;
   if (t?.mref?.src === 'srd') return B.srd?.find((m) => m.id === t.mref.id) || null;
   if (t?.mref?.src === 'bst') return B.bestiary.find((m) => m.id === t.mref.id) || null;
+  if (t?.mref?.src === 'npc') {
+    const n = (B.npcs || []).find((m) => m.id === t.mref.id);
+    return n ? npcStat(n) : null;
+  }
   return null;
 }
 const cbOfTok = (B, t) => combatantForToken(t, B.combat.list);
 const cbById = (B, id) => B.combat.list.find((c) => c.id === id) || null;
 const sideOfTok = (B, t) => {
   const cb = cbOfTok(B, t);
-  return t.charId || cb?.isPC || cb?.ally ? 'pc' : 'npc';
+  return cb?.team || (t.charId || cb?.isPC || cb?.ally ? 'pc' : 'npc');
 };
 const canControl = (B, t) => !!t && (B.gm || (!!t.ownerUid && t.ownerUid === B.me));
 const canControlCb = (B, cb) => !!cb && (B.gm || (!!cb.ownerUid && cb.ownerUid === B.me));
@@ -138,6 +186,8 @@ function moveGrid(B) {
   B._mg = { key, grid: g };
   return g;
 }
+// Beim Erkunden geht es immer nur drei Felder am Stück weiter
+export const ERKUNDEN_FELDER = 3;
 export function moveInfo(B, t, W, H) {
   if (!canControl(B, t)) return null;
   const cb = cbOfTok(B, t);
@@ -148,6 +198,9 @@ export function moveInfo(B, t, W, H) {
     totalM = Number(cb.eco.moveM) || 0;
     const used = Math.max(Number(cb.eco.movedM) || 0, B.localMove.get(`${B.combat.turnKey}|${cb.id}`) || 0);
     remainingM = Math.max(0, totalM - used);
+  } else if (B.explore && !B.gm) {
+    totalM = ERKUNDEN_FELDER * CELL_M;
+    remainingM = totalM;
   } else {
     totalM = speedOf(B, t) || 9;
     remainingM = totalM;
@@ -164,7 +217,15 @@ export function moveInfo(B, t, W, H) {
 }
 // Nach dem Ziehen: Bewegung prüfen und an die SL melden (Zonen, Gelegenheitsangriffe). false = zurück an den Start
 export function onTokenDrop(B, t, nx, ny, W, H) {
-  if (!B.combat.active) return true;
+  if (!B.combat.active) {
+    if (!B.explore || B.gm) return true;
+    const info = moveInfo(B, t, W, H);
+    if (info && !Number.isFinite(info.r.dist[ny * W + nx])) {
+      toast(`Beim Erkunden gehst du höchstens ${ERKUNDEN_FELDER} Felder am Stück.`, 'error');
+      return false;
+    }
+    return true;
+  }
   const cb = cbOfTok(B, t);
   const info = moveInfo(B, t, W, H);
   if (!info || !cb) return true;
@@ -222,13 +283,43 @@ export function selectToken(B, id) {
   B.rerender();
   B.redraw();
 }
-function armAction(B, t, a) {
-  const cb = cbOfTok(B, t);
+// Erkunden: Kämpferdaten ohne laufenden Kampf – damit die Leiste Zauber und Fähigkeiten zeigt
+export function exploreCb(B, t) {
+  if (!t) return null;
+  if (!B._tmp) B._tmp = new Map();
+  const pe = charOf(B, t);
+  const key = `${t.id}|${pe?.char?.updatedAt || ''}|${t.mref?.id || ''}`;
+  const had = B._tmp.get(t.id);
+  if (had?.key === key) return had.cb;
+  let cb = null;
+  if (pe) cb = combatantFromCharacter(pe);
+  else {
+    const sb = statFor(B, t);
+    cb = sb ? combatantsFromMonsters([{ ...sb, name: t.label, qty: 1 }])[0] : makeCombatant({ name: t.label });
+  }
+  cb.tokenId = t.id;
+  cb.ownerUid = t.ownerUid || cb.ownerUid || null;
+  cb.eco = { action: 1, bonus: 1, attacks: 1, extra: 0, moveM: 99, movedM: 0 };
+  B._tmp.set(t.id, { key, cb });
+  return cb;
+}
+export const cbForBar = (B, t) => cbOfTok(B, t) || (B.explore ? exploreCb(B, t) : null);
+
+async function armAction(B, t, a) {
+  const cb = cbForBar(B, t);
   if (!cb) { toast('Dieser Token ist nicht im Kampf.', 'error'); return; }
   if (!a.state?.ok) { toast(a.state?.why || 'Gerade nicht möglich', 'info'); return; }
+  // Ein Angriff beim Erkunden beginnt den Kampf – danach entscheidet die Initiative
+  if (a.state?.startsCombat && !B.combat.active) {
+    toast('Angriff! Der Kampf beginnt, die Initiative wird gewürfelt.', 'info');
+    B.pending = null;
+    await startCombat(B);
+    return;
+  }
   const char = B.ctx.charOf(cb);
   let slots = [];
-  if (a.kind === 'spell' && a.level > 0 && !a.arcanum) slots = char ? A.slotOptions(char, a.level) : a.monster ? A.monsterSlotOptions(cb, a) : [];
+  // Aus einer Schriftrolle wird ohne Zauberplatz gewirkt – also auch keinen abfragen
+  if (a.kind === 'spell' && a.level > 0 && !a.arcanum && !a.scroll) slots = char ? A.slotOptions(char, a.level) : a.monster ? A.monsterSlotOptions(cb, a) : [];
   const choices = choiceList(a);
   const p = { t: t.id, cb: cb.id, a, slot: slots[0]?.level || a.level || 0, pact: !!slots[0]?.pact, slots, targets: [], choice: choices?.[0]?.id || null, choices, tpl: null, dest: null };
   B.pending = p;
@@ -525,6 +616,22 @@ async function execute(B) {
 }
 
 // ───────────────────────── Kampf verwalten (SL) ─────────────────────────
+// Initiative der Gegner: die SL sieht die Würfel fallen. Bei sehr vielen Kämpfern
+// würde der Becher überquellen – dann rechnet die Engine sie still aus.
+const MAX_INIT_WUERFEL = 12;
+function sichtbareInit(B, x) {
+  const offen = x.combatants.filter((c) => c.init == null && !(c.isPC && c.ownerUid));
+  if (!offen.length || offen.length > MAX_INIT_WUERFEL) return {};
+  const ctx = A.makeCtx(x);
+  const out = {};
+  for (const c of offen) {
+    const bonus = E.statsOf(c, ctx).init ?? (Number(c.initBonus) || 0);
+    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: c.name, kind: 'init' });
+    if (r) out[c.id] = r.total;
+  }
+  return out;
+}
+
 export async function startCombat(B) {
   const toks = B.tokens.filter((t) => t.charId || t.mref || t.combatantId);
   if (!toks.length) { toast('Setze zuerst Tokens: „Gruppe“ oder Monster aus dem Kompendium.', 'error'); return; }
@@ -548,7 +655,13 @@ export async function startCombat(B) {
       if (!t.charId) links.push([t.id, c.id]);
     }
     const ctx = A.makeCtx(x);
-    for (const c of x.combatants) if (c.init == null) E.rollInitiative(x, c, ctx);
+    // Spielercharaktere würfeln auf ihrem eigenen Bildschirm – die SL springt nach 15 Sekunden ein.
+    // Für alle anderen fallen die Würfel sichtbar auf dem Bildschirm der SL.
+    const gewuerfelt = sichtbareInit(B, x);
+    for (const c of x.combatants) {
+      if (c.init != null || (c.isPC && c.ownerUid)) continue;
+      if (gewuerfelt[c.id] != null) { c.init = gewuerfelt[c.id]; E.log(x, `Initiative ${c.name}: ${gewuerfelt[c.id]}`); } else E.rollInitiative(x, c, ctx);
+    }
     // Vorab beschworene Kreaturen: 2014 eine Initiative je Gruppe, 2024 direkt nach dem Wirker
     const groups = {};
     for (const c of x.combatants) {
@@ -591,6 +704,38 @@ export async function addTokenToCombat(B, t, sbIn = null) {
   });
   if (newId && !t.charId) await db.update(col('tokens'), t.id, { combatantId: newId }).catch(() => {});
 }
+// Erlegte Monster merken – daraus entsteht das Bestiarium der Spieler (nur was die Gruppe besiegt hat)
+const gemerkt = new Set();
+export async function recordKills(B) {
+  if (!B.gm) return;
+  for (const cb of B.combat.list || []) {
+    if (cb.isPC || !cb.dead) continue;
+    const sb = cb.statblock;
+    if (!sb) continue;
+    const key = String(sb.id || sb.srdId || sb.name || cb.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
+    if (!key || gemerkt.has(key)) continue;
+    gemerkt.add(key);
+    const da = await db.get(col('kills'), key).catch(() => null);
+    if (da) { await db.update(col('kills'), key, { count: (Number(da.count) || 1) + 1, lastAt: now() }).catch(() => {}); continue; }
+    await db.set(col('kills'), key, {
+      key, name: sb.name || cb.name, srdId: sb.id || sb.srdId || null, cr: sb.cr || '', type: sb.type || '', size: sb.size || '',
+      ac: sb.ac ?? '', hp: sb.hp ?? '', image: sb.image || null, count: 1, firstAt: now(), lastAt: now(), visibility: 'players',
+    }).catch(() => {});
+  }
+}
+
+// Erkunden: alle Figuren auf der Karte in die Kämpferliste aufnehmen (ohne den Kampf zu starten)
+let sorgeLäuft = false;
+export async function ensureCombatants(B) {
+  if (!B.gm || sorgeLäuft) return;
+  const fehlend = B.tokens.filter((t) => (t.charId || t.mref || t.combatantId) && !combatantForToken(t, B.combat.list));
+  if (!fehlend.length) return;
+  sorgeLäuft = true;
+  try {
+    if (fehlend.some((t) => t.mref?.src === 'srd') && !B.srd) B.srd = (await import('../data/monsters-srd.js')).MONSTERS;
+    for (const t of fehlend) await addTokenToCombat(B, t);
+  } finally { sorgeLäuft = false; }
+}
 export async function placeMonster(B, w, W, H) {
   const m = B.placing;
   if (!m) return;
@@ -599,7 +744,7 @@ export async function placeMonster(B, w, W, H) {
   const ty = creatureType(m.type);
   const tok = {
     mapId: B.mapId, x: clamp(Math.floor(w.x - (n - 1) / 2), 0, W - n), y: clamp(Math.floor(w.y - (n - 1) / 2), 0, H - n), label: same ? `${m.name} ${same + 1}` : m.name, size: n,
-    color: ty.color, art: { icon: monsterIconName(m), color: ty.color }, mref: { src: m.src, id: m.id }, ownerUid: null, visibility: B.placeHidden ? 'gm' : 'players', createdAt: now(),
+    color: ty.color, art: { icon: monsterIconName(m), color: ty.color }, pic: portraitOf(m, { square: true }) || null, mref: { src: m.src, id: m.id }, ownerUid: null, visibility: B.placeHidden ? 'gm' : 'players', createdAt: now(),
   };
   const id = await db.add(col('tokens'), tok);
   if (B.combat.active) await addTokenToCombat(B, { ...tok, id }, m);
@@ -610,8 +755,8 @@ const prevTurn = () => mutateCombat((x) => {
   if (x.turn < 0) { x.turn = x.combatants.length - 1; x.round = Math.max(1, (x.round || 1) - 1); }
   return x;
 });
-async function endCombat() {
-  if (!(await confirmDialog('Kampf beenden? Die Kämpferliste bleibt im Kampf-Tracker erhalten, Zonen verschwinden.', { ok: 'Beenden' }))) return;
+async function endCombat(ohneFrage = false) {
+  if (!ohneFrage && !(await confirmDialog('Kampf beenden? Die Kämpferliste bleibt im Kampf-Tracker erhalten, Zonen verschwinden.', { ok: 'Beenden' }))) return;
   await mutateCombat((x) => {
     x.active = false;
     x.turn = 0;
@@ -883,6 +1028,21 @@ function drawTargetOver(ctx, B, selT, vis) {
     }
   }
 }
+// Bild für einen Token: eigenes Porträt des Charakters, beim Platzieren gemerktes Bild
+// oder das gemalte Porträt des SRD-Monsters (quadratischer Ausschnitt)
+const QDIR = 'assets/portraits/q/';
+export function tokenPic(B, t, { tall = false, cb = null } = {}) {
+  const pe = t ? charOf(B, t) : null;
+  if (pe?.char?.portrait) return tall ? pe.char.portrait : (pe.char.portraitCrop || pe.char.portrait);
+  const st = (t ? statFor(B, t) : null) || cb?.statblock || null;
+  if (st?.image) return st.image;
+  const gemalt = portraitOf(st || (t?.mref?.src === 'srd' ? { id: t.mref.id } : null), { square: !tall });
+  if (gemalt) return gemalt;
+  // Beim Platzieren gemerktes Bild (steht auch Spielern zur Verfügung)
+  if (t?.pic) return tall && t.pic.startsWith(QDIR) ? t.pic.replace(QDIR, 'assets/portraits/') : t.pic;
+  return null;
+}
+
 function drawToken(ctx, B, t, k, tm, selected) {
   const n = t.size || 1;
   const x = t.dragX ?? t.x;
@@ -900,13 +1060,35 @@ function drawToken(ctx, B, t, k, tm, selected) {
     const pulse = 0.5 + 0.5 * Math.sin(tm / 260);
     disk(ctx, cx, cy, r + 0.12 + pulse * 0.08, 'rgba(224,178,74,.22)', '#e0b24a', (2 + pulse * 2) / k);
   }
-  disk(ctx, cx + 0.03, cy + 0.06, r, 'rgba(0,0,0,.35)');
-  const img = pe?.char?.portrait ? imageFor(pe.char.portrait, B.redraw) : null;
+  const eckig = n === 1;                 // ein Feld = Quadrat, größere Kreaturen bleiben rund
+  const q = 0.45;                        // halbe Kantenlänge bei 90 % Feldbreite
+  const rad = 0.1;                       // leicht abgerundete Ecken
+  const formPfad = () => {
+    ctx.beginPath();
+    if (!eckig) { ctx.arc(cx, cy, r, 0, TAU); return; }
+    const x0 = cx - q;
+    const y0 = cy - q;
+    ctx.moveTo(x0 + rad, y0);
+    ctx.arcTo(x0 + q * 2, y0, x0 + q * 2, y0 + q * 2, rad);
+    ctx.arcTo(x0 + q * 2, y0 + q * 2, x0, y0 + q * 2, rad);
+    ctx.arcTo(x0, y0 + q * 2, x0, y0, rad);
+    ctx.arcTo(x0, y0, x0 + q * 2, y0, rad);
+    ctx.closePath();
+  };
+  if (eckig) {
+    ctx.save();
+    ctx.translate(0.03, 0.06);
+    formPfad();
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fill();
+    ctx.restore();
+  } else disk(ctx, cx + 0.03, cy + 0.06, r, 'rgba(0,0,0,.35)');
+  const img = imageFor(tokenPic(B, t), B.redraw);
   ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, TAU);
+  formPfad();
   ctx.clip();
-  if (img) ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+  const bw = eckig ? q : r;
+  if (img) ctx.drawImage(img, cx - bw, cy - bw, bw * 2, bw * 2);
   else if (t.art?.icon) {
     const g = ctx.createRadialGradient(cx, cy - r * 0.3, r * 0.1, cx, cy, r);
     g.addColorStop(0, lighten(t.art.color));
@@ -920,9 +1102,14 @@ function drawToken(ctx, B, t, k, tm, selected) {
     ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     wtext(ctx, initials(t.label).slice(0, 2), cx, cy + 0.02, Math.max(0.28, r * 0.8), '#111');
   }
-  if (down) { ctx.fillStyle = 'rgba(20,20,20,.6)'; ctx.fillRect(cx - r, cy - r, r * 2, r * 2); }
+  if (down) { ctx.fillStyle = 'rgba(20,20,20,.6)'; ctx.fillRect(cx - bw, cy - bw, bw * 2, bw * 2); }
   ctx.restore();
-  disk(ctx, cx, cy, r, null, t.ownerUid && t.ownerUid === B.me ? '#ffffff' : ring, 0.08);
+  if (eckig) {
+    formPfad();
+    ctx.strokeStyle = t.ownerUid && t.ownerUid === B.me ? '#ffffff' : ring;
+    ctx.lineWidth = 0.032;                 // dünner Rand – das Bild soll wirken, nicht der Rahmen
+    ctx.stroke();
+  } else disk(ctx, cx, cy, r, null, t.ownerUid && t.ownerUid === B.me ? '#ffffff' : ring, 0.032);
   if (down) wtext(ctx, cb?.dead || !cb?.isPC ? '☠' : cb?.stable ? '✚' : '💀', cx, cy + 0.03, r * (cb?.dead || !cb?.isPC ? 1.1 : 0.8), '#f1f1f1', 'rgba(0,0,0,.6)');
   if (cb?.concentration) { ctx.setLineDash([0.12, 0.1]); disk(ctx, cx, cy, r + 0.1, null, '#f5c542', 0.05); ctx.setLineDash([]); }
   if (cb && (cb.hp != null || cb.hpState)) {
@@ -936,12 +1123,26 @@ function drawToken(ctx, B, t, k, tm, selected) {
     ctx.fillRect(bx + 0.02, by + 0.025, (bw - 0.04) * frac, 0.09);
     if (cb.tempHp) { ctx.fillStyle = '#7fb0ff'; ctx.fillRect(bx + 0.02, by - 0.05, Math.min(bw - 0.04, (bw - 0.04) * (cb.tempHp / (cb.maxHp || 1))), 0.05); }
   }
-  (cb?.conditions || []).filter((cd) => cd.name !== E.COND.prone || !down).slice(0, 4).forEach((cd, i) => {
-    const a = -Math.PI / 4 - i * 0.6;
-    const px = cx + Math.cos(a) * (r + 0.02);
-    const py = cy + Math.sin(a) * (r + 0.02);
-    disk(ctx, px, py, 0.13, '#8a5cf5', '#fff', 0.03);
-    wtext(ctx, String(cd.name || cd).slice(0, 1), px, py + 0.01, 0.15, '#fff');
+  // Zustände: kleine Quadrate links am Token, je 20 % der Feldbreite – alle, nicht nur der erste
+  const marken = [
+    ...(cb?.dead ? [{ name: 'Tot' }] : []),
+    ...(cb && !cb.dead && cb.hp != null && cb.hp <= 0 ? [{ name: 'Bewusstlos' }] : []),
+    ...(cb?.surprised ? [{ name: 'Überrascht' }] : []),
+    ...(cb?.conditions || []),
+  ];
+  marken.forEach((cd, i) => {
+    const sz = 0.2;
+    const px = x - sz - 0.04;
+    const py = y + 0.04 + i * (sz + 0.04);
+    (B._condHit ||= []).push({ x: px, y: py, s: sz, name: String(cd.name || cd) });
+    ctx.fillStyle = '#8a5cf5';
+    ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.lineWidth = 0.025;
+    ctx.beginPath();
+    ctx.rect(px, py, sz, sz);
+    ctx.fill();
+    ctx.stroke();
+    wtext(ctx, String(cd.name || cd).slice(0, 1), px + sz / 2, py + sz / 2 + 0.005, sz * 0.78, '#fff');
   });
   if (cb?.surprised && !B.combat.active) wtext(ctx, '!', cx - r, cy - r + 0.1, 0.4, '#f5c542', 'rgba(0,0,0,.8)', 900);
   if (selected) { ctx.setLineDash([0.15, 0.1]); disk(ctx, cx, cy, r + 0.2, null, '#8a5cf5', 0.07); ctx.setLineDash([]); }
@@ -956,7 +1157,15 @@ export function drawBattle(ctx, s, k) {
   const W = s.doc.w;
   const H = s.doc.h;
   const tm = performance.now();
-  const hidden = (t) => !B.gm && s.fogOn && s.fog && s.fog[Math.floor(t.y) * W + Math.floor(t.x)] !== '1';
+  // Spieler sehen nur, was im Sichtfeld der Gruppe liegt (und was der Nebel freigibt)
+  const hidden = (t) => {
+    if (B.gm) return false;
+    const i = Math.floor(t.y) * W + Math.floor(t.x);
+    if (s.fogOn && s.fog && s.fog[i] !== '1') return true;
+    if (s.sicht && !s.sicht[i] && !t.ownerUid) return true;   // eigene Gruppe bleibt immer sichtbar
+    return false;
+  };
+  B._condHit = [];                       // Trefferflächen der Zustandsquadrate für die Infoblase
   const vis = B.tokens.filter((t) => !hidden(t));
   for (const z of B.combat.zones || []) drawZone(ctx, B, z, W, H, k);
   for (const o of B.overlays) if (o.kind === 'tpl') drawTpl(ctx, o, o.color || '#b07cff', W, H, k, o.label);
@@ -989,6 +1198,7 @@ export function drawBattle(ctx, s, k) {
       wtext(ctx, info.turn && B.combat.active ? `${fmtMeters(m)} · noch ${fmtMeters(Math.max(0, info.remainingM - m))}` : fmtMeters(m), x + n / 2, y - 0.4, 0.36, '#fff', 'rgba(0,0,0,.8)');
     } else if (info && B.combat.active && info.turn && (x !== t.x || y !== t.y)) wtext(ctx, 'zu weit', x + n / 2, y - 0.4, 0.36, '#ef5a5f', 'rgba(0,0,0,.8)');
   }
+  drawFloats(ctx, B, k);
   for (const p of [...B.overlays.filter((o) => o.kind === 'ping'), B.localPing]) {
     if (!p) continue;
     const age = (now() - p.ts) / 1000;
@@ -1004,15 +1214,22 @@ export function drawBattle(ctx, s, k) {
 }
 
 // ───────────────────────── Oberfläche ─────────────────────────
-function TokenArt({ B, t, cb, size = 32 }) {
-  const pe = t ? charOf(B, t) : null;
-  if (pe?.char?.portrait) return html`<span class="bt-art" style=${{ width: `${size}px`, height: `${size}px`, backgroundImage: `url(${pe.char.portrait})` }}></span>`;
+// Regeltext eines Zustands – für Tooltips auf der Karte und in der Leiste
+export function condText(name) {
+  return CONDITIONS.find((c) => c.name === name)?.desc || '';
+}
+
+function TokenArt({ B, t, cb, size = 32, portrait = false }) {
+  const box = portrait ? { width: `${Math.round(size * 0.8)}px`, height: `${size}px` } : { width: `${size}px`, height: `${size}px` };
+  // In der Initiativleiste zählt das Hochformat – auch bei großen Kreaturen, die auf der Karte rund bleiben
+  const pic = tokenPic(B, t, { tall: portrait, cb });
+  if (pic) return html`<span class=${`bt-art${portrait ? ' hoch' : ''}`} style=${{ ...box, backgroundImage: `url(${pic})` }}></span>`;
   const sb = B.gm && t ? statFor(B, t) : null;
   if (sb) return html`<${MonsterArt} m=${sb} size=${size} />`;
   if (cb?.statblock) return html`<${MonsterArt} m=${cb.statblock} size=${size} />`;
   if (cb?.art) return html`<${MonsterArt} m=${cb.art} size=${size} />`;
   if (t?.art) return html`<${MonsterArt} m=${{ name: t.label, icon: t.art.icon, color: t.art.color }} size=${size} />`;
-  return html`<span class="bt-art ini" style=${{ width: `${size}px`, height: `${size}px`, background: t?.color || cb?.color || '#7a7a7a' }}>${initials(t?.label || cb?.name || '?').slice(0, 2)}</span>`;
+  return html`<span class=${`bt-art bt-kuerzel${portrait ? ' hoch' : ''}`} style=${{ ...box, background: t?.color || cb?.color || '#7a7a7a' }}>${initials(t?.label || cb?.name || '?').slice(0, 2)}</span>`;
 }
 
 function TurnStrip({ B, s }) {
@@ -1025,6 +1242,30 @@ function TurnStrip({ B, s }) {
     const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: myCb.name, kind: 'init' });
     if (r) sendEvent({ type: 'init', value: r.total, charId: myCb.charId || null });
   };
+  // Beim Kampfbeginn würfelt jeder Spieler seine Initiative selbst – sichtbar auf dem eigenen Bildschirm
+  const initRef = useRef('');
+  useEffect(() => {
+    if (!c.active || !myCb || myCb.init != null) return;
+    const k = `${B.mapId}|${myCb.id}`;
+    if (initRef.current === k) return;
+    initRef.current = k;
+    const id = setTimeout(() => rollMyInit(), 400);
+    return () => clearTimeout(id);
+  }, [c.active, myCb?.id, myCb?.init]);
+  // Notnagel: Wer nach 15 Sekunden nichts gewürfelt hat, bekommt die Initiative von der Spielleitung
+  const offen = c.list.filter((x) => x.init == null).map((x) => x.id).join(',');
+  useEffect(() => {
+    if (!c.active || !B.gm || !offen) return;
+    const id = setTimeout(() => {
+      mutateCombat((x) => {
+        const ctx = A.makeCtx(x);
+        for (const o of x.combatants) if (o.init == null) E.rollInitiative(x, o, ctx);
+        resort(x);
+        return x;
+      });
+    }, 15000);
+    return () => clearTimeout(id);
+  }, [c.active, offen, B.gm]);
   return html`<div class="bt-strip">
     <span class=${`bt-round${c.active ? '' : ' idle'}`}>${c.active ? `Runde ${c.round}` : 'Vorbereitung'}</span>
     <div class="bt-order">${list.map((x) => {
@@ -1035,15 +1276,13 @@ function TurnStrip({ B, s }) {
       const tip = [`${x.name} · Initiative ${ini}`, x.form ? `Verwandelt: ${x.form.name}` : '', ...(x.conditions || []).map((k) => k.name), x.concentration ? `Konzentration: ${x.concentration.name}` : '', x.surprised ? 'überrascht' : '', t ? '' : '(kein Token auf dieser Karte)'].filter(Boolean).join('\n');
       return html`<button type="button" key=${x.id} class=${`bt-chip${x.id === c.curId ? ' cur' : ''}${down ? ' down' : ''}${x.isPC ? ' pc' : ' npc'}${x.hidden ? ' hid' : ''}`}
         title=${tip} onClick=${() => { if (t) { s.focusToken?.(t); selectToken(B, t.id); } }}>
-        <${TokenArt} B=${B} t=${t} cb=${x} size=${34} />
+        <span class="bt-pic"><${TokenArt} B=${B} t=${t} cb=${x} size=${54} portrait /></span>
         <b class="ini">${ini}</b>
-        <span class="nm">${x.dead ? '☠ ' : ''}${x.name}</span>
         <i class="hp"><i style=${{ width: `${frac * 100}%`, background: frac > 0.5 ? '#3dd68c' : frac > 0.25 ? '#f5c542' : '#ef5a5f' }}></i></i>
-        ${(x.conditions || []).length ? html`<i class="bt-cdot" title=${(x.conditions || []).map((k) => k.name).join(', ')}>${x.conditions.length}</i>` : null}
+        ${(x.conditions || []).length ? html`<i class="bt-cdot" title=${(x.conditions || []).map((k) => `${k.name}: ${condText(k.name)}`).join(String.fromCharCode(10))}>${x.conditions.length}</i>` : null}
       </button>`;
     })}</div>
     <div class="bt-ctl">
-      <${IconBtn} icon="scroll" title="Kampfprotokoll" active=${B.logOpen} onClick=${() => { B.logOpen = !B.logOpen; B.rerender(); }} />
       ${B.gm && c.active ? html`<${IconBtn} icon="skip-back" title="Vorheriger Zug (ohne Regeln)" onClick=${prevTurn} /><${Btn} size="sm" kind="primary" icon="skip-forward" onClick=${() => { B.pending = null; sendEvent({ type: 'endTurn' }).catch(() => {}); }}>Nächster Zug<//><${IconBtn} icon="stop" title="Kampf beenden" onClick=${endCombat} /><${IconBtn} icon="list" title="Kampf-Tracker (Liste mit allen Werten)" onClick=${() => openView('combat')} />` : null}
       ${B.gm && !c.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}
       ${!B.gm && myCb && myCb.init == null ? html`<${Btn} size="sm" icon="d20" onClick=${rollMyInit}>Initiative<//>` : null}
@@ -1069,7 +1308,7 @@ function StatusChips({ cb }) {
     ${cb.dead ? html`<span class="cond">☠ tot</span>` : null}
     ${zero ? html`<span class="cond">Todesrettungswürfe ${cb.deathSaves?.s || 0}✓ ${cb.deathSaves?.f || 0}✗${cb.stable ? ' · stabil' : ''}</span>` : null}
     ${cb.surprised ? html`<span class="cond">überrascht</span>` : null}
-    ${conds.map((k, i) => html`<span class="cond" key=${`c${i}`}>${k.name}${k.label ? ` (${k.label})` : ''}${k.rounds ? ` · ${k.rounds} R.` : ''}</span>`)}
+    ${conds.map((k, i) => html`<span class="cond hilfe" key=${`c${i}`} data-info=${`${k.name}: ${condText(k.name) || 'Zustand aus den Regeln'}`}>${k.name}${k.label ? ` (${k.label})` : ''}${k.rounds ? ` · ${k.rounds} R.` : ''}</span>`)}
     ${effs.map((e) => html`<span class="eff" key=${e.id}>${e.name}${e.rounds ? ` · ${e.rounds} R.` : ''}</span>`)}
     ${cb.concentration ? html`<span class="conc">◎ ${cb.concentration.name}</span>` : null}
   </div>`;
@@ -1183,6 +1422,38 @@ function ResultStack({ B }) {
   return html`<div class="bt-results">${shown.map((r) => html`<${ResultCard} key=${r.id} r=${r} B=${B} />`)}</div>`;
 }
 
+// Steht eine Seite noch? (lebt oder macht noch Todesrettungswürfe)
+const steht = (c) => !c.dead && !c.vanish && !(c.hp != null && c.hp <= 0 && (c.stable || !c.isPC));
+
+// Gewonnen / Verloren: 3 Sekunden einblenden, danach zurück ins Erkunden
+function Ausgang({ B, s }) {
+  const c = B.combat;
+  const [zeig, setZeig] = useState(null);
+  useEffect(() => {
+    if (!c.active) return undefined;
+    const liste = c.list.filter((x) => !x.vanish);
+    // Seiten: von der SL gesetzte Teams schlagen die Einteilung Helden ↔ Gegner
+    const seite = (x) => x.team || (x.isPC || x.ally ? 'pc' : 'npc');
+    const ich = liste.find((x) => x.ownerUid && x.ownerUid === B.me) || liste.find((x) => x.isPC);
+    const meineSeite = ich ? seite(ich) : 'pc';
+    const meine = liste.filter((x) => seite(x) === meineSeite);
+    const gegner = liste.filter((x) => seite(x) !== meineSeite);
+    if (!meine.length || !gegner.length) return undefined;
+    const meineLeben = meine.some(steht);
+    const gegnerLeben = gegner.some(steht);
+    if (meineLeben && gegnerLeben) return undefined;
+    const sieg = meineLeben && !gegnerLeben;
+    setZeig(sieg ? 'Gewonnen' : 'Verloren');
+    const t = setTimeout(() => {
+      setZeig(null);
+      if (sieg && B.gm) endCombat(true);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [c.list.map((x) => `${x.id}:${x.hp}:${x.dead ? 1 : 0}:${x.stable ? 1 : 0}`).join(','), c.active]);
+  if (!zeig) return null;
+  return html`<div class=${`bt-ausgang ${zeig === 'Gewonnen' ? 'sieg' : 'nieder'}`}><span>${zeig}</span></div>`;
+}
+
 export function BattleHud({ B, s, editToken }) {
   const c = B.combat;
   const selT = B.sel ? B.tokens.find((t) => t.id === B.sel) : null;
@@ -1199,14 +1470,27 @@ export function BattleHud({ B, s, editToken }) {
       B.redraw();
     }
   }, [c.turnKey]);
-  const showStrip = c.active || (B.gm && (c.list.length || B.tokens.some((t) => t.charId || t.mref)));
-  const selCb = selT ? cbOfTok(B, selT) : null;
+  // Erkunden: Figuren stehen in der Liste, damit Zauber und Fähigkeiten funktionieren
+  useEffect(() => { if (B.explore) ensureCombatants(B); }, [B.explore, B.tokens.length, c.list.length]);
+  // Besiegte Gegner ins Spieler-Bestiarium eintragen
+  const tote = c.list.filter((x) => x.dead && !x.isPC).map((x) => x.id).join(',');
+  useEffect(() => { if (B.gm && tote) recordKills(B); }, [tote, B.gm]);
+  const showStrip = c.active;   // außerhalb des Kampfes gibt es keine Initiative
+  const selCb = selT ? cbForBar(B, selT) : null;
   const ctl = !!selT && canControl(B, selT) && !!selCb;
-  const acts = ctl ? A.catalogSync(c.x, selCb, B.ctx) : [];
+  // Aufgebrauchte Verbrauchsgegenstände bleiben im Katalog (für die Auflösung), nicht aber in der Leiste
+  const acts = ctl ? A.catalogSync(c.x, selCb, B.ctx).filter((z) => !z.consumed) : [];
   const char = ctl ? B.ctx.charOf(selCb) : null;
-  const isTurn = ctl && c.active && c.curId === selCb.id;
+  const isTurn = ctl && ((c.active && c.curId === selCb.id) || (!c.active && B.explore));
   const movedLocal = selCb ? B.localMove.get(`${c.turnKey}|${selCb.id}`) || 0 : 0;
-  return html`${showStrip ? html`<${TurnStrip} B=${B} s=${s} />` : null}
+  return html`<${Ausgang} B=${B} s=${s} />
+    ${showStrip ? html`<${TurnStrip} B=${B} s=${s} />` : null}
+    ${B.condTip ? html`<div class="bt-condtip" style=${{ left: `${B.condTip.sx}px`, top: `${B.condTip.sy}px` }}>
+      <b>${B.condTip.name}</b>${condText(B.condTip.name) ? html`<span>${condText(B.condTip.name)}</span>` : null}</div>` : null}
+    ${!c.active && B.gm ? html`<button type="button" class="bt-startbtn" title="Initiative würfeln und den Kampf beginnen" onClick=${() => startCombat(B)}>
+      <${Icon} name="swords" size=${16} />Kampf starten</button>` : null}
+    <button type="button" class=${`bt-logbtn${B.logOpen ? ' on' : ''}`} title="Aktionsprotokoll"
+      onClick=${() => { B.logOpen = !B.logOpen; B.rerender(); }}><${Icon} name="scroll" size=${17} /></button>
     ${B.logOpen ? html`<${CombatLog} B=${B} />` : null}
     <${ResultStack} B=${B} />
     <div class="bt-dock">
@@ -1216,11 +1500,104 @@ export function BattleHud({ B, s, editToken }) {
       ${ctl ? html`<${BattleBar} B=${B} cb=${selCb} char=${char} acts=${acts} turn=${isTurn} speedM=${speedOf(B, selT)} movedLocal=${movedLocal}
         pendingKey=${B.pending?.a?.key || null} portrait=${html`<${TokenArt} B=${B} t=${selT} cb=${selCb} size=${64} />`}
         onArm=${(a) => (B.pending?.a?.key === a.key ? arm(B, null) : armAction(B, selT, a))}
-        onEnd=${isTurn ? () => { B.pending = null; sendEvent({ type: 'endTurn' }).catch(() => {}); } : null}
+        onEnd=${ctl && c.active && c.curId === selCb.id ? () => { B.pending = null; sendEvent({ type: 'endTurn' }).catch(() => {}); } : null}
         onGm=${B.gm ? (e) => gmMenu(B, selT, selCb, e, editToken) : null}
         onEndConc=${() => endConc(B, selCb)}
         onClose=${() => selectToken(B, null)} />` : null}
     </div>`;
+}
+
+// Figuren der Karte: Charaktere, NPC und Monster einzeln – ziehen zum Platzieren, Kreuz zum Entfernen
+export const FIG_MIME = 'application/x-weltenschmiede-figur';
+
+// Token samt Kämpfer entfernen (Karte und Initiative)
+export async function removeFigure(B, t) {
+  const cb = cbOfTok(B, t);
+  await db.remove(col('tokens'), t.id).catch(() => {});
+  if (cb) {
+    await mutateCombat((x) => {
+      x.combatants = x.combatants.filter((c) => c.id !== cb.id);
+      if (x.turn >= x.combatants.length) x.turn = 0;
+      E.log(x, `${cb.name} verlässt den Kampf`);
+      return x;
+    }).catch(() => {});
+  }
+  if (B.sel === t.id) selectToken(B, null);
+}
+
+// Eine gezogene Figur an der Zielstelle absetzen
+export async function dropFigure(B, fig, cell, W, H) {
+  if (!fig) return;
+  if (fig.kind === 'char') {
+    const pe = (B.party || []).find((x) => x.char?.id === fig.id);
+    if (!pe) return;
+    const da = B.tokens.find((x) => x.charId === fig.id);
+    if (da) { await db.update(col('tokens'), da.id, { x: cell.x, y: cell.y }); return; }
+    await db.add(col('tokens'), {
+      mapId: B.mapId, x: cell.x, y: cell.y, size: 1, label: pe.char.name, color: pe.char.color || '#4d8dff',
+      ownerUid: pe.owner, charId: pe.char.id, visibility: 'players', createdAt: now(),
+    });
+    return;
+  }
+  let m = null;
+  if (fig.kind === 'npc') {
+    const n = (B.npcs || []).find((x) => x.id === fig.id);
+    if (n) m = { ...npcStat(n), id: n.id, image: n.image || null, src: 'npc' };
+  } else if (fig.kind === 'bst') {
+    const n = (B.bestiary || []).find((x) => x.id === fig.id);
+    if (n) m = { ...n, src: 'bst' };
+  } else if (fig.kind === 'srd') {
+    if (!B.srd) B.srd = (await import('../data/monsters-srd.js')).MONSTERS;
+    const n = B.srd.find((x) => x.id === fig.id);
+    if (n) m = { ...n, src: 'srd' };
+  }
+  if (!m) return;
+  B.placing = m;
+  await placeMonster(B, { x: cell.x + 0.5, y: cell.y + 0.5 }, W, H);
+  B.placing = null;
+}
+
+function FigRow({ fig, art, name, sub, onClick, onRemove, aktiv }) {
+  return html`<div class=${`bt-fig${aktiv ? ' on' : ''}`} draggable=${!!fig}
+    onDragStart=${(e) => { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData(FIG_MIME, JSON.stringify({ kind: fig.kind, id: fig.id })); e.dataTransfer.setData('text/plain', name); }}
+    onClick=${onClick}>
+    ${art}
+    <span class="grow" style="min-width:0"><b>${name}</b><small>${sub}</small></span>
+    ${onRemove ? html`<button type="button" class="bt-figx" title="Von Karte und Initiative entfernen" onClick=${(e) => { e.stopPropagation(); onRemove(); }}><${Icon} name="x" size=${13} /></button>` : null}
+  </div>`;
+}
+
+// Liste für die Seitenleiste in „Erkunden“ und „Kampf“
+export function FigureList({ B, s, onPlaceMode }) {
+  const [q, setQ] = useState('');
+  const ql = q.trim().toLowerCase();
+  const passt = (n) => !ql || String(n).toLowerCase().includes(ql);
+  const aufKarte = B.tokens.filter((t) => passt(t.label));
+  const offeneChars = (B.party || []).filter((pe) => pe.char && !B.tokens.some((t) => t.charId === pe.char.id) && passt(pe.char.name));
+  const npcs = (B.npcs || []).filter((n) => passt(n.name));
+  return html`<div class="stack sm">
+    <input class="input sm" placeholder="Suchen: Name …" value=${q} onInput=${(e) => setQ(e.target.value)} />
+    <div class="tiny faint">Ziehen = auf die Karte setzen · Kreuz = von Karte und Initiative nehmen.</div>
+
+    ${aufKarte.length ? html`<div class="bt-figsec">Auf der Karte <small>${aufKarte.length}</small></div>
+      ${aufKarte.map((t) => html`<${FigRow} key=${t.id} fig=${null} aktiv=${B.sel === t.id}
+        art=${html`<${TokenArt} B=${B} t=${t} cb=${cbOfTok(B, t)} size=${30} />`}
+        name=${t.label} sub=${t.charId ? 'Charakter' : cbOfTok(B, t) ? 'im Kampf' : 'auf der Karte'}
+        onClick=${() => { selectToken(B, t.id); s?.focusToken?.(t); }} onRemove=${() => removeFigure(B, t)} />`)}` : null}
+
+    ${offeneChars.length ? html`<div class="bt-figsec">Charaktere <small>${offeneChars.length}</small></div>
+      ${offeneChars.map((pe) => html`<${FigRow} key=${pe.char.id} fig=${{ kind: 'char', id: pe.char.id }}
+        art=${html`<span class="bt-art" style=${{ width: '30px', height: '30px', background: pe.char.portraitCrop || pe.char.portrait ? `center / cover url(${pe.char.portraitCrop || pe.char.portrait})` : (pe.char.color || '#4d8dff') }}></span>`}
+        name=${pe.char.name} sub=${`Stufe ${pe.char.level || 1}`} />`)}` : null}
+
+    ${npcs.length ? html`<div class="bt-figsec">NPC-Sammlung <small>${npcs.length}</small></div>
+      ${npcs.map((n) => html`<${FigRow} key=${n.id} fig=${{ kind: 'npc', id: n.id }}
+        art=${html`<${MonsterArt} m=${{ ...npcStat(n), image: n.image || null }} size=${30} />`}
+        name=${n.name} sub=${[n.species, n.role].filter(Boolean).join(' · ') || 'NPC'} />`)}` : null}
+
+    <div class="bt-figsec">Monster</div>
+    <${MonsterPlacer} B=${B} active=${B.placing ? true : false} onPick=${onPlaceMode} onStop=${() => { B.placing = null; B.rerender(); }} />
+  </div>`;
 }
 
 // Kompendium in der Seitenleiste (SL): SRD-Monster (deutsch) und eigenes Bestiarium auf die Karte setzen
@@ -1230,16 +1607,21 @@ export function MonsterPlacer({ B, active, onPick, onStop }) {
   const [hidden, setHidden] = useState(!!B.placeHidden);
   useEffect(() => { import('../data/monsters-srd.js').then((m) => setSrd(m.MONSTERS)); }, []);
   const ql = q.trim().toLowerCase();
-  const list = [...(B.bestiary || []).map((m) => ({ ...m, src: 'bst' })), ...(srd || []).map((m) => ({ ...m, src: 'srd' }))]
+  const list = [
+    ...(B.bestiary || []).map((m) => ({ ...m, src: 'bst' })),
+    ...(srd || []).map((m) => ({ ...m, src: 'srd' })),
+  ]
     .filter((m) => !ql || m.name.toLowerCase().includes(ql) || String(m.type || '').toLowerCase().includes(ql)).slice(0, 40);
   return html`<div class="stack sm">
-    <b>Monster platzieren</b>
-    <input class="input sm" placeholder="Suchen: Goblin, Drache, Untoter …" value=${q} onInput=${(e) => setQ(e.target.value)} />
+    <b>Aus dem Kompendium</b>
+    <input class="input sm" placeholder="Suchen: Goblin, Drache, Wirtin …" value=${q} onInput=${(e) => setQ(e.target.value)} />
     <div class="bt-mlist">
       ${!srd ? html`<div class="empty"><span class="spinner" /></div>` : null}
-      ${list.map((m) => html`<button type="button" key=${`${m.src}:${m.id}`} class=${`bt-mrow${active && B.placing?.id === m.id ? ' on' : ''}`} onClick=${() => onPick({ ...m })}>
+      ${list.map((m) => html`<button type="button" key=${`${m.src}:${m.id}`} class=${`bt-mrow${active && B.placing?.id === m.id ? ' on' : ''}`} draggable
+        onDragStart=${(e) => { e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData(FIG_MIME, JSON.stringify({ kind: m.src, id: m.id })); e.dataTransfer.setData('text/plain', m.name); }}
+        onClick=${() => onPick({ ...m })}>
         <${MonsterArt} m=${m} size=${30} />
-        <span class="grow" style="min-width:0"><b>${m.name}</b><small>HG ${m.cr || '?'} · ${m.src === 'srd' ? 'SRD' : 'Bestiarium'}</small></span>
+        <span class="grow" style="min-width:0"><b>${m.name}</b><small>HG ${m.cr || '?'} · ${m.src === 'srd' ? 'SRD' : m.src === 'npc' ? 'NPC' : 'Bestiarium'}</small></span>
       </button>`)}
     </div>
     <label class="check small"><input type="checkbox" checked=${hidden} onChange=${(e) => { B.placeHidden = e.target.checked; setHidden(e.target.checked); }} /> Verborgen platzieren (nur SL sieht sie)</label>

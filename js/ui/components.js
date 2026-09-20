@@ -576,3 +576,14 @@ export function pickFiles({ accept = '*/*', multiple = false, directory = false 
     inp.click();
   });
 }
+
+// Umschalter zwischen zwei verwandten Seiten (NPC-Schmiede ↔ NPC-Sammlung, Bestiarium ↔ Encounter).
+// Wechselt im selben Tab, damit kein zweiter Tab aufgeht.
+export function ViewToggle({ value, options }) {
+  return html`<div class="view-toggle"><${Segmented} value=${value} options=${options.map((o) => ({ value: o.value, label: o.label, icon: o.icon }))}
+    onChange=${(v) => {
+      if (v === value) return;
+      const o = options.find((x) => x.value === v);
+      if (o) openView(o.view, o.params || {}, { replace: true });
+    }} /></div>`;
+}

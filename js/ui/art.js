@@ -103,9 +103,48 @@ export function monsterIconName(m) {
   for (const [re, ic] of MONSTER_RULES) if (re.test(n)) return ic;
   return creatureType(m?.type).icon;
 }
-export function MonsterArt({ m, size = 56, cr = false, round = true }) {
-  if (m?.image) {
-    return html`<span class=${`art monster-art has-img${round ? ' round' : ''}`} style=${{ width: `${size}px`, height: `${size}px` }}><img src=${m.image} alt="" />
+// Gemalte Porträts der SRD-Monster (assets/portraits) – werden beim ersten Gebrauch nachgeladen
+let PORTRAITS = null;
+export function loadPortraits() {
+  if (PORTRAITS) return Promise.resolve(PORTRAITS);
+  return import('../data/portraits.js').then((m) => { PORTRAITS = m.PORTRAITS; return PORTRAITS; }).catch(() => { PORTRAITS = new Set(); return PORTRAITS; });
+}
+const refKey = (m) => String(m?.portraitId || m?.srdId || m?.id || '');
+// Hochformat für Bögen und Kompendium, quadratischer Ausschnitt für Token und Initiativleiste
+export function portraitOf(m, { square = false } = {}) {
+  if (m?.image) return m.image;
+  const k = refKey(m);
+  if (!k || !PORTRAITS?.has(k)) return null;
+  return square ? `assets/portraits/q/${k}.webp` : `assets/portraits/${k}.webp`;
+}
+function usePortraits() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (PORTRAITS) return undefined;
+    let alive = true;
+    loadPortraits().then(() => alive && force((x) => x + 1));
+    return () => { alive = false; };
+  }, []);
+  return PORTRAITS;
+}
+
+// Großes Bild im Hochformat (Kompendium, NPC-Bogen) – ohne Porträt bleibt es beim Symbol
+export function PortraitArt({ m, w = 132, cr = false }) {
+  usePortraits();
+  const pic = portraitOf(m);
+  const h = Math.round(w * 4 / 3);
+  if (pic) {
+    return html`<span class="art portrait-art" style=${{ width: `${w}px`, height: `${h}px` }}><img src=${pic} alt="" loading="lazy" />
+      ${cr && m?.cr ? html`<i class="ma-cr">HG ${m.cr}</i>` : null}</span>`;
+  }
+  return html`<${MonsterArt} m=${m} size=${w} cr=${cr} round=${false} />`;
+}
+
+export function MonsterArt({ m, size = 56, cr = false, round = true, square = false }) {
+  usePortraits();
+  const pic = portraitOf(m, { square: square || round });
+  if (pic) {
+    return html`<span class=${`art monster-art has-img${round ? ' round' : ''}`} style=${{ width: `${size}px`, height: `${size}px` }}><img src=${pic} alt="" loading="lazy" />
       ${cr && m.cr ? html`<i class="ma-cr">HG ${m.cr}</i>` : null}</span>`;
   }
   const t = creatureType(m?.type);

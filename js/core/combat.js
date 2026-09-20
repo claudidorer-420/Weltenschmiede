@@ -72,7 +72,7 @@ export async function saveCombat(state) {
 // gleichzeitige Änderungen (Relais, Rückfragen, Karte) nicht gegenseitig überschreiben.
 let lock = Promise.resolve();
 const goneTokens = new Set();
-const sheetKey = (c) => `${c.hp}|${c.tempHp || 0}|${c.deathSaves?.s || 0}|${c.deathSaves?.f || 0}|${c.concentration?.name || ''}`;
+const sheetKey = (c) => `${c.hp}|${c.tempHp || 0}|${c.deathSaves?.s || 0}|${c.deathSaves?.f || 0}|${c.dead ? 1 : 0}|${c.concentration?.name || ''}`;
 export function mutateCombat(fn) {
   const run = lock.then(async () => {
     const st = await loadCombat();
@@ -128,6 +128,7 @@ export function combatantFromCharacter({ owner, char }) {
     initBonus: (Number(char.initBonus) || 0) + dex, isPC: true, ownerUid: owner, charId: char.id, color: char.color || null,
   });
   c.tempHp = Number(char.tempHp) || 0;
+  c.dead = !!char.dead;
   if (char.hp <= 0) c.deathSaves = char.deathSaves || { s: 0, f: 0 };
   return c;
 }
@@ -190,7 +191,7 @@ export function pushCharHp(c) {
   const conc = c.concentration && typeof c.concentration === 'object' ? { name: c.concentration.name, id: c.concentration.spellId || null } : null;
   // Verwandelt (2014): im Bogen bleiben die echten TP stehen
   const hp = c.form?.mode === 'replace' ? Number(c.form.hp0) || 0 : c.hp;
-  db.update(`users/${c.ownerUid}/characters`, c.charId, { hp, tempHp: c.tempHp || 0, deathSaves: c.deathSaves || { s: 0, f: 0 }, concentration: conc }).catch(() => {});
+  db.update(`users/${c.ownerUid}/characters`, c.charId, { hp, tempHp: c.tempHp || 0, deathSaves: c.deathSaves || { s: 0, f: 0 }, dead: !!c.dead, concentration: conc }).catch(() => {});
 }
 
 // Schaden (delta < 0) oder Heilung (delta > 0) inkl. temporärer TP, Todesrettungswürfe, Konzentrationshinweis (Kampf-Tracker)

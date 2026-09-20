@@ -16,7 +16,7 @@ import { doRoll } from '../core/rolls.js';
 import { roll, modifier, fmtMod } from '../lib/dice.js';
 import { CONDITIONS, EXTRA_MARKERS } from '../data/rules5e.js';
 import { ViewFrame } from '../ui/frame.js';
-import { Icon, IconBtn, Btn, Field, Toggle, Statblock, openMenu, openModal, promptDialog, confirmDialog, toast, Empty } from '../ui/components.js';
+import { Icon, IconBtn, Btn, Field, Select, Toggle, Statblock, openMenu, openModal, promptDialog, confirmDialog, toast, Empty } from '../ui/components.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { now, debounce, fmtTime } from '../lib/util.js';
 
@@ -60,6 +60,34 @@ function BestiaryPick({ close }) {
         <input class="input tiny" type="number" min="0" max="30" value=${qty[m.id] || 0} onInput=${(e) => setQty({ ...qty, [m.id]: Number(e.target.value) })} /></div>`)}
     </div>`}
     <div class="btn-row end"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" disabled=${!chosen.length} onClick=${() => close(chosen.map((m) => ({ ...m, qty: qty[m.id] })))}>Hinzufügen<//></div>
+  </div>`;
+}
+
+// Seiten festlegen – nötig, wenn Spieler gegen Spieler kämpfen („Mira, Torin gegen Hagen“)
+export const SIDES = [
+  { key: '', label: 'Automatisch', hint: 'Helden gegen Gegner' },
+  { key: 'a', label: 'Seite A' },
+  { key: 'b', label: 'Seite B' },
+  { key: 'c', label: 'Seite C' },
+];
+function SidesForm({ close, combatants }) {
+  const [teams, setTeams] = useState(Object.fromEntries(combatants.map((c) => [c.id, c.team || ''])));
+  const zeile = (k) => combatants.filter((c) => (teams[c.id] || '') === k).map((c) => c.name);
+  const satz = ['a', 'b', 'c'].map(zeile).filter((l) => l.length).map((l) => l.join(', ')).join(' gegen ');
+  return html`<div class="modal-body stack">
+    <div class="small muted">Normalerweise stehen Helden gegen Gegner. Für Duelle oder Spieler-gegen-Spieler teilst du hier von Hand ein – gleiche Seite heißt verbündet.</div>
+    <div class="stack sm">
+      ${combatants.map((c) => html`<label key=${c.id} class="row nowrap share-row">
+        <span class="grow ellipsis">${c.name}${c.isPC ? html` <span class="badge">Held</span>` : null}</span>
+        <${Select} value=${teams[c.id] || ''} onChange=${(v) => setTeams({ ...teams, [c.id]: v })} options=${SIDES.map((s) => ({ value: s.key, label: s.label }))} style="width:auto" />
+      </label>`)}
+    </div>
+    ${satz ? html`<div class="card tight small"><b>${satz}</b></div>` : null}
+    <div class="modal-foot" style="padding:0;border:0;background:none">
+      <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//>
+      <${Btn} kind="ghost" onClick=${() => close(Object.fromEntries(combatants.map((c) => [c.id, ''])))}>Zurücksetzen<//>
+      <${Btn} kind="primary" icon="check" onClick=${() => close(teams)}>Übernehmen<//>
+    </div>
   </div>`;
 }
 
@@ -178,7 +206,7 @@ function GmCombat({ tabId }) {
       if (!all && (c.isPC || c.init != null)) continue;
       c.init = roll(`1d20${c.initBonus >= 0 ? '+' : ''}${c.initBonus || 0}`).total;
     }
-    log(x, all ? 'Initiative für alle gewürfelt' : 'Initiative der NSC gewürfelt');
+    log(x, all ? 'Initiative für alle gewürfelt' : 'Initiative der NPC gewürfelt');
     return resort(x);
   });
   const start = () => update((x) => {
@@ -259,6 +287,18 @@ function GmCombat({ tabId }) {
       { label: 'Entfernen', icon: 'trash', danger: true, onClick: () => update((x) => { const curId = x.combatants[x.turn]?.id; x.combatants = x.combatants.filter((y) => y.id !== c.id); x.turn = Math.max(0, x.combatants.findIndex((y) => y.id === curId)); return x; }) },
     ]);
   };
+  const sidesDialog = async () => {
+    const liste = st?.combatants || [];
+    if (!liste.length) return toast('Erst Kämpfer hinzufügen.', 'error');
+    const r = await openModal(({ close }) => html`<${SidesForm} close=${close} combatants=${liste} />`, { title: 'Seiten festlegen', icon: 'users', size: 'sm' });
+    if (!r) return;
+    update((x) => {
+      for (const c of x.combatants) c.team = r[c.id] || null;
+      const namen = ['a', 'b', 'c'].map((k) => x.combatants.filter((c) => c.team === k).map((c) => c.name)).filter((l) => l.length).map((l) => l.join(', '));
+      log(x, namen.length > 1 ? `Seiten: ${namen.join(' gegen ')}` : 'Seiten zurückgesetzt');
+      return x;
+    });
+  };
   const onDeath = (id, k, v) => update((x) => { const c = x.combatants.find((y) => y.id === id); c.deathSaves[k] = Math.max(0, Math.min(3, v)); if (c.deathSaves.s >= 3) log(x, `${c.name} ist stabil`); if (c.deathSaves.f >= 3) log(x, `☠ ${c.name} ist gestorben`); return x; });
   const onLegendary = (id, v) => update((x) => { x.combatants.find((y) => y.id === id).legendaryUsed = v; return x; });
 
@@ -275,8 +315,9 @@ function GmCombat({ tabId }) {
       ${st.active
         ? html`<${Btn} kind="primary" icon="skip-forward" onClick=${nextTurn}>Nächster Zug<//><${IconBtn} icon="skip-back" title="Vorheriger Zug" onClick=${prevTurn} /><${Btn} kind="ghost" icon="stop" onClick=${end}>Beenden<//>`
         : html`<${Btn} kind="primary" icon="play" disabled=${!st.combatants.length} onClick=${start}>Kampf starten<//>`}
-      <${Btn} icon="d20" onClick=${() => rollInit(false)}>NSC-Initiative<//>
+      <${Btn} icon="d20" onClick=${() => rollInit(false)}>NPC-Initiative<//>
       <${Btn} icon="plus" onClick=${addMenu}>Hinzufügen<//>
+      <${Btn} icon="users" onClick=${sidesDialog} title="Wer kämpft gegen wen? (Spieler gegen Spieler)">Seiten<//>
       ${st.mapId ? html`<${Btn} icon="map" onClick=${() => openView('map', { id: st.mapId })}>Kampfkarte<//>` : null}
       ${current ? html`<span class="grow"></span><span class="small muted">Am Zug: <b>${current.name}</b></span>` : null}
     </div>

@@ -1,6 +1,6 @@
 // Kampfleiste im Stil von Baldur's Gate 3: Porträt mit TP und Todesrettungswürfen, Aktion ● / Bonusaktion ▲ / Reaktion ◆,
 // Bewegung, Zauberplätze je Grad (I–IX), Pakt- und Klassenressourcen, Reiter mit Aktionskacheln und ausführliche Tooltips.
-import { html, useState, useRef } from '../lib/preact.js';
+import { html, useState, useRef, useEffect } from '../lib/preact.js';
 import { SpellArt, ItemArt, GameIcon } from '../ui/art.js';
 import { Icon } from '../ui/components.js';
 import * as A from '../core/actions.js';
@@ -13,9 +13,10 @@ const TABS = [
   ['attack', 'Angriffe', 'crossed-swords'],
   ['spell', 'Zauber', 'spell-book'],
   ['class', 'Klasse', 'star-swirl'],
+  ['scroll', 'Zauberschriftrollen', 'scroll-unfurled'],
   ['item', 'Gegenstände', 'backpack'],
 ];
-const TAB_OF = { common: 'common', granted: 'common', attack: 'attack', monster: 'attack', spell: 'spell', class: 'class', item: 'item' };
+const TAB_OF = { common: 'common', granted: 'common', attack: 'attack', monster: 'attack', spell: 'spell', class: 'class', scroll: 'scroll', item: 'item' };
 const FACT_ICON = { range: 'bullseye', time: 'hourglass', conc: 'third-eye', hit: 'crossed-swords', save: 'dodging', dmg: 'death-skull', heal: 'heart-bottle', info: 'magic-swirl', uses: 'stopwatch' };
 const RES_SHORT = {
   rage: 'Rausch', bardic: 'Inspiration', channel: 'Macht', wildshape: 'Tiergestalt', secondwind: 'Zw. Wind', surge: 'Tatendrang', indomitable: 'Unbeugsam',
@@ -105,14 +106,16 @@ function Tile({ a, on, onArm, onTip }) {
 }
 
 // Tooltip wie in BG3: Name, Art, Beschreibung, Werte mit Symbolen, Kosten und warum es gerade nicht geht
-function Tip({ a, x, cb, ctx }) {
+function Tip({ a, x, cb, ctx, fix, onClose }) {
   const t = A.tipFor(a, cb, ctx);
-  return html`<div class="bb-tip" style=${{ left: `${x}px` }}>
+  return html`<div class=${`bb-tip${fix ? ' fix' : ''}`} style=${{ left: `${x}px` }}>
+    ${fix ? html`<button type="button" class="bb-tip-x" title="Loslassen (T)" onClick=${onClose}><${Icon} name="x" size=${14} /></button>` : null}
     <div class="bb-tip-h"><span class="bb-tip-art">${artOf(a, 40)}</span><div class="grow" style="min-width:0"><b>${t.title}</b><small>${t.sub}</small></div></div>
     ${t.lines.map((l, i) => html`<p key=${i}>${l}</p>`)}
     ${t.facts.length ? html`<div class="bb-facts">${t.facts.map(([k, v], i) => html`<span key=${i}><${GameIcon} name=${FACT_ICON[k] || 'magic-swirl'} size=${14} /><span>${v}</span></span>`)}</div>` : null}
     ${t.costs.length ? html`<div class="bb-costs">${t.costs.map(([k, v], i) => html`<span key=${i}><i class=${`bb-cost ${k}`}></i>${v}</span>`)}</div>` : null}
     ${t.why ? html`<div class="bb-why">${t.why}</div>` : null}
+    ${fix ? null : html`<div class="bb-tip-hint">Taste <b>T</b> hält den Text fest – dann kannst du darin scrollen.</div>`}
   </div>`;
 }
 
@@ -129,13 +132,30 @@ function spellRows(list) {
 export function BattleBar({ B, cb, char, acts, turn, speedM, movedLocal, pendingKey, portrait, onArm, onEnd, onGm, onEndConc }) {
   const [tab, setTab] = useState(null);
   const [tip, setTip] = useState(null);
+  const [fix, setFix] = useState(false);      // „T“ hält den Infotext fest – dann lässt er sich scrollen
   const ref = useRef();
+  const tipRef = useRef(null);
+  tipRef.current = tip;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 't' && e.key !== 'T') return;
+      const el = e.target;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (!tipRef.current) return;
+      e.preventDefault();
+      // Beim Loslassen verschwindet der Text wieder – der Zeiger steht ja längst woanders
+      setFix((v) => { if (v) setTip(null); return !v; });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const groups = {};
   for (const a of acts) (groups[TAB_OF[a.group] || 'common'] ||= []).push(a);
   if (groups.spell) groups.spell.sort((p, q) => (p.level || 0) - (q.level || 0) || p.name.localeCompare(q.name, 'de'));
   const avail = TABS.filter(([k]) => groups[k]?.length);
   const cur = tab && groups[tab]?.length ? tab : groups.attack?.length ? 'attack' : avail[0]?.[0];
   const showTip = (a, el) => {
+    if (fix) return;                          // festgehalten: der Infotext bleibt stehen
     if (!a || !el || !ref.current) { setTip(null); return; }
     const r = el.getBoundingClientRect();
     const pr = ref.current.getBoundingClientRect();
@@ -144,8 +164,8 @@ export function BattleBar({ B, cb, char, acts, turn, speedM, movedLocal, pending
   const list = groups[cur] || [];
   const rows = cur === 'spell' ? spellRows(list) : [[null, list]];
   const ac = statsOf(cb, B.ctx).ac;
-  return html`<div class="bb" ref=${ref} onMouseLeave=${() => setTip(null)}>
-    ${tip ? html`<${Tip} a=${tip.a} x=${tip.x} cb=${cb} ctx=${B.ctx} />` : null}
+  return html`<div class="bb" ref=${ref} onMouseLeave=${() => { if (!fix) setTip(null); }}>
+    ${tip ? html`<${Tip} a=${tip.a} x=${tip.x} cb=${cb} ctx=${B.ctx} fix=${fix} onClose=${() => { setFix(false); setTip(null); }} />` : null}
     <div class="bb-left">
       <div class="bb-port">${portrait}
         ${B.gm || cb.isPC ? html`<span class="bb-ac" title="Rüstungsklasse"><${GameIcon} name="shield" size=${11} />${ac}</span>` : null}

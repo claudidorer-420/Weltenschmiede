@@ -11,6 +11,7 @@ import { loadSpells, damageAt, healAt, healHasMod, fmtDice, levelName, schoolNam
 import { specFor } from '../data/spellfx.js';
 import { DAMAGE_ART } from '../data/artmap.js';
 import { normalizeMonster } from '../ui/statblock.js';
+import { scrollRef, tierOf } from '../data/scrolls.js';
 import { creatureType, monsterIconName } from '../ui/art.js';
 import { parseAttacks, lineOfSight, coverBetween, cellDistance, tokenCenter, tokensInArea, templateFor, areaReaches, pointInSight, inArea, sizeCells, CELL_M } from './tactics.js';
 import * as E from './engine.js';
@@ -28,7 +29,8 @@ export const GI = {
   melee: 'crossed-swords', ranged: 'bow-arrow', area: 'fire-breath', magic: 'magic-swirl',
 };
 export const COST = { action: 'Aktion', bonus: 'Bonusaktion', reaction: 'Reaktion', free: 'frei', attack: 'Angriff', move: 'Bewegung', long: 'länger' };
-const side = (c) => (c?.isPC || c?.ally ? 'pc' : 'npc');
+// team: von der Spielleitung gesetzte Seite (Spieler gegen Spieler); sonst zählt Held oder Gegner
+const side = (c) => c?.team || (c?.isPC || c?.ally ? 'pc' : 'npc');
 export const cbOf = (x, id) => (x?.combatants || x?.list || []).find((c) => c.id === id) || null;
 export const edNow = () => (app.get().campaign?.settings?.rulesVersion === '2024' ? '2024' : '2014');
 
@@ -56,7 +58,8 @@ export function makeCtx(x, extra = {}) {
     return t && override?.[cb.id] ? { ...t, ...override[cb.id] } : t;
   };
   const charOf = (cb) => (cb?.charId ? party.find((p) => p.char?.id === cb.charId)?.char || null : null);
-  const ctx = { ed, tokens, tokenOf, charOf, grid, list };
+  // explore: „Erkunden“ – kein Kampf, keine Züge, aber alles darf gewirkt werden
+  const ctx = { ed, tokens, tokenOf, charOf, grid, list, explore: extra.explore ?? battle.explore ?? false };
   const blocks = new Set();
   if (grid) {
     for (const z of x?.zones || []) {
@@ -270,11 +273,29 @@ function pcCatalog(x, c, char, ctx, spells) {
     out.push({ ...f, ...(f.key === 'f:wildshape' && ed === '2024' ? { cost: 'bonus' } : {}), group: 'class', kind: 'feature', art: { gi: f.gi }, needs: f.needs || { target: 'none' }, uses: f.res ? res[f.res] || { left: 0, max: 0 } : null });
   }
   if (res.breath) out.push({ key: 'f:breath', group: 'class', kind: 'feature', name: 'Odemwaffe', art: { gi: GI.breath }, cost: 'action', uses: res.breath, needs: { target: 'point', area: { shape: 'cone', size: 4.5 }, range: 0, rangeKind: 'self' }, desc: 'Kegel von 4,5 m – GES-Rettungswurf, halber Schaden bei Erfolg.' });
+  // Zauberschriftrollen: wirken den Zauber ohne Zauberplatz und zerfallen danach
+  if (spells) {
+    for (const it of char.inventory || []) {
+      const ref = scrollRef(it);
+      if (!ref) continue;
+      const sp = spells.find((s) => s.id === ref) || spells.find((s) => s.name.toLowerCase() === String(ref).toLowerCase());
+      if (!sp) continue;
+      const t = tierOf(sp.level);
+      const st = cm.spell[0] || { dc: t.dc, attack: t.atk, ability: 'int' };
+      const eigene = (char.spell?.list || []).some((e) => e.ref === sp.id);
+      const base = spellAction(sp, specFor(sp, ed), { dc: eigene ? st.dc : t.dc, attack: eigene ? st.attack : t.atk, mod: cm.mods[st.ability] || 0, level: Math.max(cm.level, sp.level) }, c);
+      out.push({
+        ...base, key: `sc:${it.id}`, group: 'scroll', art: { spell: sp }, itemId: it.id, scroll: true,
+        uses: { left: Math.max(0, Number(it.qty) || 0), max: Math.max(1, Number(it.qty) || 0) }, consumed: !(Number(it.qty) > 0),
+        desc: `Aus der Schriftrolle gewirkt – kein Zauberplatz nötig, die Rolle zerfällt danach.${eigene ? '' : ` Rettungswurf-SG ${t.dc}, ${t.atk >= 0 ? '+' : ''}${t.atk} auf Zauberangriffe.`}`,
+      });
+    }
+  }
   const POT = [[/überragend|superior/i, '8d4+8'], [/vorzüglich|supreme/i, '10d4+20'], [/groß|greater/i, '4d4+4'], [/heiltrank|healing/i, '2d4+2']];
   for (const it of char.inventory || []) {
     const m = POT.find(([re]) => re.test(it.name || ''));
-    if (!m || !(Number(it.qty) > 0)) continue;
-    out.push({ key: `it:${it.id}`, group: 'item', kind: 'item', name: it.name, art: { item: it }, cost: ed === '2024' ? 'bonus' : 'action', heal: m[1], uses: { left: Number(it.qty), max: Number(it.qty) }, needs: { target: 'ally', n: 1, range: 1.5, selfOk: true }, desc: `Heilt ${fmtDice(m[1])} TP.`, itemId: it.id });
+    if (!m) continue;
+    out.push({ key: `it:${it.id}`, group: 'item', kind: 'item', name: it.name, art: { item: it }, cost: ed === '2024' ? 'bonus' : 'action', heal: m[1], uses: { left: Math.max(0, Number(it.qty) || 0), max: Math.max(1, Number(it.qty) || 0) }, consumed: !(Number(it.qty) > 0), needs: { target: 'ally', n: 1, range: 1.5, selfOk: true }, desc: `Heilt ${fmtDice(m[1])} TP.`, itemId: it.id });
   }
   return out;
 }
@@ -316,6 +337,13 @@ function monsterCatalog(x, c, ctx, spells14) {
   if (/Spurt[^.]*Bonusaktion|Bonusaktion[^.]*Spurt/i.test(tr)) out.push({ key: 'b:dash', group: 'monster', kind: 'std', std: 'dash', name: 'Spurt (Bonusaktion)', art: { gi: GI.dash }, cost: 'bonus', needs: { target: 'none' } });
   return out;
 }
+// Heilerkit im Gepäck? (Charakterbogen oder Statblock)
+function hasHealerKit(c, ctx) {
+  const char = ctx.charOf?.(c);
+  const items = char?.items || char?.inventory || [];
+  return items.some((it) => /heiler(kit|ausrüstung)|healer.s kit/i.test(String(it?.name || it)));
+}
+
 function stdActions(c, ctx) {
   const ed = ctx.ed;
   const list = [
@@ -326,6 +354,20 @@ function stdActions(c, ctx) {
     { key: 'std:hide', std: 'hide', name: 'Verstecken', gi: GI.hide, cost: 'action', hasteOk: true, desc: ed === '2024' ? 'GES (Heimlichkeit) gegen SG 15 – bei Erfolg unsichtbar, bis du angreifst, zauberst oder entdeckt wirst.' : 'GES (Heimlichkeit) gegen die passive Wahrnehmung der Gegner – bei Erfolg versteckt.' },
     { key: 'std:shove', std: 'shove', name: 'Stoßen', gi: GI.shove, cost: 'attack', desc: ed === '2024' ? 'Statt eines Angriffs: STÄ- oder GES-Rettungswurf des Ziels (SG 8 + STÄ + ÜB) – sonst 1,5 m weg oder liegend.' : 'Statt eines Angriffs: Athletik gegen Athletik/Akrobatik – bei Erfolg 1,5 m weg oder liegend.', needs: { target: 'enemy', n: 1, range: 1.5 } },
   ];
+  // Erste Hilfe: nur sinnvoll, wenn jemand in der Nähe Todesrettungswürfe macht
+  const sterbend = (ctx.list || []).some((o) => o.isPC && o.hp <= 0 && !o.dead && !o.stable);
+  if (sterbend) {
+    list.push({
+      key: 'std:stabilize', std: 'stabilize', name: 'Erste Hilfe leisten (Stabilisieren)', gi: GI.help, cost: 'action',
+      desc: 'Du kannst deine Aktion nutzen, um einen sterbenden Charakter zu stabilisieren. Dafür ist ein erfolgreicher Wurf auf Weisheit (Heilkunde) gegen einen SG von 10 nötig. Gelingt der Wurf, ist der Charakter stabilisiert; er liegt weiterhin bewusstlos bei 0 Trefferpunkten, muss aber keine Todesrettungswürfe mehr absolvieren. Diese Aktion kann nur auf Charaktere ausgeführt werden, die aktuell Todesrettungswürfe machen müssen.',
+      needs: { target: 'ally', n: 1, range: 1.5 },
+    });
+    if (hasHealerKit(c, ctx)) list.push({
+      key: 'std:healerkit', std: 'healerkit', name: 'Heilerkit anwenden', gi: GI.help, cost: 'action',
+      desc: 'Hast du ein Heilerkit (Healer’s Kit) dabei, kannst du eine Anwendung davon aufwenden, um den Charakter automatisch und ohne Würfeln zu stabilisieren.',
+      needs: { target: 'ally', n: 1, range: 1.5 },
+    });
+  }
   if (E.has(c, E.COND.prone)) list.unshift({ key: 'std:stand', std: 'stand', name: 'Aufstehen', gi: GI.stand, cost: 'move', desc: 'Kostet die Hälfte deiner Bewegung.' });
   return list.map((a) => ({ group: 'common', kind: 'std', needs: a.needs || { target: 'none' }, art: { gi: a.gi }, ...a }));
 }
@@ -371,6 +413,18 @@ export function availability(x, c, a, ctx, char) {
       if (!opts.length) return { ok: false, why: 'Kein passender Zauberplatz frei', slot: true };
       return { ok: true, prep: true };
     }
+    // Erkunden: alles wirkbar, Angriffe lösen den Kampf aus
+    if (ctx?.explore && !E.isOut(c)) {
+      if (a.cost === 'reaction') return { ok: false, why: 'Reaktion – gibt es erst im Kampf', reaction: true };
+      if (a.uses && a.uses.left <= 0) return { ok: false, why: 'Aufgebraucht', uses: true };
+      if (a.kind === 'spell' && a.level > 0 && !a.arcanum && !a.scroll) {
+        const opts = a.monster ? monsterSlotOptions(c, a) : slotOptions(char, a.level);
+        if (!opts.length) return { ok: false, why: 'Kein passender Zauberplatz frei', slot: true };
+        return { ok: true, prep: true, slot: true };
+      }
+      if (a.attack || a.kind === 'attack' || a.kind === 'weapon') return { ok: true, prep: true, startsCombat: true };
+      return { ok: true, prep: true };
+    }
     return { ok: false, why: 'Kein Kampf – starte zuerst den Kampf' };
   }
   if (a.cost === 'reaction') return { ok: false, why: 'Reaktion – wird dir angeboten, wenn sie passt', reaction: true };
@@ -391,11 +445,12 @@ export function availability(x, c, a, ctx, char) {
     if (E.hasEff(c, 'rage')) return { ok: false, why: 'Im Kampfrausch kannst du nicht zaubern' };
     if (E.hasEff(c, 'noCast')) return { ok: false, why: 'Kann gerade nicht zaubern' };
     if (/\bV\b/.test(a.sp?.comps || '') && inSilence(x, c, ctx)) return { ok: false, why: 'Stille – keine verbalen Zauber' };
-    if (a.level > 0 && !a.arcanum) {
+    // Eine Schriftrolle ist selbst die Ressource – kein Zauberplatz, keine Zauberplatz-Regeln
+    if (a.level > 0 && !a.arcanum && !a.scroll) {
       const opts = a.monster ? (a.perDay ? [{ level: a.level }] : monsterSlotOptions(c, a)) : slotOptions(char, a.level);
       if (!opts.length) return { ok: false, why: 'Kein passender Zauberplatz frei', slot: true };
     }
-    if (ctx.ed === '2024' && a.level > 0 && eco.slotSpell) return { ok: false, why: 'Nur ein Zauber mit Zauberplatz pro Zug' };
+    if (ctx.ed === '2024' && a.level > 0 && !a.scroll && eco.slotSpell) return { ok: false, why: 'Nur ein Zauber mit Zauberplatz pro Zug' };
     if (ctx.ed === '2014' && eco.bonusSpell && a.cost === 'action' && a.level > 0) return { ok: false, why: 'Nach einem Bonusaktions-Zauber nur noch Zaubertricks' };
     if (ctx.ed === '2014' && a.cost === 'bonus' && eco.actionSpellLeveled) return { ok: false, why: 'Bonusaktions-Zauber nur zusammen mit Zaubertricks' };
   }
@@ -414,7 +469,8 @@ export function tipFor(a, c, ctx) {
   if (a.kind === 'spell') {
     const sp = a.sp;
     sub = `${sp.level ? levelName(sp.level) : 'Zaubertrick'} · ${schoolName(sp.school)}`;
-    lines.push(String((sp.desc || [])[0] || '').slice(0, 280) + (String((sp.desc || [])[0] || '').length > 280 ? ' …' : ''));
+    // Vollständiger Zaubertext – im Tooltip wird nichts mehr abgeschnitten
+    for (const absatz of (sp.desc || [])) if (String(absatz).trim()) lines.push(String(absatz).trim());
     facts.push(['range', rangeShort(sp)], ['time', sp.duration]);
     if (sp.conc) facts.push(['conc', 'Konzentration']);
     if (a.attack) facts.push(['hit', `Zauberangriff ${fmtS(a.spellAttack)}`]);
@@ -574,9 +630,9 @@ function payCosts(x, c, a, ev, ctx, char) {
     eco.attacked = true;
   }
   if (a.kind === 'spell') {
-    if (a.level > 0) eco.slotSpell = true;
+    if (a.level > 0 && !a.scroll) eco.slotSpell = true;
     if (a.cost === 'bonus') eco.bonusSpell = true;
-    if (a.cost === 'action' && a.level > 0) eco.actionSpellLeveled = true;
+    if (a.cost === 'action' && a.level > 0 && !a.scroll) eco.actionSpellLeveled = true;
     E.breakInvisibility(x, c);
     if (a.monster) {
       if (a.perDay) c.perDay = { ...(c.perDay || {}), [a.sp.id]: (Number(c.perDay?.[a.sp.id]) || 0) + 1 };
@@ -980,6 +1036,26 @@ function resolveStd(x, c, a, ev, ctx) {
     E.log(x, `🫥 ${c.name}: Heimlichkeit W20 [${n}] ${fmtS(bonus)} = ${total} gegen ${dc} → ${ok ? 'versteckt' : 'entdeckt'}`);
     if (ok) E.addCondition(x, c, { name: ctx.ed === '2024' ? E.COND.invisible : E.XCOND.hidden, breakOnAttack: true, src: c.id }, ctx);
     rec.targets.push({ id: c.id, name: c.name, note: ok ? `versteckt (${total} ≥ ${dc})` : `entdeckt (${total} < ${dc})` });
+  }
+  if (std === 'stabilize' || std === 'healerkit') {
+    const t = targetsOf(x, ev)[0];
+    if (!t) { rec.note = 'Kein Ziel in Reichweite.'; return rec; }
+    if (!(t.hp <= 0 && !t.dead && !t.stable)) { rec.note = `${t.name} macht gerade keine Todesrettungswürfe.`; return rec; }
+    if (std === 'healerkit') {
+      t.stable = true;
+      t.deathSaves = { s: 0, f: 0 };
+      E.log(x, `🧰 ${c.name} stabilisiert ${t.name} mit dem Heilerkit`);
+      rec.targets.push({ id: t.id, name: t.name, note: 'stabilisiert (Heilerkit verbraucht)' });
+    } else {
+      const char = ctx.charOf(c);
+      const bonus = char ? charMods(char).skills.medicine.bonus : E.statsOf(c, ctx).wis;
+      const n = rollDie(20);
+      const total = n + bonus;
+      const ok = total >= 10;
+      if (ok) { t.stable = true; t.deathSaves = { s: 0, f: 0 }; }
+      E.log(x, `⛑ ${c.name}: Heilkunde W20 [${n}] ${fmtS(bonus)} = ${total} gegen SG 10 → ${ok ? `${t.name} stabilisiert` : 'misslungen'}`);
+      rec.targets.push({ id: t.id, name: t.name, note: ok ? `stabilisiert (${total} ≥ 10)` : `misslungen (${total} < 10)` });
+    }
   }
   if (std === 'stand') { eco.movedM += s.speedM / 2; E.removeCondition(x, c, E.COND.prone, 'aufgestanden'); }
   if (std === 'shove') {
@@ -1628,7 +1704,7 @@ async function pushAway(fromId, cbId, m) {
 export async function consumeOnUse(cb, char, a, ev) {
   if (!char) return;
   const patch = {};
-  if (a.kind === 'spell' && a.level > 0 && !a.arcanum && ev.slot) {
+  if (a.kind === 'spell' && a.level > 0 && !a.arcanum && !a.scroll && ev.slot) {
     const sp = { ...(char.spell || {}) };
     if (ev.pact) sp.pactUsed = (Number(sp.pactUsed) || 0) + 1;
     else sp.used = { ...(sp.used || {}), [ev.slot]: (Number(sp.used?.[ev.slot]) || 0) + 1 };

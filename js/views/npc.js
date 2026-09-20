@@ -1,7 +1,7 @@
 // NPC-Schmiede: Schnell-NPCs offline + KI-Dossiers mit Stimme, Geheimnis, Bemal-Guide, Porträt und Statblock.
 import { html, useState } from '../lib/preact.js';
-import { noteById, createNote, allFolders } from '../core/app.js';
-import { openNote } from '../core/workspace.js';
+import { noteById, createNote, npcFolder } from '../core/app.js';
+import { openNote, openView } from '../core/workspace.js';
 import { generate, generateImage, extractJSON } from '../core/ai.js';
 import { npcSystemPrompt, buildNpcPrompt, encounterSystemPrompt } from '../core/prompts.js';
 import { saveToArchive, titleFromMarkdown } from '../core/archive.js';
@@ -9,23 +9,18 @@ import { SPECIES, ALIGNMENTS } from '../data/rules5e.js';
 import { npcQuick, SPECIES_NAMES } from '../data/tables.js';
 import { ViewFrame } from '../ui/frame.js';
 import {
-  Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, ModelPicker, NotePicker, DictateButton, AutoTextarea, Statblock, toast, openLightbox, Empty,
+  Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, ViewToggle, ModelPicker, NotePicker, DictateButton, AutoTextarea, Statblock, toast, openLightbox, Empty,
 } from '../ui/components.js';
 import { useGeneration, GenStatus, OutputToolbar, OutputView, saveTextAsNote } from '../ui/aiout.js';
 import { monsterToMarkdown } from '../ui/statblock.js';
 import { uploadImage } from './codex.js';
 import { dataURLToBlob, pick } from '../lib/util.js';
+import { openNpcEditor } from './npcedit.js';
+import { NPC_MODES } from '../data/npcstat.js';
 
 const PERSONALITY = ['herzlich', 'mürrisch', 'paranoid', 'geschwätzig', 'ehrgeizig', 'melancholisch', 'fromm', 'gierig', 'loyal', 'feige', 'charmant', 'rätselhaft', 'jähzornig', 'naiv', 'weise', 'zynisch'];
 const RELATIONS = ['neutral', 'Verbündeter', 'Auftraggeber', 'Rivale', 'Feind', 'Informant', 'Händler', 'Liebesinteresse'];
 const FM = '---\ntyp: npc\ntags: [npc]\n---\n';
-
-// Zielordner für NPC-Notizen: erst „NPCs“, sonst „NPC“ – gibt es beides nicht, wird „NPCs“ angelegt
-export function npcFolder() {
-  const alle = allFolders();
-  const treffer = (name) => alle.find((f) => f.split('/').pop().toLowerCase() === name);
-  return treffer('npcs') || treffer('npc') || 'NPCs';
-}
 
 export function NpcView({ tabId }) {
   const [qSpecies, setQSpecies] = useState('Zufall');
@@ -37,7 +32,9 @@ export function NpcView({ tabId }) {
   const [ctx, setCtx] = useState([]);
   const [count, setCount] = useState(1);
   const [paint, setPaint] = useState(true);
-  const [stats, setStats] = useState(false);
+  const [statMode, setStatMode] = useState('none');
+  const [npcCls, setNpcCls] = useState('kaempfer');
+  const [npcLevel, setNpcLevel] = useState(3);
   const [length, setLength] = useState('normal');
   const [model, setModel] = useState(null);
   const [portrait, setPortrait] = useState(null);
@@ -75,7 +72,7 @@ export function NpcView({ tabId }) {
       Name: f.name, Volk: f.volk, Geschlecht: f.geschlecht, Alter: f.alter, 'Beruf/Rolle': f.rolle, Gesinnung: f.gesinnung,
       Persönlichkeit: f.persoenlichkeit.join(', '), 'Beziehung zur Gruppe': f.beziehung !== 'neutral' ? f.beziehung : '', Aufenthaltsort: f.ort ? `[[${f.ort.title}]]` : '',
     };
-    const prompt = buildNpcPrompt({ fields, core, contextIds: [...ctx, ...(f.ort ? [f.ort.id] : [])], count, paint, stats, words: length === 'kurz' ? 300 : length === 'lang' ? 1000 : 600 });
+    const prompt = buildNpcPrompt({ fields, core, contextIds: [...ctx, ...(f.ort ? [f.ort.id] : [])], count, paint, stats: statMode, statsInfo: statMode === 'full' ? `Klasse ${npcCls}, Stufe ${npcLevel}` : '', words: length === 'kurz' ? 300 : length === 'lang' ? 1000 : 600 });
     const res = await gen.run({ system: npcSystemPrompt(), model, prompt });
     if (res?.text) saveToArchive({ kind: 'npc', title: titleFromMarkdown(res.text, 'NPC'), text: res.text, provider: res.provider, model: res.model });
   };
@@ -129,7 +126,7 @@ export function NpcView({ tabId }) {
     <div class="page wide">
       <div class="split">
         <div class="stack lg">
-          <div class="page-head" style="margin:0"><h1><${Icon} name="mask" size=${26} />NPC-Schmiede</h1><span class="sub">Blitz-NPCs ohne KI für spontane Begegnungen – oder ausgearbeitete Figuren mit Stimme, Geheimnis, Bemal-Guide und Porträt.</span></div>
+          <div class="page-head head-tools" style="margin:0"><h1><${Icon} name="mask" size=${26} />NPC-Schmiede</h1><div class="head-tools-btns"><${ViewToggle} value="npc" options=${[{ value: 'npc', label: 'NPC-Schmiede', icon: 'sparkles', view: 'npc' }, { value: 'npclib', label: 'NPC-Sammlung', icon: 'users', view: 'npclib' }]} /></div><span class="sub">Blitz-NPCs ohne KI für spontane Begegnungen – oder ausgearbeitete Figuren mit Stimme, Geheimnis, Bemal-Guide und Porträt.</span></div>
 
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="zap" size=${18} />Schnell-NPC (offline)</h3></div>
@@ -138,6 +135,8 @@ export function NpcView({ tabId }) {
               <${Segmented} value=${qGender} onChange=${setQGender} options=${[{ value: 'x', label: 'Egal' }, { value: 'w', label: 'weiblich' }, { value: 'm', label: 'männlich' }]} />
               <${Btn} kind="primary" icon="d20" onClick=${rollQuick}>Würfeln<//>
               <${Btn} icon="users" onClick=${rollCrowd}>6 Passanten<//>
+              <span class="grow"></span>
+              <${Btn} icon="pencil" onClick=${() => openNpcEditor(null)}>Von Hand anlegen<//>
             </div>
             ${quick ? html`<div class="card tight">
               <div class="serif" style="font-size:22px;font-weight:700">${quick.name}</div>
@@ -145,7 +144,7 @@ export function NpcView({ tabId }) {
               <ul class="small" style="margin:8px 0;padding-left:18px;line-height:1.6">
                 <li><b>Aussehen:</b> ${quick.look}</li><li><b>Marotte:</b> ${quick.quirk}</li><li><b>Motivation:</b> ${quick.motive}</li><li><b>Geheimnis:</b> ${quick.secret}</li>
               </ul>
-              <div class="btn-row"><${Btn} size="sm" icon="refresh" onClick=${rollQuick}>Neu<//><${Btn} size="sm" icon="save" onClick=${() => quickToNote(quick)}>Als Notiz<//><${Btn} size="sm" icon="sparkles" onClick=${() => quickToAI(quick)}>Mit KI ausarbeiten<//></div>
+              <div class="btn-row"><${Btn} size="sm" icon="refresh" onClick=${rollQuick}>Neu<//><${Btn} size="sm" icon="save" onClick=${() => quickToNote(quick)}>Als Notiz<//><${Btn} size="sm" icon="mask" onClick=${() => openNpcEditor({ name: quick.name, species: quick.species, role: quick.job, look: quick.look, quirk: quick.quirk, motive: quick.motive, secret: quick.secret })}>In die Sammlung<//><${Btn} size="sm" icon="sparkles" onClick=${() => quickToAI(quick)}>Mit KI ausarbeiten<//></div>
             </div>` : null}
             ${crowd ? html`<div class="card tight"><div class="list">${crowd.map((q) => html`<div class="list-item" onClick=${() => { setQuick(q); }}><b>${q.name}</b><span class="meta">${q.species}, ${q.job}</span></div>`)}</div>
               <div class="btn-row"><${Btn} size="sm" icon="save" onClick=${crowdToNote}>Alle als Notiz<//><${Btn} size="sm" kind="ghost" onClick=${() => setCrowd(null)}>Schließen<//></div></div>` : null}
@@ -177,7 +176,14 @@ export function NpcView({ tabId }) {
               <div class="inline-field"><span class="small muted">Anzahl</span><${IconBtn} icon="minus" onClick=${() => setCount(Math.max(1, count - 1))} /><b>${count}</b><${IconBtn} icon="plus" onClick=${() => setCount(Math.min(5, count + 1))} /></div>
               <${Segmented} value=${length} onChange=${setLength} options=${[{ value: 'kurz', label: 'Kurz' }, { value: 'normal', label: 'Normal' }, { value: 'lang', label: 'Ausführlich' }]} />
             </div>
-            <div class="row"><${Toggle} checked=${paint} onChange=${setPaint} label="Bemal-Guide (Miniatur)" /><${Toggle} checked=${stats} onChange=${setStats} label="Kurz-Spielwerte" /></div>
+            <${Toggle} checked=${paint} onChange=${setPaint} label="Bemal-Guide (Miniatur)" />
+            <${Field} label="Spielwerte" hint=${statMode === 'none' ? 'Im Kampf greift dann der „Gemeine“ aus dem SRD: alle Attribute 10, RK 10, 4 TP, Knüppel für 1W4.' : statMode === 'short' ? 'Kurzer Kasten mit RK, TP und einem Angriff.' : 'Vollständiger Bogen aus Klasse und Stufe.'}>
+              <${Segmented} full value=${statMode} onChange=${setStatMode} options=${NPC_MODES} />
+            <//>
+            ${statMode === 'full' ? html`<div class="grid two" style="gap:10px">
+              <${Field} label="Klasse"><input class="input" value=${npcCls} onInput=${(e) => setNpcCls(e.target.value)} placeholder="z. B. Schurke" /><//>
+              <${Field} label="Stufe"><input class="input" type="number" min="1" max="20" value=${npcLevel} onInput=${(e) => setNpcLevel(Number(e.target.value) || 1)} /><//>
+            </div>` : null}
             <${Btn} kind="primary" size="lg" block icon="sparkles" loading=${gen.busy} onClick=${run}>${count > 1 ? `${count} NPCs erschaffen` : 'NPC erschaffen'}<//>
           </div>
         </div>

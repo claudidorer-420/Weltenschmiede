@@ -13,9 +13,10 @@ import { fileUrl, saveFile, deleteFile } from '../core/files.js';
 import { loadParty } from '../core/party.js';
 import { loadCombat, mutateCombat } from '../core/combat.js';
 import { sizeCells } from '../core/tactics.js';
+import { lightMap, visibleCells, loadExplored, saveExplored, rememberSeen, cellsOf, darkMeters } from '../core/sight.js';
 import { monsterIconName, creatureType } from '../ui/art.js';
 import {
-  useBattle, drawBattle, BattleHud, MonsterPlacer, onDown as battleDown, onTokenDrop, selectToken, arm, ping, animating, startCombat, clearTemplates, placeMonster,
+  useBattle, drawBattle, BattleHud, MonsterPlacer, FigureList, FIG_MIME, dropFigure, onDown as battleDown, onTokenDrop, selectToken, arm, ping, animating, startCombat, clearTemplates, placeMonster, statFor,
 } from './battle.js';
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, NotePicker, openModal, promptDialog, confirmDialog, toast, pickFiles } from '../ui/components.js';
@@ -531,6 +532,17 @@ const inObj = (o, m, x, y, pad = 0) => {
 
 // Begehbare Felder für die Kampfbewegung: Boden aus den Formen, dünne Zwischenwände als Kanten,
 // Gelände (schwierig bzw. Grube), Objekte (Säulen blockieren, Möbel kosten extra).
+// Objekte, die selbst leuchten (Fackel, Lagerfeuer …), zählen als Lichtquellen
+export function glowSources(d) {
+  const out = [];
+  for (const o of d.objects || []) {
+    if (o.hidden) continue;
+    const m = objMeta(o);
+    if (m?.glow) out.push({ x: o.x, y: o.y, r: 3 });
+  }
+  return out;   // die Lichter aus d.lights holt sich lightMap() selbst
+}
+
 export function buildGrid(d) {
   const W = d.w || 36;
   const H = d.h || 26;
@@ -589,14 +601,24 @@ export function buildGrid(d) {
     if (m.block && m.layer === 'top') { // Baumkronen: nur der Stamm blockiert
       const x = Math.floor(o.x);
       const y = Math.floor(o.y);
-      if (x >= 0 && y >= 0 && x < W && y < H) { walk[y * W + x] = 0; cover[y * W + x] = 1; }
+      if (x >= 0 && y >= 0 && x < W && y < H) {
+        walk[y * W + x] = 0;
+        cover[y * W + x] = 1;
+        if (Math.min(m.w, m.h) >= 1.4) opaque[y * W + x] = 1;   // dicker Stamm nimmt die Sicht
+      }
       continue;
     }
     const ext = Math.max(m.w, m.h) / 2 + 1;
     cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => {
       if (!objHit(o, x + 0.5, y + 0.5)) return;
       const i = y * W + x;
-      if (m.block) { walk[i] = 0; cover[i] = 1; } else cost[i] = Math.max(cost[i], 2);
+      if (m.block) {
+        walk[i] = 0;
+        cover[i] = 1;
+        // Alles, was mindestens ein volles Feld ausfüllt, nimmt auch die Sicht (Schrank, Fels, Wagen …);
+        // Kleineres wie Fässer oder Stühle gibt nur Deckung.
+        if (Math.min(m.w, m.h) >= 0.9) opaque[i] = 1;
+      } else cost[i] = Math.max(cost[i], 2);
     });
   }
   return { w: W, h: H, walk, cost, opaque, cover, wallE, wallS };
@@ -816,7 +838,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const tokOpts = role === 'gm' ? { where: [['mapId', '==', params.id]] } : { where: [['mapId', '==', params.id], ['visibility', '==', 'players']] };
   const tokensRaw = useCol(cid ? col('tokens') : null, tokOpts);
   const tokens = (tokensRaw || []).filter((t) => gm || t.visibility === 'players');
-  const [mode, setMode] = useState(gm && !params.play ? 'build' : 'play');
+  const [mode, setMode] = useState(gm && !params.play ? 'build' : 'explore');
   const [tool, setTool] = useState(gm && !params.play ? 'land' : 'pan');
   const [shape, setShape] = useState('rect');
   const [matShape, setMatShape] = useState('brush');
@@ -884,7 +906,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const imageMap = isImageMap(s.doc);
   const rich = real || imageMap;
   const grid = useMemo(() => buildGrid(s.doc), [s.geom, s.doc.w, s.doc.h]);
-  const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender });
+  // Licht und Sicht: Grundlage für Nebel des Krieges und für das, was Spieler sehen dürfen
+  const licht = useMemo(() => lightMap(s.doc, grid, { glows: glowSources(s.doc) }), [grid, s.geom, s.ver]);
+  const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender, explore: mode === 'explore', active });
   s.B = B;
   useEffect(() => {
     if (!s.localDirty) {
@@ -898,18 +922,45 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.dirty = true;
   }, [map]);
   useEffect(() => { s.dirty = true; }, [tokensRaw, gm, mode, sel]);
+  // Sichtfeld der Gruppe: alle Tokens mit Besitzer sehen für alle (geteilte Gruppensicht)
+  useEffect(() => {
+    if (mode === 'build') { s.sicht = null; s.dirty = true; return; }
+    const späher = tokens.filter((t) => t.ownerUid && t.visibility !== 'gm').map((t) => {
+      // Dunkelsicht: eigener Wert am Token, sonst aus dem Statblock, sonst aus dem Volk des Charakters
+      const st = statFor(B, t);
+      const held = t.charId ? (B.party || []).find((p) => p.char?.id === t.charId)?.char : null;
+      const m = t.dark != null ? Number(t.dark) : darkMeters({ senses: st?.senses || '', feet: held?.darkvision || 0 });
+      return { x: t.x, y: t.y, size: t.size || 1, dark: cellsOf(m) };
+    });
+    s.sicht = späher.length ? visibleCells(grid, licht, späher, { limit: cellsOf(Number(s.doc.sightLimit) || 0) }) : null;
+    if (s.sicht) {
+      if (!s.erkundet || s.erkundet.length !== s.sicht.length) s.erkundet = loadExplored(cid, params.id, s.sicht.length);
+      if (rememberSeen(s.erkundet, s.sicht)) saveExplored(cid, params.id, s.erkundet);
+    }
+    s.dirty = true;
+  }, [tokens, grid, licht, mode]);
   // Bildkarten kennen kein Land/Belag – dann auf Auswählen wechseln
   useEffect(() => {
     if (isImageMap(s.doc) && (tool === 'land' || tool === 'terrain')) setTool('select');
   }, [tool, s.geom]);
   useEffect(() => {
-    if (gm || mode === 'play') return;
-    setMode('play');
-    setTool('pan');
-    setSel([]);
-    s.draft = null;
-    s.dirty = true;
-  }, [gm]);
+    if (gm || mode === 'build') {
+      if (!gm) {
+        setMode('explore');
+        setTool('pan');
+        setSel([]);
+        s.draft = null;
+        s.dirty = true;
+      }
+      return;
+    }
+    const soll = B.combat?.active && B.combat?.mapId === params.id ? 'play' : 'explore';
+    if (mode !== soll) {
+      setMode(soll);
+      setTool('pan');
+      s.dirty = true;
+    }
+  }, [gm, B.combat?.active, B.combat?.mapId]);
   useEffect(() => {
     if (!real) return undefined;
     let stop = false;
@@ -1246,7 +1297,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       }
       if (s.zooming) settleT = t;
       s.zooming = false;
-      if (s.mode === 'play' && animating(s.B) && t - (s.lastAnim || 0) > 33) { s.dirty = true; s.lastAnim = t; }
+      if (s.mode !== 'build' && animating(s.B) && t - (s.lastAnim || 0) > 33) { s.dirty = true; s.lastAnim = t; }
       if (s.dirty) {
         draw();
         s.dirty = false;
@@ -1327,7 +1378,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         drawObjects(ctx, d, { legacyDefs: OBJ, skip: s.skipIds, view });
       } else ctx.drawImage(s.objCache, 0, 0, d.w, d.h);
       if (s.skipIds) for (const o of d.objects) if (s.skipIds.has(o.id)) drawStampPreview(ctx, o, OBJ, 1);
-      const lightOn = s.mode === 'play' || s.showLight;
+      const lightOn = s.mode !== 'build' || s.showLight;
       if (s.lightOn?.dark && lightOn) ctx.drawImage(s.darkCv, 0, 0, d.w, d.h);
       if (s.lightOn?.glow && lightOn) {
         ctx.globalCompositeOperation = 'lighter';
@@ -1348,12 +1399,20 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         }
       }
     }
-    if (s.mode === 'play') {
+    if (s.mode !== 'build') {
       drawBattle(ctx, s, k);
       if (map.fog?.enabled && s.fog) {
         ctx.fillStyle = s.gm ? 'rgba(0,0,0,.5)' : '#000';
         for (let i = 0; i < s.fog.length; i++) {
           if (s.fog[i] === '1') continue;
+          ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
+        }
+      }
+      // Spielersicht: nie gesehen = schwarz, schon erkundet aber gerade nicht im Blick = 75 % dunkel
+      if (!s.gm && s.sicht) {
+        for (let i = 0; i < s.sicht.length; i++) {
+          if (s.sicht[i]) continue;
+          ctx.fillStyle = s.erkundet?.[i] ? 'rgba(0,0,0,.75)' : '#05070a';
           ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
         }
       }
@@ -1674,7 +1733,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y };
         return;
       }
-      if (s.mode === 'play') {
+      if (s.mode !== 'build') {
         if (e.altKey && e.button === 0) { ping(s.B, w); return; }
         if (s.B && battleDown(s.B, w, s.doc.w, s.doc.h)) return;
         if (tl === 'place' && s.gm) { await placeMonster(s.B, w, s.doc.w, s.doc.h); return; }
@@ -1842,7 +1901,15 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const w = toW(p);
       const a = s.act;
       if (!a) {
-        if (s.mode === 'play' && s.B) { s.B.hover = w; if (s.B.pending) s.dirty = true; }
+        if (s.mode !== 'build' && s.B) {
+          s.B.hover = w;
+          if (s.B.pending) s.dirty = true;
+          // Infoblase über einem Zustandsquadrat am Token
+          const q = (s.B._condHit || []).find((h) => w.x >= h.x && w.x <= h.x + h.s && w.y >= h.y && w.y <= h.y + h.s);
+          const vorher = s.B.condTip?.name || '';
+          s.B.condTip = q ? { name: q.name, sx: s.t.x + (q.x + q.s / 2) * s.t.k * PX, sy: s.t.y + q.y * s.t.k * PX } : null;
+          if ((q?.name || '') !== vorher) rerender();
+        }
         if (s.mode === 'build' && (s.tool === 'door' || s.tool === 'object') && e.pointerType !== 'touch') {
           s.hover = s.tool === 'door' ? placeDoor(w, s.doorKey) : placeObj(w, s.objKey, e);
           s.dirty = true;
@@ -2083,7 +2150,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
-      if (s.mode === 'play' && e.key === 'Escape') {
+      if (s.mode !== 'build' && e.key === 'Escape') {
         if (s.B?.pending) arm(s.B, null);
         else if (s.tool === 'place') { s.B.placing = null; setTool('pan'); } else if (s.B?.sel) selectToken(s.B, null);
         s.dirty = true;
@@ -2202,6 +2269,25 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     if (id !== 'measure') { s.measure = null; setMeasureText(''); }
     s.dirty = true;
   };
+  // Beginnt ein Kampf, springt die Karte in den Kampfmodus – danach zurück ins Erkunden
+  const warKampf = useRef(false);
+  useEffect(() => {
+    if (B.combat.active) {
+      warKampf.current = true;
+      if (mode === 'explore') {
+        setMode('play');
+        setTool('pan');
+      }
+      return;
+    }
+    if (!warKampf.current) return;
+    warKampf.current = false;
+    if (mode === 'play') {
+      setMode('explore');
+      setTool('pan');
+    }
+  }, [B.combat.active]);
+
   const switchMode = (v) => {
     setMode(v);
     setTool(v === 'build' ? 'select' : 'pan');
@@ -2209,7 +2295,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     s.measure = null;
     setMeasureText('');
     setSel([]);
-    if (v === 'play' && gm && real && usesOwnAssets(s.doc) && (map.updatedAt || 0) > (map.bake?.at || 0)) bakeForPlayers(true);
+    if (v !== 'build' && gm && real && usesOwnAssets(s.doc) && (map.updatedAt || 0) > (map.bake?.at || 0)) bakeForPlayers(true);
   };
   const updOne = (kind, id, patch) => commit({ [listOf(kind)]: (s.doc[listOf(kind)] || []).map((x) => (x.id === id ? { ...x, ...patch } : x)) }, { geom: kind === 'shape' || kind === 'terrain' });
   const delOne = (kind, id) => {
@@ -2349,11 +2435,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
 
   const leftPanel = () => html`<aside class="sidebar left mw">
     <div class="sidebar-head">
-      <button type="button" class="panel-select" onClick=${() => openView('maps')}><${Icon} name="map" size=${17} /><span class="t">${mode === 'build' ? 'Kartenwerkstatt' : 'Spielmodus'}</span></button>
+      <button type="button" class="panel-select" onClick=${() => openView('maps')}><${Icon} name="map" size=${17} /><span class="t">${mode === 'build' ? 'Kartenwerkstatt' : mode === 'explore' ? 'Erkunden' : 'Kampf'}</span></button>
       ${isMobile() ? html`<${IconBtn} icon="x" title="Schließen" onClick=${() => ws.set({ drawer: null })} />` : null}
     </div>
     <div class="sidebar-body mw-body">
-      ${gm ? html`<${Segmented} value=${mode} onChange=${switchMode} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'play', label: 'Spielen', icon: 'play' }]} />` : null}
+      ${gm ? html`<${Segmented} value=${mode} onChange=${switchMode} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'explore', label: 'Erkunden', icon: 'compass' }, { value: 'play', label: 'Kampf', icon: 'swords' }]} />` : null}
       ${mode === 'build' ? html`
         <${Sec} title="Werkzeuge" icon="wand" open=${true}><${ToolGrid} tools=${tools} tool=${tool} onPick=${pickTool} /><//>
         ${toolSection()}
@@ -2409,8 +2495,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           <${Toggle} checked=${!!B.showNames} onChange=${(v) => { B.showNames = v; s.dirty = true; rerender(); }} label="Namen auf der Karte zeigen" />
           <div class="tiny faint">Token antippen = Aktionen, Reichweiten & Bewegung · ziehen = bewegen · lange drücken oder Alt-Klick = Ping.</div>
         <//>
-        <${Sec} title="Monster platzieren" icon="ghost">
-          <${MonsterPlacer} B=${B} active=${tool === 'place'} onPick=${(m) => { B.placing = m; setTool('place'); s.dirty = true; }} onStop=${() => { B.placing = null; setTool('pan'); }} />
+        <${Sec} title="Figuren auf der Karte" icon="users" open=${true}>
+          <${FigureList} B=${B} s=${s} onPlaceMode=${(m) => { B.placing = m; setTool('place'); s.dirty = true; }} />
         <//>
         <${Sec} title="Kampf" icon="swords" open=${true}>
           <div class="btn-row">${!B.combat.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}<${Btn} size="sm" kind="ghost" icon="eraser" onClick=${() => clearTemplates(B)}>Schablonen entfernen<//></div>
@@ -2508,15 +2594,34 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   });
   useEffect(() => () => clearPanels(tabId), []);
 
+  // Der Modusumschalter steht in der Seitenleiste – in der Kopfzeile wäre er doppelt
   const actions = html`<div class="row nowrap" style="gap:2px">
-    ${gm ? html`<${Segmented} value=${mode} onChange=${switchMode} options=${[{ value: 'build', label: 'Bauen', icon: 'hammer' }, { value: 'play', label: 'Spielen', icon: 'play' }]} />` : null}
     ${mode === 'build' ? html`<${IconBtn} icon="undo" title="Rückgängig (Strg+Z)" disabled=${!s.undo.length} onClick=${undo} />` : null}
     <${IconBtn} icon="maximize" title="Einpassen" onClick=${fit} />
     ${gm ? html`<${IconBtn} icon="settings" title="Karteneinstellungen" onClick=${settingsDialog} />` : null}
   </div>`;
 
+  // Figuren aus der Liste per Ziehen & Ablegen auf die Karte setzen
+  const figDragOver = (e) => {
+    if (mode === 'build' || !gm || !e.dataTransfer.types.includes(FIG_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const figDrop = (e) => {
+    const roh = e.dataTransfer.getData(FIG_MIME);
+    if (!roh || mode === 'build' || !gm) return;
+    e.preventDefault();
+    const cv = cvRef.current;
+    if (!cv) return;
+    const r = cv.getBoundingClientRect();
+    const wx = ((e.clientX - r.left) - s.t.x) / (s.t.k * PX);
+    const wy = ((e.clientY - r.top) - s.t.y) / (s.t.k * PX);
+    const cell = { x: clamp(Math.floor(wx), 0, (s.doc.w || 1) - 1), y: clamp(Math.floor(wy), 0, (s.doc.h || 1) - 1) };
+    try { dropFigure(B, JSON.parse(roh), cell, s.doc.w, s.doc.h); } catch { /* nichts */ }
+  };
+
   return html`<${ViewFrame} tabId=${tabId} title=${map.name} noScroll actions=${actions}>
-    <div class="map-stage scrawl" ref=${wrapRef} style=${{ background: st.bg }}>
+    <div class="map-stage scrawl" ref=${wrapRef} style=${{ background: st.bg }} onDragOver=${figDragOver} onDrop=${figDrop}>
       <canvas ref=${cvRef} class=${`tool-${tool}`}></canvas>
       ${!sidebarOpen ? html`<div class="map-toolbar">
         ${tools.map(([id, icon, label]) => html`<${IconBtn} key=${id} icon=${icon} title=${label} active=${tool === id} onClick=${() => pickTool(id)} />`)}
@@ -2524,8 +2629,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           <${IconBtn} icon="plus" title="Hinzufügen" active=${op === 'add'} onClick=${() => setOp('add')} />
           <${IconBtn} icon="eraser" title="Entfernen / ausschneiden" active=${op === 'sub'} onClick=${() => setOp('sub')} />` : null}
       </div>` : null}
-      ${(sidebarOpen && mode === 'build') || (mode === 'play' && (B.sel || B.pending)) ? null : html`<div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>`}
-      ${mode === 'play' ? html`<${BattleHud} B=${B} s=${s} editToken=${gm ? editToken : null} />` : null}
+      ${(sidebarOpen && mode === 'build') || (mode !== 'build' && (B.sel || B.pending)) ? null : html`<div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>`}
+      ${mode !== 'build' ? html`<${BattleHud} B=${B} s=${s} editToken=${gm ? editToken : null} />` : null}
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b></div>` : null}
     </div>
   <//>`;

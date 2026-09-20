@@ -318,12 +318,13 @@ export async function openCampaign(cid) {
     if (gm && key !== mitglieder) {
       mitglieder = key;
       ensureVisibilityFields(cid).catch(() => {});
+      ensureNpcFolder().catch(() => {});
     }
   }, onErr));
   return true;
 }
 
-const SUBCOLLECTIONS = ['notes', 'secrets', 'trash', 'sessions', 'quests', 'maps', 'pins', 'tokens', 'handouts', 'monsters', 'encounters', 'combat', 'chat', 'whispers', 'posts', 'signals', 'party', 'journal', 'gm'];
+const SUBCOLLECTIONS = ['notes', 'secrets', 'trash', 'sessions', 'quests', 'maps', 'pins', 'tokens', 'handouts', 'monsters', 'npcs', 'kills', 'encounters', 'combat', 'chat', 'whispers', 'posts', 'signals', 'party', 'journal', 'gm'];
 
 export async function deleteCampaign(cid) {
   const u = app.get().user;
@@ -682,6 +683,26 @@ export function allFolders() {
   return [...set].filter(Boolean).sort((a, b) => a.localeCompare(b, 'de'));
 }
 
+// Es gibt in jeder Kampagne genau einen NPC-Ordner – er heißt „NPC“ oder „NPCs“, lässt sich
+// nur zwischen diesen beiden Namen umbenennen und nicht löschen, solange er der einzige ist.
+export const NPC_NAMES = ['NPC', 'NPCs'];
+export const isNpcFolder = (path) => NPC_NAMES.some((n) => n.toLowerCase() === String(path || '').split('/').pop().toLowerCase());
+// Alle NPC-Ordner der Kampagne (normalerweise genau einer)
+export const npcFolders = () => allFolders().filter(isNpcFolder);
+// Zielordner für NPC-Notizen: erst „NPCs“, sonst „NPC“ – gibt es beides nicht, wird „NPCs“ angelegt
+export function npcFolder() {
+  const alle = allFolders();
+  const treffer = (name) => alle.find((f) => f.split('/').pop().toLowerCase() === name);
+  return treffer('npcs') || treffer('npc') || 'NPCs';
+}
+// Beim Öffnen einer Kampagne dafür sorgen, dass der Ordner wirklich existiert
+export async function ensureNpcFolder() {
+  if (app.get().role !== 'gm') return null;
+  const da = npcFolders();
+  if (da.length) return da[0];
+  return createFolder('NPCs');
+}
+
 export async function createFolder(path) {
   const p = cleanPath(path);
   if (!p) return;
@@ -693,6 +714,8 @@ export async function createFolder(path) {
 export async function renameFolder(oldPath, newPath) {
   const np = cleanPath(newPath);
   if (!np || np === oldPath) return;
+  // Der NPC-Ordner darf nur zwischen „NPC“ und „NPCs“ wechseln
+  if (isNpcFolder(oldPath) && npcFolders().length <= 1 && !isNpcFolder(np)) throw new Error('Der NPC-Ordner darf nur „NPC“ oder „NPCs“ heißen.');
   const ops = [];
   for (const n of Object.values(vault.get().notes)) {
     const f = n.folder || '';
@@ -720,6 +743,7 @@ export async function setFolderMeta(path, meta) {
 }
 
 export async function deleteFolder(path) {
+  if (isNpcFolder(path) && npcFolders().length <= 1) throw new Error('Der NPC-Ordner lässt sich nicht löschen – die NPC-Schmiede legt ihre Figuren dort ab.');
   const inside = Object.values(vault.get().notes).filter((n) => (n.folder || '') === path || (n.folder || '').startsWith(`${path}/`));
   for (const n of inside) await deleteNote(n.id);
   const folders = (app.get().campaign?.folders || []).filter((f) => f !== path && !f.startsWith(`${path}/`));

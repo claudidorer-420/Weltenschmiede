@@ -84,7 +84,12 @@ Markdown im Obsidian-Stil: „# Name“ als Titel, darunter ein kursiver Einzeil
 }
 
 export function buildNpcPrompt(cfg) {
-  const { fields = {}, core = '', contextIds = [], count = 1, paint = true, stats = false, words = 600 } = cfg;
+  const { fields = {}, core = '', contextIds = [], count = 1, paint = true, stats = 'none', statsInfo = '', words = 600 } = cfg;
+  // stats: 'none' | 'short' | 'full' (früher ein Schalter – true entspricht den Kurzwerten)
+  const sm = stats === true ? 'short' : stats || 'none';
+  const KURZ = '\n## Spielwerte – kompakt: RK, TP (mit Würfeln), Bewegungsrate, Attribute, 1–2 Aktionen mit Angriffs- und Schadenswürfen, HG';
+  const VOLL = `\n## Spielwerte – vollständiger 5e-Statblock${statsInfo ? ` (${statsInfo})` : ''}: Größe/Typ/Gesinnung, RK mit Rüstung, TP mit Würfeln, Bewegungsrate, alle sechs Attribute, Rettungswürfe, Fertigkeiten, Sinne, Sprachen, HG, Merkmale, Aktionen mit Angriffs- und Schadenswürfen, bei Zauberkundigen die Zauberliste`;
+  const statAbschnitt = sm === 'short' ? KURZ : sm === 'full' ? VOLL : '';
   const lines = [count > 1 ? `Erschaffe ${count} unterschiedliche NPCs (jeweils mit eigener #-Überschrift, getrennt durch ---).` : 'Erschaffe einen NPC.'];
   lines.push(`Umfang pro NPC: etwa ${words} Wörter.`);
   const f = Object.entries(fields).filter(([, v]) => v && String(v).trim());
@@ -101,7 +106,7 @@ export function buildNpcPrompt(cfg) {
 ## Motivation & Ziele
 ## Geheimnis – im „> [!gm]“-Callout
 ## Beziehungen – als [[Wikilinks]]
-## Aufhänger – 2–3 Ideen, wie die Gruppe mit dem NPC zu tun bekommt${paint ? '\n## Bemal-Guide – Farbpalette als Liste „- Bauteil: #RRGGBB (Farbname)“ plus 2–3 Tipps (Grundierung, Akzente, Washes)' : ''}${stats ? '\n## Spielwerte – kompakt: RK, TP (mit Würfeln), Bewegungsrate, Attribute, 1–2 Aktionen mit Angriffs- und Schadenswürfen, HG' : ''}`);
+## Aufhänger – 2–3 Ideen, wie die Gruppe mit dem NPC zu tun bekommt${paint ? '\n## Bemal-Guide – Farbpalette als Liste „- Bauteil: #RRGGBB (Farbname)“ plus 2–3 Tipps (Grundierung, Akzente, Washes)' : ''}${statAbschnitt}`);
   const wc = worldContext();
   if (wc) lines.push(`\n---\n${wc}`);
   const ctx = notesContext(contextIds, { maxChars: 30000 });

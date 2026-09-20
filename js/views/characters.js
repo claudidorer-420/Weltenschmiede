@@ -17,6 +17,7 @@ import {
 } from '../data/chargen.js';
 import { useSpells, damageAt, healAt, healHasMod, fmtDice, damageName, timeShort, rangeShort, levelName, listClassOf } from '../data/spells.js';
 import { CATALOG, CATEGORIES, catalogItem, catalogByName, fmtCost, fmtWeight, carryCapacity, WEAPON_RANGE, weaponReach } from '../data/items.js';
+import { scrollItem, scrollName, tierOf } from '../data/scrolls.js';
 import { openCharacterWizard as runWizard, openLevelUp, derive, migrateLegacy } from './charwizard.js';
 import { openSpellManager, normalizeEntries, SpellDetail, openSpellDetail } from './spellbook.js';
 import { SpellArt, ItemArt, DamageTag, GameIcon } from '../ui/art.js';
@@ -26,7 +27,6 @@ import {
 } from '../ui/components.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { now, debounce, uid } from '../lib/util.js';
-import { dataUrlFromImageFile } from '../lib/image.js';
 
 const sg = (n) => (n >= 0 ? `+${n}` : `${n}`);
 const DMG_KEY = { Wucht: 'bludgeoning', Stich: 'piercing', Hieb: 'slashing' };
@@ -278,7 +278,10 @@ export function CharacterSheet({ id, owner }) {
   };
   const setPortrait = async () => {
     const [f] = await pickFiles({ accept: 'image/*' });
-    if (f) upd({ portrait: await dataUrlFromImageFile(f, { maxDim: 320, quality: 0.8 }) });
+    if (!f) return;
+    const { openPortraitDialog } = await import('../ui/portraitcrop.js');
+    const r = await openPortraitDialog(f);
+    if (r) upd({ portrait: r.portrait, portraitCrop: r.portraitCrop });
   };
   const editXp = async () => {
     if (!canEdit) return;
@@ -447,18 +450,24 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
   const [dmg, setDmg] = useState('');
   const hdp = hitDicePools(c);
   const spendHd = (pool) => {
+    if (istTot) return totHinweis();
     if (pool.used >= pool.total) return toast('Keine Trefferwürfel mehr übrig.', 'error');
     const r = doRoll(`1d${pool.hd}${sg(cm.mods.con)}`, { label: `${c.name}: Trefferwürfel`, character: c.name, kind: 'free' });
     if (!r) return;
     upd({ hp: Math.min(c.maxHp, (Number(c.hp) || 0) + Math.max(0, r.total)), hdUsed: { ...(typeof c.hdUsed === 'object' ? c.hdUsed : {}), [pool.cls]: pool.used + 1 } });
   };
+  // Tot bleibt tot – Rasten heilen keine Leiche, dafür braucht es „Toten erwecken“ & Co.
+  const istTot = !!c.dead || (Number(c.deathSaves?.f) || 0) >= 3;
+  const totHinweis = () => toast(`${c.name} ist tot. Eine Rast bringt niemanden zurück – dafür braucht es Magie wie „Toten erwecken“.`, 'error');
   const shortRest = () => {
+    if (istTot) return totHinweis();
     const resUsed = { ...(c.resUsed || {}) };
     for (const r of res) if (r.reset === 'short') resUsed[r.key] = 0;
     upd({ resUsed, spell: { ...(c.spell || {}), pactUsed: 0 } });
     toast('Kurze Rast: Ressourcen und Paktmagie aufgefrischt. Trefferwürfel kannst du hier ausgeben.', 'success');
   };
   const longRest = () => {
+    if (istTot) return totHinweis();
     const hdUsed = {};
     for (const p of hdp) hdUsed[p.cls] = Math.max(0, p.used - (ed === '2024' ? p.total : Math.max(1, Math.floor(totalLevel(c) / 2))));
     upd({ hp: c.maxHp, tempHp: 0, resUsed: {}, spell: { ...(c.spell || {}), used: {}, pactUsed: 0 }, hdUsed, exhaustion: Math.max(0, (Number(c.exhaustion) || 0) - 1), deathSaves: { s: 0, f: 0 }, concentration: null });
@@ -488,8 +497,9 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
       <span class="death-saves">${[0, 1, 2].map((i) => html`<i class=${i < (c.deathSaves?.f || 0) ? 'f' : ''} onClick=${() => upd({ deathSaves: { ...c.deathSaves, f: i < (c.deathSaves?.f || 0) ? i : i + 1 } })}></i>`)}</span> Fehlschläge
       <${Btn} size="sm" icon="d20" onClick=${() => roll20(0, 'Todesrettungswurf', 'save')}>Würfeln<//></div>` : null}
     <div class="btn-row">
-      <${Btn} size="sm" icon="clock" disabled=${!canEdit} onClick=${shortRest}>Kurze Rast<//>
-      <${Btn} size="sm" icon="moon" disabled=${!canEdit} onClick=${longRest}>Lange Rast<//>
+      <${Btn} size="sm" icon="clock" disabled=${!canEdit || istTot} onClick=${shortRest}>Kurze Rast<//>
+      <${Btn} size="sm" icon="moon" disabled=${!canEdit || istTot} onClick=${longRest}>Lange Rast<//>
+      ${istTot ? html`<span class="badge gm">tot – nur Magie hilft noch</span>` : null}
     </div>
   </div>`;
 }
@@ -808,26 +818,37 @@ function SpellsTab({ c, cm, ed, canEdit, unlock, upd, roll20, rollDmg, spells, e
 let MAGIC = null;
 const loadMagic = () => (MAGIC ? Promise.resolve(MAGIC) : import('../data/magicitems-srd.js').then((m) => { MAGIC = m.MAGIC_ITEMS; return MAGIC; }));
 
-function ItemPicker({ close }) {
+function ItemPicker({ close, ed = '2014' }) {
   const [tab, setTab] = useState('catalog');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [magic, setMagic] = useState(MAGIC);
   const [custom, setCustom] = useState({ name: '', qty: 1, weight: '', cost: '', notes: '' });
+  const spells = useSpells(ed);           // zu jedem Zauber gibt es eine Schriftrolle
   useEffect(() => { if (tab === 'magic' && !magic) loadMagic().then(setMagic); }, [tab]);
   const ql = q.trim().toLowerCase();
   const cats = [...new Set(CATALOG.map((x) => x.cat))];
   const list = tab === 'catalog' ? CATALOG.filter((x) => (!cat || x.cat === cat) && (!ql || x.name.toLowerCase().includes(ql)))
-    : (magic || []).filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql));
+    : tab === 'scroll' ? (spells || []).filter((x) => !ql || x.name.toLowerCase().includes(ql))
+      : (magic || []).filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql));
   return html`<div class="modal-body stack">
-    <div class="sm-tabs">${[['catalog', 'Ausrüstung'], ['magic', 'Magische Gegenstände (SRD)'], ['custom', 'Eigener Gegenstand']].map(([k, l]) => html`<button type="button" class=${`sm-tab${tab === k ? ' active' : ''}`} onClick=${() => setTab(k)}>${l}</button>`)}</div>
+    <div class="sm-tabs">${[['catalog', 'Ausrüstung'], ['magic', 'Magische Gegenstände (SRD)'], ['scroll', 'Zauberschriftrollen'], ['custom', 'Eigener Gegenstand']].map(([k, l]) => html`<button type="button" class=${`sm-tab${tab === k ? ' active' : ''}`} onClick=${() => setTab(k)}>${l}</button>`)}</div>
     ${tab !== 'custom' ? html`<div class="row">
       <div class="search-box grow" style="margin:0"><${Icon} name="search" size=${15} /><input class="input" placeholder="Suchen …" value=${q} autoFocus onInput=${(e) => setQ(e.target.value)} /></div>
       ${tab === 'catalog' ? html`<select class="select sm" style="width:auto" value=${cat} onChange=${(e) => setCat(e.target.value)}><option value="">Alle Kategorien</option>${cats.map((k) => html`<option value=${k}>${CATEGORIES[k]}</option>`)}</select>` : null}
     </div>
     <div class="pick-list">
       ${tab === 'magic' && !magic ? html`<div class="empty"><span class="spinner" /></div>` : null}
-      ${list.slice(0, 250).map((x) => html`<div class="pick-row" key=${x.key || x.id}>
+      ${tab === 'scroll' && !spells ? html`<div class="empty"><span class="spinner" /></div>` : null}
+      ${tab === 'scroll' ? list.slice(0, 400).map((sp) => {
+        const st = tierOf(sp.level);
+        return html`<div class="pick-row" key=${sp.id}>
+          <${SpellArt} sp=${sp} size=${38} />
+          <div class="grow" style="min-width:0"><b>${scrollName(sp)}</b><div class="tiny faint">${levelName(sp.level)} · ${st.rar} · ${fmtCost(st.gp)} · einmal verwendbar</div></div>
+          <${Btn} size="sm" icon="plus" onClick=${() => close({ id: uid(6), ...scrollItem(sp) })}>Hinzufügen<//>
+        </div>`;
+      }) : null}
+      ${tab === 'scroll' ? null : list.slice(0, 250).map((x) => html`<div class="pick-row" key=${x.key || x.id}>
         <${ItemArt} item=${tab === 'magic' ? { ...x, magic: true } : { name: x.name, ref: x.key, icon: x.icon }} size=${38} />
         <div class="grow" style="min-width:0"><b>${x.name}</b><div class="tiny faint">${tab === 'magic' ? `${x.type} · ${x.rarity}${x.attune ? ' · Einstimmung' : ''}` : `${CATEGORIES[x.cat]}${x.sub ? ` · ${x.sub}` : ''} · ${fmtCost(x.cost)} · ${fmtWeight(x.weight)}`}</div></div>
         <${Btn} size="sm" icon="plus" onClick=${() => close(tab === 'magic'
@@ -902,7 +923,7 @@ function InventoryTab({ c, cm, canEdit, upd }) {
   };
   const attuned = inv.filter((x) => x.attuned);
   const add = async () => {
-    const it = await openModal(({ close }) => html`<${ItemPicker} close=${close} />`, { title: 'Gegenstand hinzufügen', icon: 'backpack', size: 'lg' });
+    const it = await openModal(({ close }) => html`<${ItemPicker} close=${close} ed=${edOf(c)} />`, { title: 'Gegenstand hinzufügen', icon: 'backpack', size: 'lg' });
     if (it) upd({ inventory: [...inv, it] });
   };
   const open = async (r) => {

@@ -1,6 +1,7 @@
 // App-Hülle: Anmeldung/Start, Ribbon, Seitenleisten, Tabs, Ansichten (lazy geladen), Statusleiste.
 import { html, useState, useEffect, useLayoutEffect, useRef } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
+import { GameClock } from './clock.js';
 import { app, vault, noteById, col } from '../core/app.js';
 import { settings, updateSettings } from '../core/settings.js';
 import {
@@ -26,6 +27,7 @@ const LOADERS = {
   graph: () => import('../views/graph.js'),
   forge: () => import('../views/forge.js'),
   npc: () => import('../views/npc.js'),
+  npclib: () => import('../views/npclib.js'),
   encounter: () => import('../views/encounter.js'),
   bestiary: () => import('../views/bestiary.js'),
   combat: () => import('../views/combat.js'),
@@ -52,8 +54,9 @@ export const VIEWS = {
   forge: { title: 'Weltenschmiede', icon: 'anvil', gm: true, mod: 'forge', comp: 'ForgeView' },
   archive: { title: 'Archiv der Welten', icon: 'archive', gm: true, mod: 'archive', comp: 'ArchiveView' },
   npc: { title: 'NPC-Schmiede', icon: 'mask', gm: true, mod: 'npc', comp: 'NpcView' },
+  npclib: { title: 'NPC-Sammlung', icon: 'users', gm: true, mod: 'npclib', comp: 'NpcLibView' },
   encounter: { title: 'Encounter', icon: 'swords', gm: true, mod: 'encounter', comp: 'EncounterView' },
-  bestiary: { title: 'Bestiarium', icon: 'ghost', gm: true, mod: 'bestiary', comp: 'BestiaryView' },
+  bestiary: { title: 'Bestiarium', icon: 'ghost', mod: 'bestiary', comp: 'BestiaryView' },
   combat: { title: 'Kampf', icon: 'sword', mod: 'combat', comp: 'CombatView' },
   maps: { title: 'Karten', icon: 'map', mod: 'maps', comp: 'MapsView' },
   map: { title: 'Karte', icon: 'map', mod: 'maps', comp: 'MapView' },
@@ -98,9 +101,8 @@ const RIBBON_GM = [
   { view: 'graph', icon: 'graph', title: 'Graph-Ansicht (Strg+G)', label: 'Graph' },
   '|',
   { view: 'forge', icon: 'anvil', title: 'Weltenschmiede (KI)', label: 'Schmiede' },
-  { view: 'npc', icon: 'mask', title: 'NPC-Schmiede', label: 'NPCs' },
-  { view: 'encounter', icon: 'swords', title: 'Encounter & Statblocks', label: 'Encounter' },
-  { view: 'bestiary', icon: 'ghost', title: 'Bestiarium (SRD + eigene Monster)', label: 'Bestiarium' },
+  { view: 'npc', icon: 'mask', title: 'NPC-Schmiede & NPC-Sammlung (auf der Seite umschaltbar)', label: 'NPCs', views: ['npc', 'npclib'] },
+  { view: 'bestiary', icon: 'ghost', title: 'Bestiarium & Encounter-Generator (auf der Seite umschaltbar)', label: 'Bestiarium', views: ['bestiary', 'encounter'] },
   MAPS,
   '|',
   { view: 'table', icon: 'image', title: 'Spieltisch: Szene, Gruppe, Play-by-Post', label: 'Spieltisch' },
@@ -130,6 +132,7 @@ const RIBBON_PLAYER = [
   { view: 'quests', icon: 'list-checks', title: 'Quests', label: 'Quests' },
   { view: 'sessions', icon: 'calendar', title: 'Sitzungen', label: 'Sitzungen' },
   { view: 'handouts', icon: 'scroll', title: 'Handouts', label: 'Handouts' },
+  { view: 'bestiary', icon: 'ghost', title: 'Besiegte Kreaturen', label: 'Bestiarium' },
   '|',
   { view: 'dice', icon: 'd20', title: 'Würfel', label: 'Würfel' },
   { view: 'rules', icon: 'book', title: 'Regeln & Zauber', label: 'Regeln' },
@@ -433,6 +436,7 @@ function MobileHeader({ tabs, active }) {
   return html`<div class="m-header">
     <${IconBtn} icon="panel-left" title="Seitenleiste" onClick=${toggleLeft} size=${20} />
     <div class="m-title">${viewTitle(currentOf(at))}</div>
+    <${GameClock} compact />
     <div class="tabbar">
       ${tabs.map((t) => {
         const cur = currentOf(t);
@@ -454,6 +458,7 @@ function StatusBar() {
   const count = useStore(vault, (x) => Object.keys(x.notes).length);
   const cloudOk = s.mode === 'cloud' && s.sync !== 'offline';
   return html`<div class="statusbar">
+    <${GameClock} />
     ${s.role === 'gm'
       ? html`<button type="button" class=${s.viewAsPlayer ? 'warn' : ''} title="Zeigt die App so, wie Spieler sie sehen" onClick=${() => app.set({ viewAsPlayer: !s.viewAsPlayer })}>
           <${Icon} name=${s.viewAsPlayer ? 'eye' : 'eye-off'} size=${13} />${s.viewAsPlayer ? 'Spieleransicht aktiv' : 'Spieleransicht'}</button>`
