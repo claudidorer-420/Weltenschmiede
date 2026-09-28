@@ -318,4 +318,7 @@ Gewaltmarsch: nach 8 Stunden je weitere Stunde KON-Rettungswurf (SG 10 + 1 pro S
 
 export const XP_LEVELS = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
 
-export const SRD_ATTRIBUTION = 'Enthält Material aus dem System Reference Document 5.1 („SRD 5.1“) von Wizards of the Coast LLC, lizenziert unter CC-BY-4.0 (creativecommons.org/licenses/by/4.0).';
+// Namensnennungen im vorgeschriebenen Wortlaut (Rechtliche Informationen der deutschen SRD-PDFs) – nicht umformulieren
+export const SRD51_ATTRIBUTION = 'Dieses Werk enthält Material aus dem Systemreferenzdokument 5.1 („SRD 5.1”) von Wizards of the Coast LLC, das unter https://dnd.wizards.com/de/resources/systems-reference-document verfügbar ist. Das SRD 5.1 ist lizenziert gemäß der Lizenz Creative Commons Namensnennung 4.0 International, die unter https://creativecommons.org/licenses/by/4.0/legalcode.de verfügbar ist.';
+export const SRD521_ATTRIBUTION = 'Dieses Werk enthält Material aus dem Systemreferenzdokument 5.2.1 („SRD 5.2.1“) von Wizards of the Coast LLC, verfügbar unter https://www.dndbeyond.com/srd. Das SRD 5.2.1 ist lizenziert gemäß Creative Commons Namensnennung 4.0 International Public License (verfügbar unter https://creativecommons.org/licenses/by/4.0/legalcode.de).';
+export const SRD_ATTRIBUTION = SRD51_ATTRIBUTION;

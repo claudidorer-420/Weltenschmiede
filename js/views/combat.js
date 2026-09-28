@@ -18,6 +18,7 @@ import { CONDITIONS, EXTRA_MARKERS } from '../data/rules5e.js';
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Select, Toggle, Statblock, openMenu, openModal, promptDialog, confirmDialog, toast, Empty } from '../ui/components.js';
 import { useCol, useDoc } from '../core/hooks.js';
+import { CombatLogList } from '../ui/combatlog.js';
 import { now, debounce, fmtTime } from '../lib/util.js';
 
 function hpClass(c) {
@@ -321,7 +322,7 @@ function GmCombat({ tabId }) {
       ${st.mapId ? html`<${Btn} icon="map" onClick=${() => openView('map', { id: st.mapId })}>Kampfkarte<//>` : null}
       ${current ? html`<span class="grow"></span><span class="small muted">Am Zug: <b>${current.name}</b></span>` : null}
     </div>
-    ${showLog ? html`<div class="card" style="margin:12px 16px 0"><div class="combat-log">${[...(st.log || [])].reverse().map((l) => html`<div><span class="faint tiny">${fmtTime(l.ts)}</span> ${l.text}</div>`)}</div></div>` : null}
+    ${showLog ? html`<div class="card" style="margin:12px 16px 0"><div class="combat-log"><${CombatLogList} lines=${st.log || []} gm=${true} reverse=${true} time=${fmtTime} sideOf=${(id) => { const c = st.combatants.find((o) => o.id === id); return c ? c.team || (c.isPC || c.ally ? 'pc' : 'npc') : ''; }} /></div></div>` : null}
     ${!st.combatants.length ? html`<${Empty} icon="sword" title="Noch keine Kämpfer" action=${html`<div class="btn-row center"><${Btn} icon="plus" onClick=${addMenu}>Kämpfer hinzufügen<//><${Btn} icon="swords" onClick=${() => openView('encounter')}>Encounter erstellen<//></div>`}>Füge die Gruppe, Monster aus dem Bestiarium oder einen generierten Encounter hinzu.<//>` : html`
       <div class="split even" style="padding:0 0 60px">
         <div class="combatants">
@@ -374,7 +375,8 @@ function PlayerCombat({ tabId }) {
             </div>
             <span></span>
           </div>`)}
-        </div>`}
+        </div>
+        ${pub?.log?.length ? html`<div class="card"><div class="card-head"><h3><${Icon} name="list" size=${16} />Kampfprotokoll</h3></div><div class="combat-log"><${CombatLogList} lines=${pub.log} reverse=${true} time=${fmtTime} sideOf=${(id) => { const c = list.find((o) => o.id === id); return c ? c.team || (c.isPC || c.ally ? 'pc' : 'npc') : ''; }} /></div></div>` : null}`}
     </div>
   <//>`;
 }

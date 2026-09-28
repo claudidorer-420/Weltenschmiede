@@ -15,6 +15,7 @@ import { copyText } from '../lib/util.js';
 import { vault, unlockVault, setVaultSync } from '../core/keyvault.js';
 import { authErrorMessage } from '../core/db-cloud.js';
 import { DICE_SKINS, drawSkinPreview } from '../ui/dice3d.js';
+import { SRD51_ATTRIBUTION, SRD521_ATTRIBUTION } from '../data/rules5e.js';
 
 const ALL_SECTIONS = [
   { value: 'ai', label: 'KI & Modelle', icon: 'sparkles' },
@@ -439,8 +440,11 @@ function AboutSection() {
     <div class="card"><div class="card-head"><h3><${Icon} name="command" size=${18} />Tastenkürzel</h3></div><table class="xp-table">${keys.map(([k, d]) => html`<tr><td><span class="kbd">${k}</span></td><td>${d}</td></tr>`)}</table></div>
     <div class="card stack sm small" style="line-height:1.6">
       <b>Quellen & Lizenzen</b>
-      <div>Zauber, Monster und magische Gegenstände: System Reference Document 5.1 und 5.2.1 (deutsche Fassungen) von Wizards of the Coast LLC, lizenziert unter <a href="https://creativecommons.org/licenses/by/4.0/legalcode.de" target="_blank" rel="noopener">CC-BY-4.0</a>. Maschinenlesbare Aufbereitung des SRD 5.1: openrpg.de; ergänzende Metadaten (Klassen, Schaden, Flächen): dnd5eapi.co.</div>
-      <div>Symbole für Zauber, Gegenstände und Monster: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (Lorc, Delapouite u. a.), lizenziert unter CC BY 3.0.</div>
+      <div>${SRD51_ATTRIBUTION}</div>
+      <div>${SRD521_ATTRIBUTION}</div>
+      <div class="faint">Maschinenlesbare Aufbereitung des SRD 5.1: openrpg.de; ergänzende Metadaten (Klassen, Schaden, Flächen): dnd5eapi.co.</div>
+      <div>Symbole für Zauber, Gegenstände und Monster: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (Lorc, Delapouite und weitere), lizenziert unter <a href="https://creativecommons.org/licenses/by/3.0/deed.de" target="_blank" rel="noopener">CC BY 3.0</a>; für die App verkleinert und eingefärbt.</div>
+      <div>Texturen und 3D-Modelle der Kartenbausteine: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0). Monsterporträts und weitere Bausteine: eigene Erzeugnisse (Stable Diffusion XL).</div>
       <div class="faint">Gebaut mit Preact + htm (ohne Build-Schritt), Firebase für Konten & Sync. Regelzusammenfassungen in eigenen Worten. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan-Werkzeug.</div>
     </div>
   </div>`;

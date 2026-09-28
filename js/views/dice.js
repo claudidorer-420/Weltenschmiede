@@ -12,6 +12,7 @@ import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Toggle, Segmented, Select, promptDialog, toast } from '../ui/components.js';
 import { DiceTray, RollResult, DieIcon, diceSummary } from '../ui/dicetray.js';
 import { useCol } from '../core/hooks.js';
+import { useTip, RollTip } from '../ui/combatlog.js';
 import { AB, AB_NAME, AB_SHORT, ALL_SKILLS, charMods, rollTraits, skillName, skillAbility, findWeapon, weaponAttack } from '../data/chargen.js';
 
 const DICE = [4, 6, 8, 10, 12, 20, 100];
@@ -44,6 +45,17 @@ function poolExpr(pool, mod) {
   const parts = Object.entries(pool).filter(([, n]) => n > 0).sort((a, b) => Number(b[0]) - Number(a[0])).map(([s, n]) => `${n}d${s}`);
   if (!parts.length) return '';
   return parts.join('+') + (mod ? (mod > 0 ? `+${mod}` : `${mod}`) : '');
+}
+
+// Verlauf: Überfahren zeigt den Rechenweg (jeder Würfel, Boni, Effekte), T hält ihn fest
+function RollLog({ log }) {
+  const rt = useTip((r, fix, close, style) => html`<${RollTip} r=${r} fix=${fix} onClose=${close} style=${style} />`);
+  if (!log.length) return html`<div class="faint small">Noch keine Würfe.</div>`;
+  return html`<div>${log.slice(0, 40).map((r, i) => html`<div class=${`roll-log-item has-tip${rt.active === i ? ' on' : ''}`} key=${r.ts || i} ...${rt.bind(i, r)}>
+    <span class=${`n${r.crit ? ' success-text' : r.fumble ? ' danger-text' : ''}`}>${r.total}</span>
+    <span class="small"><b>${r.label || r.input}</b>${r.character ? html` <span class="faint">· ${r.character}</span>` : null}<br /><span class="mono faint">${String(r.text).replace(/~(-?\d+)~/g, '($1)')}</span></span>
+    <span class="tiny faint">${fmtTime(r.ts)}</span>
+  </div>`)}${rt.node}</div>`;
 }
 
 export function DiceView({ tabId }) {
@@ -276,11 +288,7 @@ export function DiceView({ tabId }) {
 
       <div class="card">
         <div class="card-head"><h3><${Icon} name="clock" size=${18} />Verlauf</h3><span class="grow"></span>${log.length ? html`<${Btn} size="sm" kind="ghost" onClick=${clearRollLog}>Leeren<//>` : null}</div>
-        ${log.length ? log.slice(0, 40).map((r) => html`<div class="roll-log-item">
-          <span class=${`n${r.crit ? ' success-text' : r.fumble ? ' danger-text' : ''}`}>${r.total}</span>
-          <span class="small"><b>${r.label || r.input}</b>${r.character ? html` <span class="faint">· ${r.character}</span>` : null}<br /><span class="mono faint">${String(r.text).replace(/~(-?\d+)~/g, '($1)')}</span></span>
-          <span class="tiny faint">${fmtTime(r.ts)}</span>
-        </div>`) : html`<div class="faint small">Noch keine Würfe.</div>`}
+        <${RollLog} log=${log} />
       </div>
       </div>
     </div>

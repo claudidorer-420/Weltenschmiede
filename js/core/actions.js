@@ -163,11 +163,14 @@ function weaponAction(char, cm, w, c, ctx, opts = {}) {
   let dice = opts.versatile && w.vers ? w.vers : w.dmg;
   let abil = a.ability;
   let bonus = a.bonus + plus;
+  // Bestandteile für den Rechenweg im Protokoll (Tooltip)
+  let parts = [[cm.mods[abil] || 0, `${E.AB_NAME_DE[abil]}-Modifikator`], ...(a.prof ? [[cm.pb, 'Übungsbonus']] : []), ...(bonus - plus - (cm.mods[abil] || 0) - (a.prof ? cm.pb : 0) === 2 ? [[2, 'Kampfstil Bogenschießen']] : [])];
   let flat = parseDmg(a.damage).flat;
   const shil = !!E.effs(c, 'shillelagh').length && ['knueppel', 'kampfstab'].includes(w.key);
   if (shil) {
     abil = cm.spell[0]?.ability || 'wis';
     bonus = cm.pb + cm.mods[abil] + plus;
+    parts = [[cm.mods[abil] || 0, `${E.AB_NAME_DE[abil]}-Modifikator`], [cm.pb, 'Übungsbonus']];
     flat = cm.mods[abil];
     dice = ctx.ed === '2024' ? (cm.level >= 17 ? '2d6' : cm.level >= 11 ? '1d12' : cm.level >= 5 ? '1d10' : '1d8') : '1d8';
   }
@@ -178,7 +181,7 @@ function weaponAction(char, cm, w, c, ctx, opts = {}) {
   return {
     key: `${opts.offhand ? 'off' : 'w'}:${w.key}`, group: 'attack', kind: 'attack', name: opts.offhand ? `${w.name} (Zweitwaffe)` : w.name,
     art: { item: { name: w.name, ref: `w:${w.key}` } }, cost: opts.offhand ? 'bonus' : 'attack', hasteOk: true, offhand: !!opts.offhand,
-    attack: { kind: ranged ? 'ranged' : 'melee', bonus, reach: ranged ? 1.5 : weaponReach(w), range, thrown, damage: [{ dice, flat, type }], magical: !!mw || shil, weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged },
+    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: ranged ? 1.5 : weaponReach(w), range, thrown, damage: [{ dice, flat, type }], magical: !!mw || shil, weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged },
     needs: { target: 'enemy', n: 1, sight: true },
     desc: [a.props, opts.versatile && w.vers ? 'zweihändig geführt' : '', shil ? 'Shillelagh' : '', mw ? mw.name : ''].filter(Boolean).join(' · '),
   };
@@ -189,7 +192,7 @@ function unarmedAction(char, cm, c, ctx) {
   const die = monk ? (ctx.ed === '2024' ? (monk >= 17 ? '1d12' : monk >= 11 ? '1d10' : monk >= 5 ? '1d8' : '1d6') : monk >= 17 ? '1d10' : monk >= 11 ? '1d8' : monk >= 5 ? '1d6' : '1d4') : '';
   return {
     key: 'unarmed', group: 'attack', kind: 'attack', name: 'Waffenloser Schlag', art: { gi: GI.unarmed }, cost: 'attack', hasteOk: true,
-    attack: { kind: 'melee', bonus: cm.mods[abil] + cm.pb, reach: 1.5, damage: [{ dice: die, flat: monk ? cm.mods[abil] : Math.max(1, 1 + cm.mods.str), type: 'bludgeoning' }], weapon: true, ability: abil, strBased: abil === 'str' },
+    attack: { kind: 'melee', bonus: cm.mods[abil] + cm.pb, parts: [[cm.mods[abil], `${E.AB_NAME_DE[abil]}-Modifikator`], [cm.pb, 'Übungsbonus']], reach: 1.5, damage: [{ dice: die, flat: monk ? cm.mods[abil] : Math.max(1, 1 + cm.mods.str), type: 'bludgeoning' }], weapon: true, ability: abil, strBased: abil === 'str' },
     needs: { target: 'enemy', n: 1, sight: true }, desc: monk ? `Kampfkunst (${die})` : 'Faust, Tritt, Kopfstoß',
   };
 }
@@ -203,7 +206,7 @@ function trueStrikeAction(char, cm, w, c, ctx, sp, st) {
   const d0 = base.attack.damage[0];
   return {
     ...base, key: `ts:${w.key}`, group: 'spell', kind: 'attack', name: `${sp.name}: ${w.name}`, art: { spell: sp }, cost: 'action', hasteOk: false, level: 0, sp, isSpell: true,
-    attack: { ...base.attack, bonus: st.attack + plus, damage: [{ dice: d0.dice, flat: mod + plus, type: d0.type }, ...(extra ? [{ dice: extra, flat: 0, type: 'radiant' }] : [])], ability: st.ability, strBased: false, magical: true },
+    attack: { ...base.attack, bonus: st.attack + plus, parts: [[mod, `${E.AB_NAME_DE[st.ability]}-Modifikator`], [st.attack - mod, st.attack - mod === cm.pb ? 'Übungsbonus' : 'weitere Boni'], ...(plus ? [[plus, mw.name]] : [])], damage: [{ dice: d0.dice, flat: mod + plus, type: d0.type }, ...(extra ? [{ dice: extra, flat: 0, type: 'radiant' }] : [])], ability: st.ability, strBased: false, magical: true },
     desc: 'Zaubertrick (Aktion): Waffenangriff mit deinem Zauberattribut.',
   };
 }
@@ -555,19 +558,32 @@ export function rollParts(parts, { crit = false, label = '', doRoll } = {}) {
   const r = doRoll ? doRoll(expr, { label, kind: 'damage', fx: crit ? { crit: true } : {} }) : null;
   const res = r || rollDetailed(expr, { kind: 'damage', fx: crit ? { crit: true } : {} });
   const groups = new Map();
-  for (const d of res.dice || []) if (!d.dropped) groups.set(d.group, (groups.get(d.group) || 0) + (d.adj ?? d.value));
+  const faces = new Map();
+  for (const d of res.dice || []) {
+    if (!d.dropped) groups.set(d.group, (groups.get(d.group) || 0) + (d.adj ?? d.value));
+    faces.set(d.group, [...(faces.get(d.group) || []), d.dropped ? `~${d.value}~` : d.adj ? `${d.value}→${d.adj}` : String(d.value)]);
+  }
+  const det = [];
   let ti = 0;
   const out = parts.map((p) => {
     let sum = 0;
     const nd = p.dice ? p.dice.split('+').length : 0;
-    for (let k = 0; k < nd; k++) sum += groups.get(ti++) || 0;
+    const d = [];
+    for (let k = 0; k < nd; k++) { d.push(...(faces.get(ti) || [])); sum += groups.get(ti++) || 0; }
     if (p.flat) ti++;
     if (!p.dice && !p.flat) ti++;
-    return { amount: Math.max(0, sum + (p.flat || 0)), type: p.type || null };
+    const amount = Math.max(0, sum + (p.flat || 0));
+    det.push({ x: [p.dice, p.flat ? fmtS(p.flat) : ''].filter(Boolean).join('').replace(/^\+/, '') || '0', n: amount, t: p.type || null, ...(p.label ? { l: p.label } : {}), d });
+    return { amount, type: p.type || null };
   });
   const total = out.reduce((s, p) => s + p.amount, 0);
   if (Math.abs(total - res.total) > 0 && out.length === 1) out[0].amount = Math.max(0, res.total);
-  return { parts: out, total: out.reduce((s, p) => s + p.amount, 0), text: res.text };
+  return { parts: out, total: out.reduce((s, p) => s + p.amount, 0), text: res.text, det, notes: (res.notes || []).slice(0, 4) };
+}
+// Rechenweg eines einfachen Wurfs (Heilung, temporäre TP) fürs Protokoll
+export function detOf(r, type = null) {
+  const d = (r?.dice || []).map((q) => (q.dropped ? `~${q.value}~` : q.adj ? `${q.value}→${q.adj}` : String(q.value)));
+  return { x: String(r?.input || '').replace(/\s+/g, ''), n: Math.max(0, Number(r?.total) || 0), t: type, d };
 }
 // Zusätzliche Schadensteile beim Treffer: Zeichen des Jägers, Verhexen, Göttliche Gunst, Kampfrausch, Hinterhältiger Angriff …
 export function riderParts(x, c, a, target, ctx, opts = {}) {
@@ -611,6 +627,13 @@ function reconcile(r, mode) {
   if (mode && dice.length < 2) dice.push(rollDie(20));
   if (!mode) return { natural: dice[0], dice: [dice[0]] };
   return { natural: mode === 'adv' ? Math.max(dice[0], dice[1]) : Math.min(dice[0], dice[1]), dice: dice.slice(0, 2) };
+}
+function attackParts(att, a, c, ctx) {
+  const pb = E.statsOf(c, ctx).pb;
+  const out = att.parts ? att.parts.map((p) => [...p]) : a.spec?.attack && att.kind?.startsWith('spell') && a.castMod != null ? [[a.castMod, 'Zauberattribut-Modifikator']] : [];
+  const rest = (Number(att.bonus) || 0) - out.reduce((t, [v]) => t + v, 0);
+  if (rest) out.push([rest, !out.length ? 'Angriffsbonus' : rest === pb ? 'Übungsbonus' : 'weitere Boni']);
+  return out.length ? out : [[0, 'Angriffsbonus']];
 }
 function attackBonusExtras(x, c) {
   const out = [];
@@ -680,7 +703,7 @@ function applyEff(x, c, tgt, eff, a, concId, ev) {
   if (eff.k === 'aid') { who.maxHp = (Number(who.maxHp) || 1) + data.hp; who.hp = (Number(who.hp) || 0) + data.hp; }
   if (eff.k === 'fireShield') E.addEffect(x, who, { key: 'resist', name: 'Feuerschild (Resistenz)', src: c.id, silent: true, data: { types: [data.type === 'fire' ? 'cold' : 'fire'] }, rounds: spec.rounds || 100 });
   if (eff.k === 'rage') { /* s. Merkmal */ }
-  if (!eff.silent) E.log(x, `✨ ${who.name}: ${e.name}`);
+  if (!eff.silent) E.log(x, `✨ ${who.name}: ${e.name}`, '', '', { e: { t: 'eff', a: E.who(c), o: E.who(who), w: e.name } });
   return e;
 }
 function applyCond(x, c, tgt, cond, a, concId, ev, ctx) {
@@ -692,7 +715,7 @@ function applyCond(x, c, tgt, cond, a, concId, ev, ctx) {
     ...(cond.endOnDamage ? { endOnDamage: true } : {}), ...(cond.saveOnDamage ? { saveOnDamage: true } : {}), ...(cond.breakOnAttack ? { breakOnAttack: true } : {}),
     ...(cond.fails != null ? { fails: 0, onFails: cond.onFails } : {}), ...(cond.label ? { label: cond.label } : {}),
   };
-  if (E.addCondition(x, tgt, k, ctx)) E.log(x, `⛓ ${tgt.name}: ${name}${cond.label ? ` (${cond.label})` : ''}`);
+  if (E.addCondition(x, tgt, k, ctx)) E.log(x, `⛓ ${tgt.name}: ${name}${cond.label ? ` (${cond.label})` : ''}`, '', '', { e: { t: 'cond', a: E.who(c), o: E.who(tgt), w: name, r: a.name || '' } });
 }
 function pushResultRec(x, rec) {
   return E.pushResult(x, rec);
@@ -711,9 +734,13 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
     if (att.thrown && ctx.tokenOf(c) && ctx.tokenOf(tgt) && cellDistance(ctx.tokenOf(c), ctx.tokenOf(tgt)) * CELL_M > (att.reach || 1.5)) att.kind = 'ranged';
     if (spec.attack && att.kind?.startsWith('spell')) att.bonus = a.spellAttack;
     const plan = E.attackPlan(x, c, tgt, att, ctx);
-    if (!plan.ok) { rec.targets.push({ id: tgt.id, name: tgt.name, hit: false, note: plan.problems.join(', ') }); return; }
+    if (!plan.ok) {
+      rec.targets.push({ id: tgt.id, name: tgt.name, hit: false, note: plan.problems.join(', ') });
+      E.log(x, `🎯 ${c.name} → ${tgt.name}: ${a.name} – ${plan.problems.join(', ')}`, '', '', { e: { t: 'atk', a: E.who(c), o: E.who(tgt), w: a.name, r: 'blocked' }, tip: { lines: plan.problems } });
+      return;
+    }
     if (E.hasEff(tgt, 'sanctuary') && side(tgt) !== side(c)) {
-      const sv = E.savingThrow(x, c, 'wis', effDc(x, tgt, 'sanctuary'), { spell: true }, ctx);
+      const sv = E.savingThrow(x, c, 'wis', effDc(x, tgt, 'sanctuary'), { spell: true, src: tgt, what: 'Heiligtum' }, ctx);
       if (!sv.ok) { rec.targets.push({ id: tgt.id, name: tgt.name, hit: false, note: 'Heiligtum – Angriff abgelenkt' }); return; }
     }
     const rr = reconcile(ev.rolls?.[i], plan.mode);
@@ -744,8 +771,15 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
     const head = `🎯 ${c.name} → ${tgt.name}: ${a.name} ${dieTxt} ${fmtS(att.bonus)}${extras.map(([n, t]) => ` ${fmtS(n)} (${t})`).join('')} = ${total}`;
     const tail = `${plan.adv.length || plan.dis.length ? ` · ${[...plan.adv.map((s) => `▲ ${s}`), ...plan.dis.map((s) => `▼ ${s}`)].join(', ')}` : ''} → ${j.crit ? 'KRITISCHER TREFFER' : j.hit ? 'Treffer' : j.fumble ? 'natürliche 1 – daneben' : j.image ? 'Spiegelbild' : 'verfehlt'}`;
     const acTxt = ` gegen RK ${ac}${plan.cover ? ` (inkl. Deckung +${plan.cover})` : ''}`;
-    if (tgt.isPC) E.log(x, `${head}${acTxt}${tail}`);
-    else E.log(x, `${head}${plan.cover ? ' (Ziel in Deckung)' : ''}${tail}`, '', `${head}${acTxt}${tail}`);
+    const why = [...plan.adv.map((s) => `▲ ${s}`), ...plan.dis.map((s) => `▼ ${s}`)];
+    const tipLines = [plan.cover ? `Ziel in Deckung (+${plan.cover} RK)` : '', re.shield ? 'Schild: RK +5' : '', re.parry ? `Parieren: RK +${re.parry}` : '', j.image ? 'Getroffen wurde nur ein Spiegelbild' : '', plan.long ? 'Große Entfernung' : ''].filter(Boolean);
+    const data = {
+      e: { t: 'atk', a: E.who(c), o: E.who(tgt), w: a.name, r: j.crit ? 'crit' : j.hit ? 'hit' : j.fumble ? 'fumble' : j.image ? 'image' : 'miss' },
+      tip: { ...(tgt.isPC ? { ac } : {}), rolls: [{ l: 'Angriffswurf', d: rr.dice, k: rr.natural, m: plan.mode, why, p: [...attackParts(att, a, c, ctx), ...extras.map(([n, t]) => [n, t])], sum: total, crit: j.crit, fumble: j.fumble }], lines: tipLines },
+      ...(tgt.isPC ? {} : { gtip: { ac } }),
+    };
+    if (tgt.isPC) E.log(x, `${head}${acTxt}${tail}`, '', '', data);
+    else E.log(x, `${head}${plan.cover ? ' (Ziel in Deckung)' : ''}${tail}`, '', `${head}${acTxt}${tail}`, data);
     rec.targets.push({ id: tgt.id, name: tgt.name, natural: rr.natural, dice: rr.dice, total, ac, hit: j.hit, crit: j.crit, fumble: j.fumble, mode: plan.mode, adv: plan.adv, dis: plan.dis, melee: plan.melee, shield: !!re.shield, parry: !!re.parry, image: !!j.image, halfOnMiss: !j.hit && spec.special === 'acidArrow' });
     if (j.hit) {
       for (const eff of [].concat(spec.eff || []).filter((f) => f.onHit)) applyEff(x, c, tgt, eff, a, c.concentration?.id, ev);
@@ -761,7 +795,7 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
     if (t0) {
       const tok = ctx.tokenOf(t0);
       const around = tok ? x.combatants.filter((o) => !E.isDead(o) && ctx.tokenOf(o) && cellDistance(ctx.tokenOf(o), tok) <= 1) : [t0];
-      rec.explode = around.map((o) => { const sv = E.savingThrow(x, o, 'dex', a.dc, { spell: true }, ctx); return { id: o.id, name: o.name, save: { ok: sv.ok, total: sv.total, dc: a.dc } }; });
+      rec.explode = around.map((o) => { const sv = E.savingThrow(x, o, 'dex', a.dc, { spell: true, src: c, what: a.name }, ctx); return { id: o.id, name: o.name, save: { ok: sv.ok, total: sv.total, dc: a.dc } }; });
     }
   }
   const dmg = a.attack?.damage?.length ? a.attack.damage : a.kind === 'spell' ? spellDamage(a, ev.slot, a.castLevel, ev.choice) : [];
@@ -786,7 +820,7 @@ function smiteRider(x, c, tgt, spellId, ctx) {
   let concId = E.concOf(c)?.spellId === sp.id ? E.concOf(c).id : null;
   if (sp.conc && !concId) concId = E.startConcentration(x, c, { name: sp.name, spellId: sp.id });
   let failed = true;
-  if (sm.save) failed = !E.savingThrow(x, tgt, sm.save, dc, { spell: true }, ctx).ok;
+  if (sm.save) failed = !E.savingThrow(x, tgt, sm.save, dc, { spell: true, src: c, what: sp.name }, ctx).ok;
   if (failed && sm.cond) applyCond(x, c, tgt, sm.cond, a, concId, {}, ctx);
   if (failed && sm.eff) applyEff(x, c, tgt, sm.eff, a, concId, {});
   if (sm.dotStart) E.addEffect(x, tgt, { key: 'dotStart', name: `${sp.name} (brennt)`, src: c.id, conc: concId || undefined, rounds: spec.rounds || 10, data: { dice: sm.dotStart.dice, type: sm.dotStart.type, save: sm.dotStart.save ? { ab: sm.dotStart.save, dc } : null } });
@@ -831,7 +865,7 @@ function resolveSpellEffects(x, c, a, ev, ctx, reacts, side) {
       rounds: spec.zone?.rounds || spec.rounds || 10,
     });
     rec.zone = z.id;
-    E.log(x, `🌀 ${c.name} wirkt ${sp.name}${concId ? ' (Konzentration)' : ''}`);
+    E.log(x, `🌀 ${c.name} wirkt ${sp.name}${concId ? ' (Konzentration)' : ''}`, '', '', { e: { t: 'use', a: E.who(c), w: sp.name, r: 'spell' }, tip: { ...(a.dc && spec.save ? { dc: a.dc } : {}), lines: [ev.slot ? `Zauberplatz ${ev.slot}. Grad` : '', concId ? 'Konzentration' : '', 'Wirkt als Zone auf der Karte'].filter(Boolean) } });
     if (a.spec.grant) grantAction(x, c, a, ev, concId, z.id);
     // Sofortwirkung beim Erscheinen: Zustand (Netz, Verstricken …) bzw. Schaden der Zone (Schwarze Tentakel, Feuerwand)
     dmg = spec.zone?.dmg ? spec.zone.dmg.map(([d, t]) => ({ ...parseDmg(d), type: t })) : spec.half && !spec.cond ? dmg : [];
@@ -843,7 +877,7 @@ function resolveSpellEffects(x, c, a, ev, ctx, reacts, side) {
     if (spec.only && !spec.only.test(t.statblock?.type || (t.isPC ? 'Humanoide' : ''))) { rec.targets.push({ id: t.id, name: t.name, note: 'nicht betroffen (Kreaturentyp)' }); continue; }
     if (spec.use === 'special' && spec.special === 'hpPool') continue;
     const firstCond = [].concat(spec.cond || [])[0]?.n;
-    const sv = spec.save ? E.savingThrow(x, t, spec.save, a.dc, { spell: true, cover: spec.ignoreCover ? 0 : ctx.cover && ctx.tokenOf(c) && ctx.tokenOf(t) ? ctx.cover(ctx.tokenOf(c), ctx.tokenOf(t)) : 0, immuneTo: firstCond }, ctx) : { ok: false, total: 0 };
+    const sv = spec.save ? E.savingThrow(x, t, spec.save, a.dc, { spell: true, src: c, what: a.name, cover: spec.ignoreCover ? 0 : ctx.cover && ctx.tokenOf(c) && ctx.tokenOf(t) ? ctx.cover(ctx.tokenOf(c), ctx.tokenOf(t)) : 0, immuneTo: firstCond }, ctx) : { ok: false, total: 0 };
     const entry = { id: t.id, name: t.name, save: spec.save ? { ok: sv.ok, total: sv.total, natural: sv.natural, auto: sv.auto, immune: sv.immune } : null };
     if (!sv.ok) {
       for (const cond of [].concat(spec.cond || []).filter((f) => !f.onHit)) applyCond(x, c, t, cond, a, concId, ev, ctx);
@@ -870,11 +904,16 @@ function resolveSupport(x, c, a, ev, ctx, targets, concId, rec) {
   const spec = a.spec;
   if (spec.t === 'self' || !targets.length) targets = [c];
   rec.kind = spec.use === 'heal' ? 'heal' : 'effect';
+  const others = targets.filter((t) => t !== c);
+  E.log(x, `✨ ${c.name} wirkt ${a.name}${targets.length && targets[0] !== c ? ` auf ${targets.map((t) => t.name).join(', ')}` : ''}${concId ? ' (Konzentration)' : ''}`, '', '', {
+    e: { t: 'use', a: E.who(c), o: others.length === 1 ? E.who(others[0]) : null, w: a.name, n: others.length, r: 'spell' },
+    tip: { lines: [ev.slot ? `Zauberplatz ${ev.slot}. Grad` : '', concId ? 'Konzentration' : ''].filter(Boolean) },
+  });
   for (const t of targets) {
     const entry = { id: t.id, name: t.name };
     if (spec.use === 'heal') {
       const amt = Number(ev.amounts?.[t.id] ?? ev.amount) || 0;
-      entry.healed = E.applyHealing(x, t, amt, { source: a.name });
+      entry.healed = E.applyHealing(x, t, amt, { source: a.name, by: c, roll: ev.amountDet || null });
       for (const n of spec.cures || []) E.removeCondition(x, t, n, a.name);
     }
     if (spec.use === 'temp') { E.addTempHp(x, t, Number(ev.amount) || 0, a.name); entry.temp = Number(ev.amount) || 0; }
@@ -884,7 +923,6 @@ function resolveSupport(x, c, a, ev, ctx, targets, concId, rec) {
   }
   if (spec.grant) grantAction(x, c, a, ev, concId, null);
   if (spec.special === 'dashNow') { const eco = (c.eco ||= E.freshEco(c, ctx)); eco.moveM += E.statsOf(c, ctx).speedM; }
-  E.log(x, `✨ ${c.name} wirkt ${a.name}${targets.length && targets[0] !== c ? ` auf ${targets.map((t) => t.name).join(', ')}` : ''}${concId ? ' (Konzentration)' : ''}`);
   return rec;
 }
 function grantAction(x, c, a, ev, concId, zoneId) {
@@ -970,13 +1008,13 @@ function resolveSpecial(x, c, a, ev, ctx) {
   if (s === 'chain') {
     const list = targetsOf(x, ev);
     rec.kind = 'save'; rec.save = 'dex'; rec.dc = a.dc; rec.half = true;
-    for (const tt of list) { const sv = E.savingThrow(x, tt, 'dex', a.dc, { spell: true }, ctx); rec.targets.push({ id: tt.id, name: tt.name, save: { ok: sv.ok, total: sv.total } }); }
+    for (const tt of list) { const sv = E.savingThrow(x, tt, 'dex', a.dc, { spell: true, src: c, what: a.name }, ctx); rec.targets.push({ id: tt.id, name: tt.name, save: { ok: sv.ok, total: sv.total } }); }
     rec.damage = spellDamage(a, ev.slot, a.castLevel);
     rec.stage = 'damage';
   }
   if (s === 'divineWord') {
     for (const tt of targetsOf(x, ev)) {
-      const sv = E.savingThrow(x, tt, 'cha', a.dc, { spell: true }, ctx);
+      const sv = E.savingThrow(x, tt, 'cha', a.dc, { spell: true, src: c, what: a.name }, ctx);
       if (sv.ok) { rec.targets.push({ id: tt.id, name: tt.name, save: { ok: true, total: sv.total } }); continue; }
       const hp = tt.hp;
       if (hp <= 20) E.die(x, tt, a.name);
@@ -991,7 +1029,7 @@ function resolveSpecial(x, c, a, ev, ctx) {
     for (const tt of list) {
       const n = rollDie(8);
       const [name, type] = COLORS[Math.min(6, n - 1)];
-      const sv = E.savingThrow(x, tt, 'dex', a.dc, { spell: true }, ctx);
+      const sv = E.savingThrow(x, tt, 'dex', a.dc, { spell: true, src: c, what: a.name }, ctx);
       if (n === 8) { rec.targets.push({ id: tt.id, name: tt.name, note: 'zwei Strahlen – die SL würfelt nach' }); continue; }
       if (type) { const r = roll('10d6'); const amt = sv.ok ? Math.floor(r.total / 2) : r.total; E.applyDamage(x, tt, [{ amount: amt, type }], { magical: true, attacker: c }, ctx); rec.targets.push({ id: tt.id, name: tt.name, note: `${name}: ${amt} ${dmgName(type)}` }); } else if (!sv.ok) { E.addCondition(x, tt, { name: name === 'Indigo' ? E.COND.restrained : E.COND.blind, src: c.id, save: { ab: 'con', dc: a.dc, at: 'end' } }, ctx); rec.targets.push({ id: tt.id, name: tt.name, note: `${name}: ${name === 'Indigo' ? 'festgesetzt' : 'blind'}` }); }
     }
@@ -1004,7 +1042,7 @@ function resolveSpecial(x, c, a, ev, ctx) {
     const tt = spec.form?.self ? c : t;
     if (m && tt) {
       const willing = tt.id === c.id || side(tt) === side(c);
-      const sv = willing || !spec.save ? { ok: false } : E.savingThrow(x, tt, spec.save, a.dc, { spell: true }, ctx);
+      const sv = willing || !spec.save ? { ok: false } : E.savingThrow(x, tt, spec.save, a.dc, { spell: true, src: c, what: a.name }, ctx);
       if (!sv.ok) {
         const concId = a.conc ? E.startConcentration(x, c, { name: a.sp.name, spellId: a.sp.id }) : null;
         E.applyForm(x, tt, formOf(m), { mode: spec.form?.temp ? 'temp' : 'replace', conc: concId, src: a.sp.id, by: c.id, endOnTemp: !!spec.form?.temp });
@@ -1014,8 +1052,7 @@ function resolveSpecial(x, c, a, ev, ctx) {
     }
   }
   if (s === 'trueStrike' && t) return null;
-  if (!rec.targets.length && !rec.note) E.log(x, `✨ ${c.name} wirkt ${a.name}`);
-  return rec;
+  return rec; // die Ankündigung schreibt announce()
 }
 function resolveStd(x, c, a, ev, ctx) {
   const rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' };
@@ -1066,7 +1103,7 @@ function resolveStd(x, c, a, ev, ctx) {
       if (ctx.ed === '2024') {
         const dc = 8 + s.mods.str + s.pb;
         const ab = (E.statsOf(t, ctx).saves.dex || 0) > (E.statsOf(t, ctx).saves.str || 0) ? 'dex' : 'str';
-        ok = !E.savingThrow(x, t, ab, dc, {}, ctx).ok;
+        ok = !E.savingThrow(x, t, ab, dc, { src: c, what: 'Stoßen' }, ctx).ok;
       } else {
         const mine = rollDie(20) + (char ? charMods(char).skills.athletics.bonus : s.mods.str);
         const ts = E.statsOf(t, ctx);
@@ -1100,7 +1137,7 @@ function resolveFeature(x, c, a, ev, ctx) {
     E.log(x, `😡 ${c.name} gerät in Kampfrausch`);
   }
   if (k === 'f:reckless') E.addEffect(x, c, { key: 'reckless', name: 'Tollkühner Angriff', src: c.id, unique: 'any', until: { cb: c.id, at: 'end', n: (c.turnNo || 0) - 1 } });
-  if (k === 'f:secondwind') { const lv = classLevel(char, 'kaempfer'); E.applyHealing(x, c, Number(ev.amount) || rollDie(10) + lv, { source: 'Zweiter Wind' }); }
+  if (k === 'f:secondwind') { const lv = classLevel(char, 'kaempfer'); E.applyHealing(x, c, Number(ev.amount) || rollDie(10) + lv, { source: 'Zweiter Wind', roll: ev.amountDet || null }); }
   if (k === 'f:surge') { eco.action += 1; E.log(x, `⚡ ${c.name}: Tatendrang – eine weitere Aktion`); }
   if (k === 'f:flurry') { eco.attacks += 2; eco.flurry = true; E.log(x, `👊 ${c.name}: Schlaghagel – zwei waffenlose Schläge`); }
   if (k === 'f:martial') { eco.attacks += 1; eco.martial = true; }
@@ -1118,7 +1155,7 @@ function resolveFeature(x, c, a, ev, ctx) {
     const dc = s.spell?.dc || 8 + s.pb + (s.mods.wis || 0);
     for (const o of x.combatants) {
       if (!/untot|undead/i.test(o.statblock?.type || '') || E.isOut(o) || !tok || !ctx.tokenOf(o) || cellDistance(tok, ctx.tokenOf(o)) * CELL_M > 9) continue;
-      const sv = E.savingThrow(x, o, 'wis', dc, {}, ctx);
+      const sv = E.savingThrow(x, o, 'wis', dc, { src: c, what: a.name }, ctx);
       if (!sv.ok) E.addCondition(x, o, { name: E.COND.frightened, src: c.id, rounds: 10, endOnDamage: true, label: 'vertrieben' }, ctx);
       rec.targets.push({ id: o.id, name: o.name, save: { ok: sv.ok, total: sv.total }, note: sv.ok ? '' : 'vertrieben' });
     }
@@ -1138,7 +1175,7 @@ function resolveFeature(x, c, a, ev, ctx) {
     const type = s.resist.all.find((t) => ['acid', 'cold', 'fire', 'lightning', 'poison'].includes(t)) || 'fire';
     const dc = 8 + s.pb + (s.mods.con || 0);
     rec.kind = 'save'; rec.save = 'dex'; rec.dc = dc; rec.half = true; rec.tpl = ev.tpl;
-    for (const t of ev.tpl ? areaTargets(x, c, ev.tpl, ctx) : []) { const sv = E.savingThrow(x, t, 'dex', dc, {}, ctx); rec.targets.push({ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total } }); }
+    for (const t of ev.tpl ? areaTargets(x, c, ev.tpl, ctx) : []) { const sv = E.savingThrow(x, t, 'dex', dc, { src: c, what: a.name }, ctx); rec.targets.push({ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total } }); }
     rec.damage = [{ dice, flat: 0, type }];
     if (rec.targets.length) rec.stage = 'damage';
   }
@@ -1147,7 +1184,7 @@ function resolveFeature(x, c, a, ev, ctx) {
 function resolveMonsterAbility(x, c, a, ev, ctx) {
   const rec = { ...baseRec(ev, c, a), kind: 'save', stage: 'done', save: a.save, dc: a.dc, half: !!a.half, tpl: ev.tpl || null };
   const targets = ev.tpl ? areaTargets(x, c, ev.tpl, ctx) : targetsOf(x, ev);
-  for (const t of targets) { const sv = E.savingThrow(x, t, a.save, a.dc, {}, ctx); rec.targets.push({ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total, natural: sv.natural, auto: sv.auto } }); }
+  for (const t of targets) { const sv = E.savingThrow(x, t, a.save, a.dc, { src: c, what: a.name }, ctx); rec.targets.push({ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total, natural: sv.natural, auto: sv.auto } }); }
   rec.damage = a.damage || [];
   if (rec.damage.length && rec.targets.length) rec.stage = 'damage';
   return rec;
@@ -1155,7 +1192,7 @@ function resolveMonsterAbility(x, c, a, ev, ctx) {
 function resolveItem(x, c, a, ev, ctx) {
   const t = targetsOf(x, ev)[0] || c;
   const amt = Number(ev.amount) || roll(a.heal).total;
-  E.applyHealing(x, t, amt, { source: a.name });
+  E.applyHealing(x, t, amt, { source: a.name, by: c, roll: ev.amountDet || null });
   return { ...baseRec(ev, c, a), kind: 'heal', stage: 'done', targets: [{ id: t.id, name: t.name, healed: amt }] };
 }
 function resolveAuto(x, c, a, ev, ctx, reacts) {
@@ -1380,7 +1417,7 @@ function resolveCounter(x, c, a, ev, ctx, cs) {
   const cm = charMods(cs.char);
   const st = cm.spell[0] || { dc: 8 + cm.pb, ability: 'int' };
   let countered;
-  if (ctx.ed === '2024') countered = !E.savingThrow(x, c, 'con', st.dc, { spell: true }, ctx).ok;
+  if (ctx.ed === '2024') countered = !E.savingThrow(x, c, 'con', st.dc, { spell: true, what: `Gegenzauber von ${cs.name}` }, ctx).ok;
   else if (cs.level >= lvl) {
     countered = true;
     E.log(x, `✋ ${cs.name}: Gegenzauber (${cs.level}. Grad) – Grad reicht, automatisch aufgehoben`);
@@ -1410,7 +1447,7 @@ export async function starteKampf(angreiferId = null) {
     if (i >= 0 && i !== x.turn) {
       x.turn = i;
       E.beginTurn(x, x.combatants[i], ctx);
-      E.log(x, `▶ ${x.combatants[i].name} schlägt zuerst zu`, 'turn');
+      E.log(x, `▶ ${x.combatants[i].name} schlägt zuerst zu`, 'turn', '', { e: { t: 'turn', o: E.who(x.combatants[i]) } });
     }
     return x;
   });
@@ -1477,6 +1514,7 @@ export async function handleAct(ev) {
     payCosts(x, c, a, ev, ctx, char);
     let rec = null;
     const use = a.spec?.use;
+    announce(x, c, a, ev, use);
     if (a.kind === 'std') rec = resolveStd(x, c, a, ev, ctx);
     else if (a.kind === 'feature') rec = resolveFeature(x, c, a, ev, ctx);
     else if (a.kind === 'item') rec = resolveItem(x, c, a, ev, ctx);
@@ -1485,7 +1523,7 @@ export async function handleAct(ev) {
       if (a.grant?.area) rec = resolveMonsterAbility(x, c, { ...a, save: a.grant.save, dc: a.dc, half: a.grant.half, damage: [{ ...parseDmg(a.grant.dice), type: a.grant.type }] }, ev, ctx);
       else if (a.attack) rec = resolveAttacks(x, c, a, ev, ctx, reacts, side);
       else if (a.grant?.moveZone && ev.dest) { const z = (x.zones || []).find((q) => q.id === a.grant.zoneId || q.src === c.id); if (z) { z.tpl = { ...z.tpl, x: ev.dest.x + 0.5, y: ev.dest.y + 0.5 }; E.log(x, `🌀 ${c.name} bewegt ${z.name}`); } rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' }; }
-      else if (a.grant?.condChoice) { const t = targetsOf(x, ev)[0]; if (t) { const sv = E.savingThrow(x, t, a.grant.save, a.dc, { spell: true }, ctx); if (!sv.ok) E.addCondition(x, t, { name: ev.choice || a.grant.condChoice[0], src: c.id, rounds: 10 }, ctx); rec = { ...baseRec(ev, c, a), kind: 'save', stage: 'done', save: a.grant.save, dc: a.dc, targets: [{ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total } }] }; } }
+      else if (a.grant?.condChoice) { const t = targetsOf(x, ev)[0]; if (t) { const sv = E.savingThrow(x, t, a.grant.save, a.dc, { spell: true, src: c, what: a.name }, ctx); if (!sv.ok) E.addCondition(x, t, { name: ev.choice || a.grant.condChoice[0], src: c.id, rounds: 10 }, ctx); rec = { ...baseRec(ev, c, a), kind: 'save', stage: 'done', save: a.grant.save, dc: a.dc, targets: [{ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total } }] }; } }
     } else if (a.kind === 'attack') rec = resolveAttacks(x, c, a, ev, ctx, reacts, side);
     else if (a.kind === 'spell') {
       if (use === 'attack' || use === 'summonAttack' || a.spec.special === 'acidArrow' || a.spec.special === 'iceKnife') {
@@ -1524,6 +1562,19 @@ export async function handleAct(ev) {
   if (summoned.length) await placeSummonTokens(summoned, ev.dest, actor);
   for (const p of pushes) await pushAway(ev.actor, p.id, p.m);
   await flushSideFx();
+}
+
+// „Elara wirkt Feuerball“ – Angriffe kündigen sich mit ihrer eigenen Zeile an, Zonen/Beschwörungen ebenfalls
+function announce(x, c, a, ev, use) {
+  const spell = a.kind === 'spell';
+  if (a.attack || (spell && ['attack', 'summonAttack', 'zone', 'smite', 'summon', 'move', 'buff', 'mark', 'temp', 'heal'].includes(use)) || (spell && ['acidArrow', 'iceKnife'].includes(a.spec?.special))) return;
+  if (!spell && a.kind !== 'ability' && !(a.kind === 'granted' && a.grant?.area)) return;
+  const tg = targetsOf(x, ev);
+  const on = tg.length === 1 ? ` auf ${tg[0].name}` : tg.length > 1 ? ` auf ${tg.length} Ziele` : ev.tpl ? ' (Fläche)' : '';
+  E.log(x, `✨ ${c.name} ${spell ? 'wirkt' : 'nutzt'} ${a.name}${ev.slot && a.level && ev.slot > a.level ? ` (${ev.slot}. Grad)` : ''}${on}`, '', '', {
+    e: { t: 'use', a: E.who(c), o: tg.length === 1 ? E.who(tg[0]) : null, w: a.name, n: tg.length, r: spell ? 'spell' : 'ability' },
+    tip: { ...(a.dc && (a.spec?.save || a.save) ? { dc: a.dc } : {}), lines: [ev.slot ? `Zauberplatz ${ev.slot}. Grad` : '', a.spec?.save || a.save ? `Rettungswurf: ${E.AB_SHORT[a.spec?.save || a.save] || ''}` : '', a.conc || a.spec?.conc ? 'Konzentration' : ''].filter(Boolean) },
+  });
 }
 
 // Schadenswurf (vom Handelnden gewürfelt) auf die getroffenen Ziele anwenden
@@ -1567,7 +1618,8 @@ export async function handleDamage(ev) {
       for (let k = 0; k < times; k++) {
         const parts = r.parts.map((p) => ({ amount: Math.floor(p.amount * factor), type: p.type }));
         if (rec.disintegrate) parts.forEach((p) => { p.type = 'force'; });
-        const res = E.applyDamage(x, tgt, parts, { crit: t.crit, melee: t.melee, magical: rec.magical || !!ev.magical, attacker: actor, floorOne: rec.floorOne, halve: halve[t.id] ? 'Unglaubliches Ausweichen' : null }, ctx);
+        const rollNote = factor < 1 ? (t.halfOnMiss && !t.hit ? 'Verfehlt – halber Schaden' : 'Rettungswurf geschafft – halber Schaden') : '';
+        const res = E.applyDamage(x, tgt, parts, { crit: t.crit, melee: t.melee, magical: rec.magical || !!ev.magical, attacker: actor, floorOne: rec.floorOne, halve: halve[t.id] ? 'Unglaubliches Ausweichen' : null, source: rec.title, roll: r.det || null, rollNotes: [rollNote, ...(r.notes || [])].filter(Boolean) }, ctx);
         t.applied = (t.applied || 0) + res.taken;
         drained += res.taken;
         if (rec.disintegrate && tgt.hp <= 0) { E.die(x, tgt, 'zu Staub zerfallen'); t.note = 'zu Staub zerfallen'; }
@@ -1634,7 +1686,7 @@ async function offerRebuke(rb, ctx0) {
     if (!t || !a) return xx;
     t.reaction = false;
     const dc = charMods(char).spell[0]?.dc || 13;
-    const sv = E.savingThrow(xx, a, 'dex', dc, { spell: true }, cx);
+    const sv = E.savingThrow(xx, a, 'dex', dc, { spell: true, src: t, what: 'Höllischer Tadel' }, cx);
     const r = roll('2d10');
     const amt = sv.ok ? Math.floor(r.total / 2) : r.total;
     E.log(xx, `🔥 ${t.name}: Höllischer Tadel – ${r.text} = ${r.total}${sv.ok ? ' (halbiert)' : ''}`);
@@ -1843,7 +1895,7 @@ export function rollDamage(x, c, rec, ctx, { sneak = true, smite = null, doRoll 
   const plan = damagePlan(x, c, rec, ctx, { sneak, smite });
   const rolls = plan.map((p) => {
     const r = rollParts(p.parts, { crit: p.crit, label: p.label, doRoll });
-    return { i: p.i, parts: r.parts, total: r.total };
+    return { i: p.i, parts: r.parts, total: r.total, det: r.det, notes: r.notes };
   });
   return {
     type: 'dmg', resultId: rec.id, rolls, sneak: plan.some((p) => p.sneak), mapId: rec.mapId || null,

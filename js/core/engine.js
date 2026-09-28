@@ -23,6 +23,7 @@ const AUTO_FAIL_SD = [COND.paralyzed, COND.petrified, COND.stunned, COND.unconsc
 const ADV_AGAINST = [COND.paralyzed, COND.petrified, COND.stunned, COND.unconscious, COND.restrained];
 export const PHYS = new Set(['bludgeoning', 'piercing', 'slashing']);
 export const AB_SHORT = { str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' };
+export const AB_NAME_DE = { str: 'Stärke', dex: 'Geschicklichkeit', con: 'Konstitution', int: 'Intelligenz', wis: 'Weisheit', cha: 'Charisma' };
 const AB = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const fmtS = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
 export const fmtM = (m) => `${String(Math.round((Number(m) || 0) * 10) / 10).replace('.', ',')} m`;
@@ -44,8 +45,25 @@ export const concOf = (c) => (c?.concentration && typeof c.concentration === 'ob
 
 // ───────────────────────── Protokoll & Ergebnisse ─────────────────────────
 // gm: ausführlichere Zeile nur für die SL (z. B. genaue TP eines Monsters)
-export function log(x, text, kind = '', gm = '') {
-  (x.log ||= []).push({ ts: now(), text, ...(kind ? { kind } : {}), ...(gm ? { gm } : {}) });
+// data (optional, für die Anzeige im BG3-Stil – ui/combatlog.js):
+//   e    = Ereignis { t: atk|save|dmg|heal|temp|cond|end|eff|use|death|dsave|init|round|turn, a: [id, name] (wer),
+//          o: [id, name] (wen), w: womit, r: Ergebnis, n: Zahl, dt: Schadensart }
+//   tip  = Rechenweg für alle, die die Zeile sehen { dc, ac, rolls: [wurf], dmg: [teil], lines: [] }
+//   gtip = Zusätze nur für die SL (z. B. RK und TP von Monstern)
+// wurf = { l: Bezeichnung, d: [Würfel], k: behaltener W20, m: adv|dis, why: [Gründe], p: [[Wert, Grund]], sum, crit, fumble }
+export function log(x, text, kind = '', gm = '', data = null) {
+  (x.log ||= []).push({ ts: now(), text, ...(kind ? { kind } : {}), ...(gm ? { gm } : {}), ...(data || {}) });
+}
+export const who = (c) => (c ? [c.id, c.name] : null);
+// Grundbonus eines Rettungswurfs in Attributsmodifikator und Übungsbonus zerlegen
+export function saveParts(s, ab, total) {
+  const mod = Number(s?.mods?.[ab]);
+  if (!Number.isFinite(mod)) return [[total, `${AB_SHORT[ab] || ab}-Rettungswurf`]];
+  const out = [[mod, `${AB_NAME_DE[ab] || ab}-Modifikator`]];
+  const rest = total - mod;
+  if (rest && rest === s.pb) out.push([rest, 'Übungsbonus']);
+  else if (rest) out.push([rest, 'weitere Boni']);
+  return out;
 }
 export function pushResult(x, rec) {
   const r = { ts: now(), ...rec };
@@ -276,14 +294,16 @@ export function savingThrow(x, c, ab, dc, opts = {}, ctx = {}) {
   const ed = ctx.ed || '2014';
   const s = statsOf(c, ctx);
   const label = `${AB_SHORT[ab] || ab}-Rettungswurf`;
+  const ev = (r, extra = {}) => ({ t: 'save', a: who(opts.src), o: who(c), w: opts.what || '', ab, r, ...extra });
   if (AUTO_FAIL_SD.some((n) => has(c, n)) && (ab === 'str' || ab === 'dex')) {
-    const text = `${c.name}: ${label} scheitert automatisch (${AUTO_FAIL_SD.find((n) => has(c, n))})`;
-    log(x, text);
+    const why = AUTO_FAIL_SD.find((n) => has(c, n));
+    const text = `${c.name}: ${label} scheitert automatisch (${why})`;
+    log(x, text, '', '', { e: ev('auto'), tip: { dc, lines: [`Scheitert automatisch – ${why}`] } });
     return { ok: false, auto: true, total: 0, natural: 0, text };
   }
   if (opts.immuneTo && s.condImm.includes(opts.immuneTo)) {
     const text = `${c.name}: immun gegen „${opts.immuneTo}“`;
-    log(x, text);
+    log(x, text, '', '', { e: ev('immune'), tip: { lines: [`Immun gegen „${opts.immuneTo}“`] } });
     return { ok: true, immune: true, total: 0, natural: 0, text };
   }
   const adv = [...(opts.adv || [])];
@@ -301,7 +321,8 @@ export function savingThrow(x, c, ab, dc, opts = {}, ctx = {}) {
   const mode = adv.length && dis.length ? null : adv.length ? 'adv' : dis.length ? 'dis' : null;
   let bonus = Number(s.saves?.[ab]) || 0;
   const parts = [`${fmtS(bonus)}`];
-  const add = (n, why) => { bonus += n; parts.push(`${fmtS(n)} ${why}`); };
+  const pp = saveParts(s, ab, bonus);
+  const add = (n, why) => { bonus += n; parts.push(`${fmtS(n)} ${why}`); pp.push([n, why]); };
   for (const e of effs(c, 'bless')) { const d = rollDie(4); add(d, `Segen (W4=${d})`); void e; }
   for (const e of effs(c, 'bane')) { const d = rollDie(4); add(-d, `Fluch (W4=${d})`); void e; }
   for (const e of effs(c, 'saveDie')) { const d = rollDie(Number(e.data?.sides) || 4); add(d, `${e.name} (W${e.data?.sides || 4}=${d})`); removeEffect(x, c, e.id); }
@@ -322,7 +343,11 @@ export function savingThrow(x, c, ab, dc, opts = {}, ctx = {}) {
   }
   const dieTxt = r.dice.length > 1 ? `W20 ${mode === 'adv' ? 'Vorteil' : 'Nachteil'} [${r.dice.join(', ')}]` : `W20 [${r.natural}]`;
   const text = `${c.name}: ${label} ${dieTxt} ${parts.join(' ')} = ${total} gegen SG ${dc} → ${ok ? 'geschafft' : 'misslungen'}${note}`;
-  log(x, text);
+  const why = [...adv.map((w) => `▲ ${w}`), ...dis.map((w) => `▼ ${w}`)];
+  log(x, text, '', '', {
+    e: ev(ok ? 'ok' : 'fail'),
+    tip: { dc, rolls: [{ l: label, d: r.dice, k: r.natural, m: mode, why, p: pp, sum: total }], lines: note ? [note.replace(/^ · /, '')] : [] },
+  });
   return { ok, total, natural: r.natural, mode, text, adv, dis };
 }
 
@@ -358,9 +383,15 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
   }
   if (c.form?.endOnTemp && !c.tempHp) revertForm(x, c, 'keine temporären TP mehr');
   out.taken = total;
-  const who = opts.attacker ? ` (von ${opts.attacker.name})` : '';
+  const von = opts.attacker ? ` (von ${opts.attacker.name})` : '';
+  const typed = parts.filter((p) => p.type);
+  const dt = typed.length && typed.every((p) => p.type === typed[0].type) ? typed[0].type : null;
+  const dmgData = (n, extra = {}) => ({
+    e: { t: 'dmg', a: who(opts.attacker), o: who(c), n, dt, w: opts.source || '', ...(opts.crit ? { r: 'crit' } : {}) },
+    tip: { dmg: opts.roll || parts.map((p) => ({ n: p.amount, t: p.type || null })), lines: [...(opts.rollNotes || []), ...out.lines.filter((l) => !/^\d+ [\p{L} ]*$/u.test(l))], ...extra },
+  });
   if (total <= 0) {
-    log(x, `🛡 ${c.name} erleidet keinen Schaden${who}: ${out.lines.join(' · ')}`);
+    log(x, `🛡 ${c.name} erleidet keinen Schaden${von}: ${out.lines.join(' · ')}`, '', '', dmgData(0));
     return out;
   }
   // Schutzbindung: der Wirker erleidet denselben Schaden
@@ -404,7 +435,7 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
           c.stable = false;
           addCondition(x, c, { name: COND.unconscious, auto: 'zeroHp' });
           addCondition(x, c, { name: COND.prone });
-          log(x, `💥 ${c.name} fällt auf 0 TP – bewusstlos und liegend`);
+          log(x, `💥 ${c.name} fällt auf 0 TP – bewusstlos und liegend`, '', '', { e: { t: 'down', o: who(c) } });
         }
       } else die(x, c, 'auf 0 TP');
       if (isDead(c) || out.dropped) out.died = isDead(c);
@@ -419,16 +450,17 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
       if (ds.f >= 3) die(x, c, 'drei Fehlschläge');
     }
   }
-  const line = `🩸 ${c.name} erleidet ${total} Schaden${who}: ${out.lines.join(' · ')}`;
-  if (isDead(c)) log(x, `${line} → ${c.isPC ? 'tot' : 'besiegt'}`);
-  else if (c.isPC) log(x, `${line} → ${c.hp}/${c.maxHp} TP`);
-  else log(x, line, '', `${line} → ${c.hp}/${c.maxHp} TP`);
+  const line = `🩸 ${c.name} erleidet ${total} Schaden${von}: ${out.lines.join(' · ')}`;
+  const hpNow = `${c.hp}/${c.maxHp} TP`;
+  if (isDead(c)) log(x, `${line} → ${c.isPC ? 'tot' : 'besiegt'}`, '', '', dmgData(total));
+  else if (c.isPC) log(x, `${line} → ${hpNow}`, '', '', dmgData(total, { hp: hpNow }));
+  else log(x, line, '', `${line} → ${hpNow}`, { ...dmgData(total), gtip: { hp: hpNow } });
   if (x.log.length - 1 > mark) x.log.splice(mark, 0, x.log.pop());
   // Zustände, die bei Schaden enden (Hypnotisches Muster, Schlaf …) bzw. einen neuen Rettungswurf erlauben
   for (const k of [...(c.conditions || [])]) {
     if (k.endOnDamage) removeCondition(x, c, k.name, 'durch Schaden');
     else if (k.saveOnDamage && k.save) {
-      const r = savingThrow(x, c, k.save.ab, k.save.dc, { spell: true, adv: ['durch Schaden'] }, ctx);
+      const r = savingThrow(x, c, k.save.ab, k.save.dc, { spell: true, adv: ['durch Schaden'], what: k.name }, ctx);
       if (r.ok) removeCondition(x, c, k.name, 'Rettungswurf nach Schaden');
     }
   }
@@ -438,7 +470,7 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
     if (c.hp <= 0 || incapacitated(c)) endConcentration(x, c, 'kampfunfähig');
     else {
       const dc = Math.min((ctx.ed || '2014') === '2024' ? 30 : 99, Math.max(10, Math.floor(total / 2)));
-      const r = savingThrow(x, c, 'con', dc, { conc: true, allowLegendary: false }, ctx);
+      const r = savingThrow(x, c, 'con', dc, { conc: true, allowLegendary: false, what: `Konzentration (${conc.name})` }, ctx);
       if (!r.ok) endConcentration(x, c, 'Konzentrationswurf misslungen');
     }
   }
@@ -449,7 +481,7 @@ export function die(x, c, why) {
   c.hp = 0;
   c.stable = false;
   if (concOf(c)) endConcentration(x, c, 'tot');
-  log(x, `☠️ ${c.name} ${c.isPC ? 'stirbt' : 'ist besiegt'} – ${why}`);
+  log(x, `☠️ ${c.name} ${c.isPC ? 'stirbt' : 'ist besiegt'} – ${why}`, '', '', { e: { t: 'death', o: who(c), w: why, r: c.isPC ? 'pc' : 'npc' } });
   // Beschworene Kreaturen verschwinden bei 0 TP (belebte Untote bleiben liegen)
   if (c.summonOf && !c.keep && !c.vanish) {
     c.vanish = true;
@@ -471,15 +503,16 @@ export function applyHealing(x, c, amount, opts = {}) {
     removeCondition(x, c, COND.unconscious);
   }
   const line = `💚 ${c.name} erhält ${n} TP zurück${opts.source ? ` (${opts.source})` : ''}`;
-  if (c.isPC) log(x, `${line} → ${c.hp}/${c.maxHp}`);
-  else log(x, line, '', `${line} → ${c.hp}/${c.maxHp}`);
+  const hd = { e: { t: 'heal', a: who(opts.by), o: who(c), n, w: opts.source || '' }, tip: opts.roll ? { dmg: opts.roll } : undefined };
+  if (c.isPC) log(x, `${line} → ${c.hp}/${c.maxHp}`, '', '', { ...hd, tip: { ...(hd.tip || {}), hp: `${c.hp}/${c.maxHp} TP` } });
+  else log(x, line, '', `${line} → ${c.hp}/${c.maxHp}`, { ...hd, gtip: { hp: `${c.hp}/${c.maxHp} TP` } });
   return n;
 }
 export function addTempHp(x, c, n, source = '') {
   const v = Math.max(0, Math.floor(Number(n) || 0));
   if (v <= (c.tempHp || 0)) { log(x, `${c.name}: ${v} temporäre TP verfallen – ${c.tempHp} sind höher`); return; }
   c.tempHp = v;
-  log(x, `🛡 ${c.name} erhält ${v} temporäre TP${source ? ` (${source})` : ''}`);
+  log(x, `🛡 ${c.name} erhält ${v} temporäre TP${source ? ` (${source})` : ''}`, '', '', { e: { t: 'temp', o: who(c), n: v, w: source || '' } });
 }
 export function stabilize(x, c, source = '') {
   if (!c?.isPC || !atZero(c) || isDead(c)) return false;
@@ -503,9 +536,13 @@ export function deathSave(x, c, ctx = {}) {
     removeCondition(x, c, COND.unconscious);
     text = 'natürliche 20 – wacht mit 1 TP auf!';
   } else if (n === 1) { ds.f += 2; text = 'natürliche 1 – zwei Fehlschläge'; } else if (n >= 10) { ds.s += 1; text = 'Erfolg'; } else { ds.f += 1; text = 'Fehlschlag'; }
-  if (ds.f >= 3) { log(x, `💀 ${c.name}: Todesrettungswurf W20 ${adv ? `Vorteil [${a}, ${b}]` : `[${n}]`} → ${text}`); die(x, c, 'drei Fehlschläge'); return { n, text, dead: true }; }
+  const dsData = () => ({
+    e: { t: 'dsave', o: who(c), r: n >= 10 ? 'ok' : 'fail', w: text },
+    tip: { dc: 10, rolls: [{ l: 'Todesrettungswurf', d: adv ? [a, b] : [n], k: n, m: adv ? 'adv' : null, why: adv ? ['▲ Leuchtfeuer der Hoffnung'] : [], p: [], sum: n, crit: n === 20, fumble: n === 1 }], lines: [`Stand: ${ds.s} Erfolge · ${ds.f} Fehlschläge`] },
+  });
+  if (ds.f >= 3) { log(x, `💀 ${c.name}: Todesrettungswurf W20 ${adv ? `Vorteil [${a}, ${b}]` : `[${n}]`} → ${text}`, '', '', dsData()); die(x, c, 'drei Fehlschläge'); return { n, text, dead: true }; }
   if (ds.s >= 3) { c.stable = true; ds.s = 0; ds.f = 0; text += ' – stabilisiert (bewusstlos, keine weiteren Würfe)'; }
-  log(x, `💀 ${c.name}: Todesrettungswurf W20 ${adv ? `Vorteil [${a}, ${b}]` : `[${n}]`} → ${text}${c.stable ? '' : ` (${ds.s}✓/${ds.f}✗)`}`);
+  log(x, `💀 ${c.name}: Todesrettungswurf W20 ${adv ? `Vorteil [${a}, ${b}]` : `[${n}]`} → ${text}${c.stable ? '' : ` (${ds.s}✓/${ds.f}✗)`}`, '', '', dsData());
   void ctx;
   return { n, text };
 }
@@ -526,7 +563,7 @@ export function addCondition(x, c, k, ctx = {}) {
 export function removeCondition(x, c, name, why = '') {
   const had = has(c, name);
   c.conditions = (c.conditions || []).filter((k) => k.name !== name);
-  if (had) log(x, `${c.name}: „${name}“ endet${why ? ` (${why})` : ''}`);
+  if (had) log(x, `${c.name}: „${name}“ endet${why ? ` (${why})` : ''}`, '', '', { e: { t: 'end', o: who(c), w: name, r: why || '' } });
 }
 export function addEffect(x, c, e) {
   const eff = { id: uid(8), ts: now(), ...e };
@@ -544,7 +581,7 @@ export function removeEffect(x, c, id, why = '') {
     addEffect(x, c, { key: 'lethargic', name: 'Lethargisch (Hast endet)', until: { cb: c.id, at: 'end', n: c.turnNo || 0 } });
     if (c.eco) Object.assign(c.eco, { action: 0, extra: 0, attacks: 0, moveM: Number(c.eco.movedM) || 0 });
   }
-  if (e.name && !e.silent) log(x, `${c.name}: „${e.name}“ endet${why ? ` (${why})` : ''}`);
+  if (e.name && !e.silent) log(x, `${c.name}: „${e.name}“ endet${why ? ` (${why})` : ''}`, '', '', { e: { t: 'end', o: who(c), w: e.name, r: why || '' } });
 }
 export function startConcentration(x, c, info) {
   if (concOf(c)) endConcentration(x, c, `neuer Konzentrationszauber: ${info.name}`);
@@ -556,7 +593,7 @@ export function endConcentration(x, c, why = '') {
   const conc = concOf(c);
   if (!conc) return;
   c.concentration = null;
-  log(x, `🔸 ${c.name}: Konzentration auf „${conc.name}“ endet${why ? ` (${why})` : ''}`);
+  log(x, `🔸 ${c.name}: Konzentration auf „${conc.name}“ endet${why ? ` (${why})` : ''}`, '', '', { e: { t: 'end', o: who(c), w: `Konzentration auf ${conc.name}`, r: why || '' } });
   for (const o of x.combatants || []) {
     for (const e of [...(o.effects || [])]) if (e.conc === conc.id) removeEffect(x, o, e.id);
     if (o.form?.conc === conc.id) revertForm(x, o, 'Konzentration endet');
@@ -671,7 +708,7 @@ export function zoneHit(x, z, c, why, ctx = {}) {
   let ok = false;
   const lines = [];
   if (z.save) {
-    const r = savingThrow(x, c, z.save.ab, z.save.dc, { spell: true }, ctx);
+    const r = savingThrow(x, c, z.save.ab, z.save.dc, { spell: true, what: z.name, src: x.combatants.find((o) => o.id === z.src) }, ctx);
     ok = r.ok;
     lines.push(r.text);
   }
@@ -758,7 +795,7 @@ export function beginTurn(x, c, ctx = {}) {
     const r = roll(e.data?.dice || '1d6');
     log(x, `🔥 ${e.name}: ${r.text} = ${r.total} ${dmgName(e.data?.type)}`);
     applyDamage(x, c, [{ amount: r.total, type: e.data?.type }], { magical: true, source: e.name }, ctx);
-    if (e.data?.save) { const sv = savingThrow(x, c, e.data.save.ab, e.data.save.dc, { spell: true }, ctx); if (sv.ok) removeEffect(x, c, e.id, 'Rettungswurf geschafft'); }
+    if (e.data?.save) { const sv = savingThrow(x, c, e.data.save.ab, e.data.save.dc, { spell: true, what: e.name }, ctx); if (sv.ok) removeEffect(x, c, e.id, 'Rettungswurf geschafft'); }
   }
   if (c.isPC && atZero(c) && !isDead(c) && !c.stable) deathSave(x, c, ctx);
   zoneTrigger(x, c, 'start', ctx);
@@ -777,7 +814,7 @@ export function finishTurn(x, c, ctx = {}) {
   if (!c) return;
   for (const k of [...(c.conditions || [])]) {
     if (!k.save || (k.save.at || 'end') !== 'end' || isDead(c)) continue;
-    const r = savingThrow(x, c, k.save.ab, k.save.dc, { spell: true }, ctx);
+    const r = savingThrow(x, c, k.save.ab, k.save.dc, { spell: true, what: k.name }, ctx);
     if (r.ok) {
       c.conditions = c.conditions.filter((q) => q !== k);
       log(x, `${c.name}: „${k.name}“ endet (Rettungswurf geschafft)`);
@@ -789,7 +826,7 @@ export function finishTurn(x, c, ctx = {}) {
   }
   for (const e of [...(c.effects || [])]) {
     if (e.save && (e.save.at || 'end') === 'end' && !isDead(c)) {
-      const r = savingThrow(x, c, e.save.ab, e.save.dc, { spell: true }, ctx);
+      const r = savingThrow(x, c, e.save.ab, e.save.dc, { spell: true, what: e.name }, ctx);
       if (r.ok) removeEffect(x, c, e.id, 'Rettungswurf geschafft');
     }
     if (e.key === 'dotEnd') {
@@ -836,14 +873,14 @@ export function advance(x, ctx = {}) {
     if (t >= n) {
       t = 0;
       x.round = (x.round || 1) + 1;
-      log(x, `— Runde ${x.round} —`, 'round');
+      log(x, `— Runde ${x.round} —`, 'round', '', { e: { t: 'round', n: x.round } });
     }
     guard++;
   } while (guard < n * 2 && skipTurn(x, x.combatants[t], ctx));
   x.turn = t;
   const next = x.combatants[t];
   beginTurn(x, next, ctx);
-  log(x, `▶ ${next.name} ist am Zug`, 'turn');
+  log(x, `▶ ${next.name} ist am Zug`, 'turn', '', { e: { t: 'turn', o: who(next) } });
   return x;
 }
 // Kampfbeginn: Runde 1, Züge zurücksetzen, der erste handlungsfähige Kämpfer beginnt (Überraschte setzen 2014 aus)
@@ -858,7 +895,7 @@ export function beginCombat(x, ctx = {}) {
     c.legResUsed = 0;
     c.reaction = !(c.surprised && ed === '2014');
   }
-  log(x, '⚔️ Kampf beginnt – Runde 1', 'round');
+  log(x, '⚔️ Kampf beginnt – Runde 1', 'round', '', { e: { t: 'round', n: 1, r: 'start' } });
   const n = x.combatants.length;
   let t = 0;
   let guard = 0;
@@ -867,14 +904,14 @@ export function beginCombat(x, ctx = {}) {
     if (t >= n) {
       t = 0;
       x.round += 1;
-      log(x, `— Runde ${x.round} —`, 'round');
+      log(x, `— Runde ${x.round} —`, 'round', '', { e: { t: 'round', n: x.round } });
     }
   }
   x.turn = n ? t : 0;
   const c = x.combatants[x.turn];
   if (c) {
     beginTurn(x, c, ctx);
-    log(x, `▶ ${c.name} ist am Zug`, 'turn');
+    log(x, `▶ ${c.name} ist am Zug`, 'turn', '', { e: { t: 'turn', o: who(c) } });
   }
   return x;
 }
@@ -888,7 +925,10 @@ export function rollInitiative(x, c, ctx = {}) {
   const r = rollD20(mode);
   c.init = r.natural + bonus;
   c.initBonus = bonus;
-  log(x, `🎲 Initiative ${c.name}: W20 ${r.dice.length > 1 ? `${mode === 'adv' ? 'Vorteil' : 'Nachteil'} [${r.dice.join(', ')}]` : `[${r.natural}]`} ${fmtS(bonus)} = ${c.init}`);
+  log(x, `🎲 Initiative ${c.name}: W20 ${r.dice.length > 1 ? `${mode === 'adv' ? 'Vorteil' : 'Nachteil'} [${r.dice.join(', ')}]` : `[${r.natural}]`} ${fmtS(bonus)} = ${c.init}`, '', '', {
+    e: { t: 'init', o: who(c), n: c.init },
+    tip: { rolls: [{ l: 'Initiative', d: r.dice, k: r.natural, m: mode, why: [...(adv ? ['▲ unsichtbar'] : []), ...(dis ? ['▼ überrascht'] : [])], p: [[bonus, c.isPC && bonus !== s.dex ? 'Initiativebonus' : 'Geschicklichkeits-Modifikator']], sum: c.init }] },
+  });
   return c.init;
 }
 export function sortInitiative(list) {

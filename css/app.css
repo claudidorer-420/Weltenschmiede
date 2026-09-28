@@ -799,7 +799,8 @@ details.callout[open] > summary::after { transform: rotate(90deg); }
 .death-saves i.s { background: var(--success); border-color: var(--success); }
 .death-saves i.f { background: var(--danger); border-color: var(--danger); }
 .combat-log { font-size: 13px; color: var(--text-2); max-height: 240px; overflow-y: auto; }
-.combat-log div { padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.combat-log > div:not(.cl) { padding: 3px 0; border-bottom: 1px dashed var(--border); }
+.combat-log .cl-l { padding-top: 2px; padding-bottom: 2px; border-bottom: 1px dashed var(--border); border-radius: 0; }
 .turn-strip { display: flex; gap: 6px; overflow-x: auto; padding: 6px 2px; }
 .turn-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 99px; background: var(--bg-3); font-size: 13px; white-space: nowrap; border: 1px solid var(--border); }
 .turn-pill.current { background: var(--accent); color: #fff; border-color: transparent; }
@@ -2183,3 +2184,60 @@ body.resizing .sb-resize::after { background: var(--accent); }
 .view-toggle .segmented { font-size: 12.5px; }
 .view-toggle .segmented button { padding: 4px 11px; }
 @media (max-width: 560px) { .view-toggle .segmented button span { display: none; } }
+
+/* ── Kampfprotokoll im BG3-Stil (ui/combatlog.js) ─────────────────────── */
+.cl { display: flex; flex-direction: column; gap: 1px; font-family: Georgia, 'Times New Roman', serif; font-size: 12.5px; line-height: 1.45; color: #d9ccb0; }
+.cl-l { padding: 1px 5px; border-radius: 5px; overflow-wrap: anywhere; }
+.cl-l.sub, .cl-sub { padding-left: 16px; }
+.cl-sub { display: block; }
+.cl-l.turn { color: #9c8a66; font-size: 11.5px; }
+.cl-l.plain { color: #cdbd98; }
+.cl-l.plain.round { font-weight: 800; color: #c9962c; margin-top: 4px; }
+.cl-l.has-tip { cursor: help; }
+.cl-l.has-tip:hover, .cl-l.on { background: rgba(224, 178, 74, 0.1); }
+.cl-round { margin: 8px 0 2px; color: #b69a64; font-weight: 700; letter-spacing: 0.02em; border-bottom: 1px solid rgba(224, 178, 74, 0.18); }
+.cl-round:first-child { margin-top: 0; }
+.cl-time { font-family: var(--font); font-size: 10.5px; color: var(--text-3); margin-right: 6px; }
+.cl-n { font-weight: 700; color: #e8d7b0; }
+.cl-n.pc, .cl-n.a { color: #86d993; }
+.cl-n.npc, .cl-n.b { color: #ef7461; }
+.cl-n.c { color: #f0b54a; }
+.cl-w { color: #e9c77b; font-weight: 600; }
+.cl-num { color: #f6e4b8; }
+.cl-sum { color: #fff3cf; font-size: 13.5px; }
+.cl-crit { color: #ffcf4a; font-weight: 700; }
+.cl-heal { color: #74de8f; }
+.cl-cond { color: #c9a6ff; }
+.cl-dead { color: #ff8c7a; }
+.cl-muted { color: #9c8a66; font-style: italic; }
+.roll-log-item.has-tip, .chat-roll.has-tip { cursor: help; }
+.roll-log-item.has-tip:hover, .roll-log-item.on, .chat-roll.has-tip:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 8px; }
+.cl-tip {
+  position: fixed; z-index: 1200; max-height: min(60vh, 520px); overflow-y: auto; padding: 10px 12px; border-radius: 12px; pointer-events: none;
+  background: linear-gradient(180deg, #2a2219, #15110d); border: 1px solid #8a6d3b; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  color: #efe3c8; font-family: Georgia, 'Times New Roman', serif; font-size: 13px; line-height: 1.5;
+}
+.cl-tip.fix { pointer-events: auto; border-color: var(--accent); }
+.cl-tip-x { position: absolute; top: 6px; right: 6px; border: 1px solid #6b5431; background: transparent; color: #cdbd98; border-radius: 6px; padding: 2px; cursor: pointer; }
+.cl-head { display: flex; align-items: center; gap: 6px; padding-bottom: 5px; margin-bottom: 5px; border-bottom: 1px solid rgba(224, 178, 74, 0.2); color: #f6e4b8; }
+.cl-roll { margin: 3px 0; }
+.cl-lbl { color: #b69a64; }
+.cl-roll s { color: #7d6d52; }
+.cl-why { font-size: 12px; margin-top: 1px; }
+.cl-why.up { color: #86d993; }
+.cl-why.down { color: #ef7461; }
+.cl-notes { margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(224, 178, 74, 0.15); font-size: 12px; color: #dccfb2; }
+.cl-hp { margin-top: 4px; display: flex; align-items: center; gap: 5px; font-size: 12px; color: #ef9a8c; }
+.cl-rule { margin-top: 6px; font-size: 12px; color: #dccfb2; }
+.cl-hint { margin-top: 7px; padding-top: 5px; border-top: 1px solid rgba(224, 178, 74, 0.15); font-size: 11px; color: #8c7b5a; font-family: var(--font); }
+/* Im Kampf-Tracker (App-Farben): helle Themen brauchen dunklere Töne */
+.combat-log .cl { color: var(--text-2); }
+.combat-log .cl-l.plain { color: var(--text-2); }
+[data-theme="light"] .combat-log .cl-n, [data-theme="parchment"] .combat-log .cl-n { color: var(--text); }
+[data-theme="light"] .combat-log .cl-n.pc, [data-theme="parchment"] .combat-log .cl-n.pc, [data-theme="light"] .combat-log .cl-n.a, [data-theme="parchment"] .combat-log .cl-n.a { color: #1f7a3a; }
+[data-theme="light"] .combat-log .cl-n.npc, [data-theme="parchment"] .combat-log .cl-n.npc, [data-theme="light"] .combat-log .cl-n.b, [data-theme="parchment"] .combat-log .cl-n.b { color: #b3261e; }
+[data-theme="light"] .combat-log .cl-w, [data-theme="parchment"] .combat-log .cl-w { color: #8a5a00; }
+[data-theme="light"] .combat-log .cl-num, [data-theme="parchment"] .combat-log .cl-num { color: var(--text); }
+[data-theme="light"] .combat-log .cl-heal, [data-theme="parchment"] .combat-log .cl-heal { color: #1f7a3a; }
+[data-theme="light"] .combat-log .cl-cond, [data-theme="parchment"] .combat-log .cl-cond { color: #6a3fb5; }
+[data-theme="light"] .combat-log .cl-round, [data-theme="parchment"] .combat-log .cl-round { color: #8a5a00; }

@@ -36,7 +36,7 @@ export function projection(state) {
     currentId: state.active && cur && !cur.hidden ? cur.id : null,
     mapId: state.mapId || null,
     list: state.combatants.filter((c) => !c.hidden && !c.vanish).map((c) => ({
-      id: c.id, name: c.name, init: c.init ?? null, initBonus: c.initBonus || 0, isPC: !!c.isPC, ally: !!c.ally, ownerUid: c.ownerUid || null, charId: c.charId || null, tokenId: c.tokenId || null,
+      id: c.id, name: c.name, init: c.init ?? null, initBonus: c.initBonus || 0, isPC: !!c.isPC, ally: !!c.ally, ...(c.team ? { team: c.team } : {}), ownerUid: c.ownerUid || null, charId: c.charId || null, tokenId: c.tokenId || null,
       summonOf: c.summonOf || null,
       // eigene Beschwörungen brauchen den Statblock für die Kampfleiste, Verwandelte ihre neue Gestalt
       ...(c.ownerUid && !c.isPC && c.statblock ? { statblock: c.statblock } : {}),
@@ -51,7 +51,8 @@ export function projection(state) {
     zones: (state.zones || []).map((z) => ({ id: z.id, name: z.name, src: z.src || null, tpl: z.tpl, follow: z.follow || null, color: z.color || null, obscure: !!z.obscure, difficult: z.difficult || 0, silence: !!z.silence, barrier: !!z.barrier, opaque: !!z.opaque })),
     results: (state.results || []).slice(-10),
     prompts: (state.prompts || []).filter((p) => (p.expires || 0) > t),
-    log: (state.log || []).slice(-80).map((l) => ({ ts: l.ts, text: l.text, ...(l.kind ? { kind: l.kind } : {}) })),
+    // Rechenweg (tip) sehen alle – SL-Zusätze (gm, gtip: RK und TP von Monstern) nicht
+    log: (state.log || []).slice(-80).map((l) => ({ ts: l.ts, text: l.text, ...(l.kind ? { kind: l.kind } : {}), ...(l.e ? { e: l.e } : {}), ...(l.tip ? { tip: l.tip } : {}) })),
     updatedAt: t,
   };
 }
@@ -167,7 +168,7 @@ export function advanceTurn(x, ctx) {
     if (t >= n) {
       t = 0;
       x.round = (x.round || 1) + 1;
-      x.log.push({ ts: now(), text: `— Runde ${x.round} —` });
+      x.log.push({ ts: now(), text: `— Runde ${x.round} —`, kind: 'round', e: { t: 'round', n: x.round } });
     }
     guard++;
   } while (guard < n && isOut(x.combatants[t]));
@@ -181,7 +182,7 @@ export function advanceTurn(x, ctx) {
     }
     return true;
   });
-  x.log.push({ ts: now(), text: `${c.name} ist am Zug` });
+  x.log.push({ ts: now(), text: `${c.name} ist am Zug`, kind: 'turn', e: { t: 'turn', o: [c.id, c.name] } });
   return x;
 }
 

@@ -16,6 +16,7 @@ import {
 import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
 import { now, fmtTime, fmtRelative, sortBy, esc } from '../lib/util.js';
 import { uploadImage } from './codex.js';
+import { useTip, RollTip } from '../ui/combatlog.js';
 
 function rollHtml(text) {
   return esc(text || '').replace(/~(\d+)~/g, '<s>$1</s>');
@@ -124,6 +125,7 @@ function InitiativeStrip() {
 // ───────────────────────── Chat (rechte Seitenleiste) ─────────────────────────
 export function ChatPanel({ active = true }) {
   const me = myUid();
+  const rt = useTip((r, fix, close, style) => html`<${RollTip} r=${r} fix=${fix} onClose=${close} style=${style} />`);
   const gm = useStore(app, (s) => s.role === 'gm');
   const members = useStore(vault, (s) => s.members);
   const myChar = useMyChar();
@@ -185,7 +187,7 @@ export function ChatPanel({ active = true }) {
   };
   const nameOf = (uid) => members[uid]?.name || 'Unbekannt';
 
-  return html`<div class="chat-panel">
+  return html`<div class="chat-panel">${rt.node}
     <div class="row" style="padding:8px 12px;border-bottom:1px solid var(--border)"><b class="grow"><${Icon} name="message" size=${16} /> Chat & Würfel</b>
       ${gm ? html`<${IconBtn} icon="trash" title="Chat leeren" onClick=${clearChat} />` : null}</div>
     <div class="chat-log" ref=${logRef}>
@@ -197,7 +199,7 @@ export function ChatPanel({ active = true }) {
           <${Avatar} name=${m.character || m.name} size="sm" />
           <div class="body">
             <div class="who">${m.character ? `${m.character} (${m.name})` : m.name}<span class="when">${fmtTime(m.ts)}</span>${m._w ? html`<span class="badge accent">🤫 ${m.to === 'gm' ? 'an SL' : mine ? `an ${nameOf(m.to)}` : 'geflüstert'}</span>` : null}</div>
-            ${m.kind === 'roll' && m.roll ? html`<div class="chat-roll"><span class=${`roll-total${m.roll.crit ? ' crit' : m.roll.fumble ? ' fumble' : ''}`}>${m.roll.total}</span><span class="small"><b>${m.roll.label || m.text || m.roll.input}</b><br /><span class="mono faint" dangerouslySetInnerHTML=${{ __html: rollHtml(m.roll.text) }} /></span></div>` : html`<${MarkdownView} src=${m.text} />`}
+            ${m.kind === 'roll' && m.roll ? html`<div class="chat-roll has-tip" ...${rt.bind(m.id, { ...m.roll, character: m.character })}><span class=${`roll-total${m.roll.crit ? ' crit' : m.roll.fumble ? ' fumble' : ''}`}>${m.roll.total}</span><span class="small"><b>${m.roll.label || m.text || m.roll.input}</b><br /><span class="mono faint" dangerouslySetInnerHTML=${{ __html: rollHtml(m.roll.text) }} /></span></div>` : html`<${MarkdownView} src=${m.text} />`}
           </div>
         </div>`;
       })}
@@ -222,6 +224,7 @@ export function ChatPanel({ active = true }) {
 
 // ───────────────────────── Play-by-Post ─────────────────────────
 function PlayByPost({ active }) {
+  const rt = useTip((r, fix, close, style) => html`<${RollTip} r=${r} fix=${fix} onClose=${close} style=${style} />`);
   const cid = useStore(app, (s) => s.cid);
   const campaign = useStore(app, (s) => s.campaign);
   const members = useStore(vault, (s) => s.members);
@@ -284,7 +287,7 @@ function PlayByPost({ active }) {
     toast(p === 'granted' ? 'Benachrichtigungen aktiv (solange die App offen ist)' : 'Benachrichtigungen abgelehnt', p === 'granted' ? 'success' : 'error');
   };
 
-  return html`<div class="page narrow stack">
+  return html`<div class="page narrow stack">${rt.node}
     <div class=${`waiting-for${myTurn ? ' me' : ''}`}>
       <${Icon} name="hourglass" size=${16} />
       ${waiting.length ? html`<span>Warte auf: ${waiting.map((u) => html`<b style="margin-right:6px">${members[u]?.name || '?'}</b>`)}</span>` : html`<span>Niemand ist gerade am Zug – freies Spiel.</span>`}
@@ -305,7 +308,7 @@ function PlayByPost({ active }) {
         ${p.uid === me || gm ? html`<${IconBtn} icon="more-horizontal" size=${15} class="sm" onClick=${(e) => postMenu(e, p)} />` : null}
       </div>
       ${p.text ? html`<${MarkdownView} src=${p.text} />` : null}
-      ${p.roll ? html`<div class="chat-roll"><span class=${`roll-total${p.roll.crit ? ' crit' : p.roll.fumble ? ' fumble' : ''}`}>${p.roll.total}</span><span class="mono small faint" dangerouslySetInnerHTML=${{ __html: rollHtml(p.roll.text) }} /></div>` : null}
+      ${p.roll ? html`<div class="chat-roll has-tip" ...${rt.bind(p.id, { ...p.roll, character: p.as || '' })}><span class=${`roll-total${p.roll.crit ? ' crit' : p.roll.fumble ? ' fumble' : ''}`}>${p.roll.total}</span><span class="mono small faint" dangerouslySetInnerHTML=${{ __html: rollHtml(p.roll.text) }} /></div>` : null}
     </div>`)}
     <div ref=${endRef}></div>
 

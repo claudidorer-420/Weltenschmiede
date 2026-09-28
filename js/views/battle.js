@@ -23,6 +23,7 @@ import { MonsterArt, creatureType, monsterIconName, giImage, portraitOf, loadPor
 import { Icon, IconBtn, Btn, Statblock, toast, openModal, openMenu, promptDialog, confirmDialog } from '../ui/components.js';
 import { now, initials, clamp } from '../lib/util.js';
 import { BattleBar, ROMAN } from './battlebar.js';
+import { CombatLogList } from '../ui/combatlog.js';
 
 const TAU = Math.PI * 2;
 const imgCache = new Map();
@@ -438,11 +439,13 @@ export function onDown(B, w) {
   return true;
 }
 const roundTpl = (t) => ({ shape: t.shape, x: Math.round(t.x * 100) / 100, y: Math.round(t.y * 100) / 100, dir: Math.round((t.dir || 0) * 1000) / 1000, size: Math.round(t.size * 100) / 100, ...(t.width ? { width: t.width } : {}) });
-function rollAmount(h, label) {
+// Würfelt Heilung/temporäre TP; ev bekommt den Rechenweg fürs Protokoll (amountDet)
+function rollAmount(h, label, ev = null) {
   const dice = h.dice || '';
   const flat = Number(h.flat) || 0;
   const expr = `${dice}${flat ? (dice ? (flat > 0 ? `+${flat}` : `${flat}`) : `${flat}`) : ''}` || '0';
   const r = doRoll(expr, { label, kind: 'heal' });
+  if (r && ev) ev.amountDet = [A.detOf(r)];
   return r ? Math.max(0, r.total) : 0;
 }
 // Wände (Steinwand, Feuerwand …): erster Klick = Anfang, zweiter Klick = Richtung
@@ -585,13 +588,13 @@ async function execute(B) {
   }
   if (a.kind === 'spell' && spec.use === 'heal') {
     const h = A.healOf(a, p.slot);
-    if (h) ev.amount = rollAmount(h, `${a.name} – Heilung`);
+    if (h) ev.amount = rollAmount(h, `${a.name} – Heilung`, ev);
   }
   if (a.kind === 'spell' && spec.use === 'temp') {
     const tp = A.tempOf(a, p.slot);
-    if (tp) ev.amount = rollAmount(tp, `${a.name} – temporäre TP`);
+    if (tp) ev.amount = rollAmount(tp, `${a.name} – temporäre TP`, ev);
   }
-  if (a.key === 'f:secondwind') ev.amount = rollAmount({ dice: '1d10', flat: classLevel(char, 'kaempfer') }, 'Zweiter Wind');
+  if (a.key === 'f:secondwind') ev.amount = rollAmount({ dice: '1d10', flat: classLevel(char, 'kaempfer') }, 'Zweiter Wind', ev);
   if (a.key === 'f:layonhands') {
     const left = a.uses?.left ?? 0;
     const v = await promptDialog(`Wie viele Trefferpunkte heilen? (Vorrat: ${left})`, String(Math.min(left, 10)), { title: 'Handauflegen', ok: 'Heilen' });
@@ -599,7 +602,7 @@ async function execute(B) {
     if (!n) { B.pending = null; B.rerender(); return; }
     ev.amount = n;
   }
-  if (a.kind === 'item' && a.heal) ev.amount = rollAmount(A.parseDmg(a.heal), a.name);
+  if (a.kind === 'item' && a.heal) ev.amount = rollAmount(A.parseDmg(a.heal), a.name, ev);
   B.pending = null;
   B._tv = null;
   B.rerender();
@@ -1290,12 +1293,14 @@ function TurnStrip({ B, s }) {
   </div>`;
 }
 
+// Kampfprotokoll im BG3-Stil (ui/combatlog.js): Rechenweg beim Überfahren, T hält ihn fest
+export const sideOfCb = (cb) => (cb ? cb.team || (cb.isPC || cb.ally ? 'pc' : 'npc') : '');
 function CombatLog({ B }) {
   const ref = useRef();
   const lines = (B.combat.log || []).slice(-100);
   useEffect(() => { const el = ref.current; if (el) el.scrollTop = el.scrollHeight; }, [lines.length]);
   return html`<div class="bt-log" ref=${ref}>
-    ${lines.length ? lines.map((l, i) => html`<div key=${i} class=${`bt-logl ${l.kind || ''}`}>${B.gm ? l.gm || l.text : l.text}</div>`) : html`<div class="tiny faint">Noch keine Einträge.</div>`}
+    <${CombatLogList} lines=${lines} gm=${B.gm} sideOf=${(id) => sideOfCb(cbById(B, id))} />
   </div>`;
 }
 
