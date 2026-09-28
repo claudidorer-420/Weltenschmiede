@@ -5,7 +5,8 @@
       powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "Neue Karten-Funktion"
 
   Prüft die Module, aktualisiert Dateiliste + Cache-Version im Service Worker (damit alle Geräte
-  die neue Version laden und offline vollständig funktionieren), committet und pusht zu GitHub.
+  die neue Version laden und offline vollständig funktionieren), committet, pusht zu GitHub (privat,
+  nur als Sicherung) und veröffentlicht die App über tools\deploy.ps1 bei Cloudflare.
 #>
 param([string]$Message = "Aktualisierung")
 $ErrorActionPreference = "Stop"
@@ -30,4 +31,5 @@ git diff --cached --quiet
 if ($LASTEXITCODE -eq 0) { Write-Host "Keine Änderungen zu veröffentlichen."; exit 0 }
 git commit -m $Message | Out-Null
 git push
-Write-Host "Veröffentlicht (Version ws-$stamp). GitHub Pages ist in ~1 Minute aktualisiert." -ForegroundColor Green
+& (Join-Path $PSScriptRoot 'deploy.ps1')
+Write-Host "Veröffentlicht (Version ws-$stamp)." -ForegroundColor Green

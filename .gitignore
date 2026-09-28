@@ -8,3 +8,7 @@ tools/sdxl/uv.exe
 tools/sdxl/*.log
 tools/sdxl/out-lauf1/
 tools/sdxl/*.png
+
+# Veröffentlichung (tools/deploy.ps1)
+.deploy/
+.wrangler/

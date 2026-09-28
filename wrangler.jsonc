@@ -1,0 +1,11 @@
+// Weltenschmiede – Hosting als Cloudflare Worker mit statischen Dateien (kostenlos, Repo bleibt privat).
+// Veröffentlicht wird der Ordner .deploy, den tools/deploy.ps1 aus dem letzten Commit baut.
+// Sicherheits-Header stehen in _headers.
+{
+  "name": "weltenschmiede",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./.deploy"
+  }
+}
