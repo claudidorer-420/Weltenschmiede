@@ -178,7 +178,7 @@ function JoinCard({ busy, onJoin, compact }) {
     <h3 class="row" style="margin:0"><${Icon} name="user-plus" />${compact ? 'Als Spieler beitreten' : 'Einer Kampagne beitreten'}</h3>
     <div class="small muted" style="margin:0">Den Code (oder Einladungslink) bekommst du von deiner Spielleitung.</div>
     <form class="row nowrap" onSubmit=${(e) => { e.preventDefault(); if (code.trim()) onJoin(code.trim()); }}>
-      <input class="input grow" value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="z. B. K7QX2M" maxlength="12" autocomplete="off" spellcheck=${false} />
+      <input class="input grow" value=${code} onInput=${(e) => setCode(e.target.value.toUpperCase())} placeholder="z. B. K7QX2M" maxlength="24" autocomplete="off" spellcheck=${false} />
       <${Btn} kind="primary" type="submit" icon="log-in" loading=${busy} disabled=${!code.trim()}>Beitreten<//>
     </form>
   </div>`;

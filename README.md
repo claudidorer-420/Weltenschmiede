@@ -1,6 +1,6 @@
 # ⚒️ Weltenschmiede
 
-**Deine D&D‑5e‑Kampagnen‑Werkstatt** – ein Codex im Obsidian‑Stil, KI‑Weltenbau mit frei wählbaren Modellen, Encounter mit echten Statblocks, Karten, Charakterbögen und ein Online‑Spieltisch. Läuft als App auf Handy, Tablet und PC, ohne Build‑Schritt, gehostet über GitHub Pages.
+**Deine D&D‑5e‑Kampagnen‑Werkstatt** – ein Codex im Obsidian‑Stil, KI‑Weltenbau mit frei wählbaren Modellen, Encounter mit echten Statblocks, Karten, Charakterbögen und ein Online‑Spieltisch. Läuft als App auf Handy, Tablet und PC, ohne Build‑Schritt, gehostet als kostenloser Cloudflare Worker mit statischen Dateien (das Repository bleibt privat).
 
 ---
 
@@ -39,13 +39,13 @@ node tools/serve.mjs
 ```
 Dann <http://localhost:5173> öffnen → „Beispiel laden“. Daten bleiben im Browser dieses PCs.
 
-### Variante B – auf allen Geräten (GitHub Pages)
+### Variante B – auf allen Geräten (Cloudflare)
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\setup-github.ps1
+powershell -ExecutionPolicy Bypass -File tools\deploy.ps1
 ```
-Das Skript installiert bei Bedarf die GitHub CLI, meldet dich im Browser an, legt das Repository an, lädt alles hoch und schaltet GitHub Pages ein. Danach ist die App unter `https://<dein-name>.github.io/weltenschmiede/` erreichbar.
+Beim ersten Mal öffnet Wrangler den Browser für die Cloudflare‑Anmeldung (kostenloses Konto genügt). Das Skript baut aus dem letzten Commit nur die Dateien, die die App braucht (keine Werkzeuge, kein MCP‑Server), setzt die Sicherheits‑Header aus `_headers` (inkl. Content‑Security‑Policy) und veröffentlicht unter `https://weltenschmiede.<dein-konto>.workers.dev`. Das Git‑Repository bleibt privat (GitHub dient nur als Sicherung).
 
-> Kostenlose GitHub Pages brauchen ein **öffentliches** Repository. Der Code enthält keine Geheimnisse: KI‑Schlüssel bleiben in deinem Browser, deine Kampagnen in deiner eigenen Firebase‑Datenbank (bzw. lokal).
+> Die Firebase‑Web‑Konfiguration in `js/config.js` ist kein Geheimnis (jede Firebase‑Web‑App liefert sie aus), sollte aber in der Google‑Cloud‑Konsole auf die Firebase‑APIs und deine App‑Adresse beschränkt sein. KI‑Schlüssel stehen nie im Code: Sie liegen auf dem Gerät und – falls gewünscht – Ende‑zu‑Ende verschlüsselt im Konto (`js/core/keyvault.js`).
 
 **Als App installieren:** Adresse auf dem Gerät öffnen → Chrome/Edge: Menü ⋮ → „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ · iPad/iPhone (Safari): Teilen → „Zum Home‑Bildschirm“.
 
@@ -95,7 +95,7 @@ Einmalig ca. 10 Minuten. Danach synchronisieren Handy, Tablet und PC, und Mitspi
 4. **Firestore → Regeln** → den kompletten Inhalt von [`firebase/firestore.rules`](firebase/firestore.rules) einfügen → **Veröffentlichen**.
 5. **Projekteinstellungen (Zahnrad) → Allgemein → App hinzufügen → Web (`</>`)** → die `firebaseConfig` kopieren.
 6. Die Konfiguration in [`js/config.js`](js/config.js) eintragen (empfohlen – dann müssen Mitspieler nichts einrichten) **oder** in der App unter Einstellungen → Cloud einfügen.
-7. **Authentication → Einstellungen → Autorisierte Domains** → `<dein-name>.github.io` hinzufügen.
+7. **Authentication → Einstellungen → Autorisierte Domains** → die App‑Adresse (`weltenschmiede.<dein-konto>.workers.dev`) hinzufügen.
 8. Änderungen veröffentlichen: `powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "Firebase"`.
 
 Beim ersten Öffnen wählst du **Spielleitung** oder **Spieler** und legst ein Konto an (Name + Geheimwort, mind. 6 Zeichen). Mit denselben Daten meldest du dich auf allen Geräten an. Lokale Kampagnen aus dem Offline‑Modus überträgst du unter **Einstellungen → Konto** mit einem Klick.
@@ -136,9 +136,9 @@ Nach Änderungen am Code:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "Was sich geändert hat"
 ```
-Das Skript prüft alle Module, erhöht die Cache‑Version (alle Geräte laden die neue Version) und lädt zu GitHub hoch.
+Das Skript prüft alle Module, erhöht die Cache‑Version (alle Geräte laden die neue Version), sichert zu GitHub und veröffentlicht über `tools\deploy.ps1` bei Cloudflare.
 
-Lokales Testen im WLAN (z. B. am Tablet): `node tools/serve.mjs --lan` – Mikrofon, Installation und Offline‑Modus funktionieren allerdings nur über HTTPS (also die GitHub‑Pages‑Adresse) oder `localhost`.
+Lokales Testen im WLAN (z. B. am Tablet): `node tools/serve.mjs --lan` – Mikrofon, Installation und Offline‑Modus funktionieren allerdings nur über HTTPS (also die veröffentlichte Adresse) oder `localhost`.
 
 ---
 

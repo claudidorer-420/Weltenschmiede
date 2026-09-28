@@ -115,7 +115,8 @@ const fieldPath = (k) => (/^[A-Za-z_][A-Za-z_0-9]*$/.test(k) ? k : '`' + k.repla
 
 export function cleanPath(p) {
   const parts = String(p || '').split('/').filter(Boolean);
-  if (!parts.length || parts.some((x) => x === '.' || x === '..')) throw new Error(`Ungültiger Pfad: „${p}“`);
+  // Keine Sonderzeichen, die die REST-Adresse verändern könnten (?, #, %-Kodierung) – sonst ließe sich z. B. die Sperre privater Pfade umgehen
+  if (!parts.length || parts.some((x) => x === '.' || x === '..' || /[?#%\\\s]/.test(x))) throw new Error(`Ungültiger Pfad: „${p}“`);
   return parts.join('/');
 }
 

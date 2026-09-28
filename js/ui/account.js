@@ -1,10 +1,11 @@
 // Konto: Avatar-Menü, Abmelden (optional mit Gerätebereinigung), Rolle wechseln, Geheimwort, Einstellungen als Dialog.
 import { html, useState, useEffect } from '../lib/preact.js';
-import { app, enterLobby, signOut, setAccountKind, isGmAccount } from '../core/app.js';
+import { app, enterLobby, signOut, setAccountKind, isGmAccount, weakSecret, MIN_SECRET } from '../core/app.js';
+import { rekeyVault } from '../core/keyvault.js';
 import { db } from '../core/db.js';
 import { openView } from '../core/workspace.js';
 import { authErrorMessage } from '../core/db-cloud.js';
-import { openMenu, openModal, confirmDialog, promptDialog, toast } from './components.js';
+import { openMenu, openModal, confirmDialog, toast, Btn, Field } from './components.js';
 
 export function openSettingsModal(section) {
   openModal(() => {
@@ -20,16 +21,42 @@ export function openSettings(section) {
   else openSettingsModal(section);
 }
 
+// Altes Geheimwort bestätigen, neues zweimal eingeben; danach wird der Schlüsseltresor neu verschlüsselt.
+function SecretForm({ close }) {
+  const [f, setF] = useState({ old: '', a: '', b: '' });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr('');
+    const weak = weakSecret(f.a, app.get().user?.name);
+    if (weak) return setErr(weak);
+    if (f.a !== f.b) return setErr('Die beiden neuen Geheimwörter stimmen nicht überein.');
+    setBusy(true);
+    try {
+      await db.cloud.verifySecret(f.old);
+      await db.cloud.changeSecret(f.a);
+      await rekeyVault(f.a).catch((x) => console.warn('[vault] rekey', x));
+      close(true);
+    } catch (x) {
+      setErr(authErrorMessage(x));
+      setBusy(false);
+    }
+  };
+  const inp = (k, auto) => html`<input class="input" type="password" value=${f[k]} onInput=${set(k)} autocomplete=${auto} />`;
+  return html`<form onSubmit=${submit}><div class="modal-body stack">
+    <${Field} label="Bisheriges Geheimwort">${inp('old', 'current-password')}<//>
+    <${Field} label="Neues Geheimwort" hint=${`Mindestens ${MIN_SECRET} Zeichen, am besten ein kurzer Satz.`}>${inp('a', 'new-password')}<//>
+    <${Field} label="Neues Geheimwort wiederholen">${inp('b', 'new-password')}<//>
+    ${err ? html`<div class="callout callout-red small" style="margin:0">${err}</div>` : null}
+    <div class="small muted">Andere Geräte werden dabei abgemeldet. Deine KI-Schlüssel werden mit dem neuen Geheimwort neu verschlüsselt.</div>
+  </div><div class="modal-foot"><${Btn} onClick=${() => close(false)}>Abbrechen<//><${Btn} type="submit" kind="primary" loading=${busy}>Ändern<//></div></form>`;
+}
+
 export async function changeSecretDialog() {
-  const a = await promptDialog('Neues Geheimwort (mind. 6 Zeichen)', '', { title: 'Geheimwort ändern' });
-  if (!a) return;
-  if (a.length < 6) return toast('Mindestens 6 Zeichen.', 'error');
-  try {
-    await db.cloud.changeSecret(a);
-    toast('Geheimwort geändert', 'success');
-  } catch (e) {
-    toast(authErrorMessage(e), 'error');
-  }
+  const ok = await openModal(({ close }) => html`<${SecretForm} close=${close} />`, { title: 'Geheimwort ändern', icon: 'key', size: 'sm' });
+  if (ok) toast('Geheimwort geändert', 'success');
 }
 
 export async function switchKind(kind) {

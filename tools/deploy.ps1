@@ -20,6 +20,8 @@ git archive --format=tar -o "$out/app.tar" HEAD $paths
 if ($LASTEXITCODE -ne 0) { throw "git archive fehlgeschlagen." }
 tar -xf "$out/app.tar" -C $out
 Remove-Item "$out/app.tar"
+node tools/headers.mjs $out   # CSP: Hash der Import-Map einsetzen
+if ($LASTEXITCODE -ne 0) { throw "Sicherheits-Header konnten nicht erzeugt werden." }
 
 $log = (npx --yes wrangler@4 deploy 2>&1) -join "`n"
 Write-Host $log

@@ -13,6 +13,16 @@ import { registerMapTools } from './maps.js';
 
 const now = () => Date.now();
 const low = (s) => String(s ?? '').toLowerCase();
+const APP_URL = 'https://weltenschmiede.claudidorer.workers.dev/';
+
+// Private Kontodaten (Einstellungen, Schlüsseltresor) sind für KI-Werkzeuge tabu – auch wenn eine
+// eingeschleuste Anweisung (z. B. in einer Notiz eines Mitspielers) danach fragt.
+function guardPath(p) {
+  const parts = p.split('/');
+  if (parts[0] === 'users' && parts[2] === 'private') throw new Error('Private Kontodaten (Einstellungen, Schlüssel) sind über den Connector nicht zugänglich.');
+  if (parts[0] === 'invites') throw new Error('Einladungscodes sind über den Connector nicht zugänglich – bitte in der App verwalten.');
+  return p;
+}
 
 // ───────────────────────── Hilfen ─────────────────────────
 // Notiz-Logik (abgeleitete Felder, Titel, Suche) kommt aus js/lib/notes.js – dieselbe wie in der App.
@@ -129,7 +139,7 @@ tool('kampagnen', 'Kampagnen auflisten', 'Zeigt das angemeldete Konto und alle K
   return {
     konto: { uid: ctx.user.uid, name: profile?.name || ctx.user.name, art: profile?.kind || 'gm' },
     kampagnen: list.map((c) => ({ id: c.id, name: c.name, rolle: c.role, regelwerk: c.edition || null })),
-    app: 'https://claudidorer-420.github.io/weltenschmiede/',
+    app: APP_URL,
   };
 });
 
@@ -660,7 +670,7 @@ const PFAD = str('Firestore-Pfad, z. B. „campaigns/{kampagnenId}/encounters“
 tool('daten_lesen', 'Daten lesen (Experte)', 'Liest ein beliebiges Dokument (gerade Anzahl Pfadteile) oder listet eine Sammlung (ungerade). Für alles, was kein eigenes Werkzeug hat: encounters, tokens, pins, party, users/{uid}/notes (Tagebuch) … Spieler-Abfragen auf Sammlungen mit Sichtbarkeit brauchen nur_spieler=true.', S({
   pfad: PFAD, nur_spieler: bool('Filter visibility == players (für Spieler nötig)'), limit: num('Maximal (Standard 100)'), felder: { type: 'array', items: { type: 'string' }, description: 'Nur diese Felder zurückgeben (spart Platz bei großen Dokumenten)' },
 }, ['pfad']), RO, async (ctx, a) => {
-  const p = cleanPath(a.pfad);
+  const p = guardPath(cleanPath(a.pfad));
   const pick = (d) => (a.felder?.length ? Object.fromEntries(['id', ...a.felder].filter((f) => f in d).map((f) => [f, d[f]])) : d);
   if (p.split('/').length % 2 === 0) {
     const d = await ctx.fs.get(p);
@@ -674,7 +684,7 @@ tool('daten_lesen', 'Daten lesen (Experte)', 'Liest ein beliebiges Dokument (ger
 tool('daten_schreiben', 'Daten schreiben (Experte)', 'Schreibt ein Dokument. modus „merge“ (Standard) ändert nur die angegebenen obersten Felder, „set“ ersetzt das Dokument komplett, „add“ legt in der Sammlung ein neues Dokument mit zufälliger ID an. Firestore kennt keine verschachtelten Listen. Werkzeuge mit eigenem Namen bevorzugen.', S({
   pfad: PFAD, daten: { type: 'object', additionalProperties: true, description: 'Felder' }, modus: str('merge, set oder add', { enum: ['merge', 'set', 'add'] }),
 }, ['pfad', 'daten']), RW, async (ctx, a) => {
-  const p = cleanPath(a.pfad);
+  const p = guardPath(cleanPath(a.pfad));
   const mode = a.modus || 'merge';
   if (mode === 'add') {
     if (p.split('/').length % 2 === 0) throw new Error('„add“ braucht einen Sammlungspfad.');
@@ -686,7 +696,7 @@ tool('daten_schreiben', 'Daten schreiben (Experte)', 'Schreibt ein Dokument. mod
 });
 
 tool('daten_loeschen', 'Dokument löschen (Experte)', 'Löscht ein einzelnes Dokument endgültig (kein Papierkorb). Für Notizen stattdessen notiz_loeschen verwenden.', S({ pfad: PFAD }, ['pfad']), DEL, async (ctx, a) => {
-  const p = cleanPath(a.pfad);
+  const p = guardPath(cleanPath(a.pfad));
   if (p.split('/').length % 2 !== 0) throw new Error('Pfad muss auf ein Dokument zeigen.');
   await ctx.fs.remove(p);
   return { ok: true };
@@ -695,7 +705,7 @@ tool('daten_loeschen', 'Dokument löschen (Experte)', 'Löscht ein einzelnes Dok
 // Für Werkzeuge, die außerhalb dieser Datei entstehen (z. B. mit gebündelten Textdateien in index.js)
 export const registerTool = tool;
 
-export const INSTRUCTIONS = `Weltenschmiede ist eine D&D-5e-Kampagnen-App (deutsch) unter https://claudidorer-420.github.io/weltenschmiede/.
+export const INSTRUCTIONS = `Weltenschmiede ist eine D&D-5e-Kampagnen-App (deutsch) unter ${APP_URL}.
 Alle Werkzeuge arbeiten mit dem verbundenen Konto; Änderungen erscheinen sofort live in der App bei allen Mitspielern.
 - Beginne mit „kampagnen“. Hat das Konto mehrere Kampagnen, gib „kampagne“ (Name oder ID) an.
 - Codex = Markdown-Notizen im Obsidian-Stil mit [[Wikilinks]], #Tags und Frontmatter (typ, tags, aliases). Vor dem Bearbeiten lesen; für kleine Änderungen „ersetzungen“ oder „anhaengen“ statt den ganzen Text neu zu schreiben.

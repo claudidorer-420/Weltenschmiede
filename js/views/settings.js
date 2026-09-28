@@ -12,6 +12,8 @@ import { Icon, IconBtn, Btn, Field, Toggle, Segmented, Avatar, toast, confirmDia
 import { changeSecretDialog, signOutDialog, switchKind } from '../ui/account.js';
 import { localSummary, migrateLocalToCloud } from './importexport.js';
 import { copyText } from '../lib/util.js';
+import { vault, unlockVault, setVaultSync } from '../core/keyvault.js';
+import { authErrorMessage } from '../core/db-cloud.js';
 import { DICE_SKINS, drawSkinPreview } from '../ui/dice3d.js';
 
 const ALL_SECTIONS = [
@@ -124,6 +126,56 @@ function TaskRow({ task }) {
   </div>`;
 }
 
+// Schlüsseltresor: Status, Entsperren mit dem Geheimwort, Abgleich an/aus
+function KeyVaultCard({ gm }) {
+  const mode = useStore(app, (s) => s.mode);
+  const st = useStore(vault, (s) => s);
+  const sync = useStore(settings, (s) => s.ai.syncKeys !== false);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  if (mode !== 'cloud') {
+    return html`<div class="card key-note"><${Icon} name="lock" size=${20} class="accent-text" /><div class="txt small muted">Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät und gehören zum Offline-Profil.</div></div>`;
+  }
+  const unlock = async (e) => {
+    e.preventDefault();
+    if (!pw) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await unlockVault(pw);
+      setPw('');
+      toast('Schlüsseltresor entsperrt', 'success');
+    } catch (x) {
+      setErr(x?.code ? authErrorMessage(x) : x.message || String(x));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const who = gm ? 'deine Spieler' : 'die Spielleitung, deine Mitspieler';
+  const text = !sync
+    ? 'Deine Schlüssel liegen nur auf diesem Gerät. Auf anderen Geräten trägst du sie selbst ein.'
+    : st.status === 'synced'
+      ? `Ende-zu-Ende verschlüsselt mit deinem Geheimwort: In der Cloud liegt nur unlesbarer Geheimtext – weder ${who}, verbundene KI-Werkzeuge (MCP) noch der Betreiber der Datenbank können die Schlüssel lesen. Anfragen gehen direkt von diesem Gerät an den Anbieter. Beim Abmelden werden sie von diesem Gerät entfernt.`
+      : 'Die Schlüssel liegen gerade nur auf diesem Gerät. Gib einmal dein Geheimwort ein, um sie verschlüsselt mit deinen anderen Geräten abzugleichen.';
+  return html`<div class="card stack">
+    <div class="row nowrap" style="gap:12px;align-items:flex-start">
+      <${Icon} name=${st.status === 'synced' && sync ? 'lock' : 'key'} size=${20} class="accent-text" />
+      <div class="grow stack sm">
+        <b class="small">${!sync ? 'Nur auf diesem Gerät' : st.status === 'synced' ? 'Verschlüsselt synchronisiert' : 'Tresor gesperrt'}</b>
+        <div class="small muted" style="line-height:1.55">${text}</div>
+        ${st.error ? html`<div class="small danger-text">${st.error}</div>` : null}
+      </div>
+    </div>
+    ${sync && st.status !== 'synced' ? html`<form class="row nowrap" onSubmit=${unlock}>
+      <input class="input grow" type="password" placeholder="Dein Geheimwort" autocomplete="current-password" value=${pw} onInput=${(e) => setPw(e.target.value)} />
+      <${Btn} type="submit" kind="primary" icon="unlock" loading=${busy}>Entsperren<//>
+    </form>` : null}
+    ${err ? html`<div class="callout callout-red small" style="margin:0">${err}</div>` : null}
+    <${Toggle} checked=${sync} onChange=${(v) => setVaultSync(v)} label="Schlüssel verschlüsselt zwischen meinen Geräten abgleichen" />
+  </div>`;
+}
+
 // Aufgaben, für die Spieler die KI nutzen (Regelfragen im Regelteil)
 const PLAYER_TASKS = ['rules'];
 
@@ -139,12 +191,7 @@ function AISection() {
       Du bringst deinen eigenen Schlüssel mit – die App schickt Anfragen direkt vom Browser an den Anbieter, ohne Umweg über einen Server. Du zahlst nur, was du nutzt.<br />
       <b>Günstiger Start:</b> Google Gemini (Flash-Modelle mit Gratis-Kontingent). <b>Beste Texte:</b> Claude Opus 5. <b>Viele Modelle mit einem Schlüssel:</b> OpenRouter.
     </div></div>
-    <div class="card key-note">
-      <${Icon} name="lock" size=${20} class="accent-text" />
-      <div class="txt small muted">${mode === 'cloud'
-        ? `Deine Schlüssel gehören nur zu deinem Konto: Sie liegen im privaten Bereich deines Kontos – nur du kannst sie lesen, ${gm ? 'deine Spieler' : 'weder die Spielleitung noch deine Mitspieler'} sehen sie nie. Sie stehen auf all deinen Geräten bereit und werden beim Abmelden von diesem Gerät entfernt; meldet sich jemand anderes an, sind sie weg.`
-        : 'Offline-Modus: Die Schlüssel liegen nur auf diesem Gerät und gehören zum Offline-Profil.'}</div>
-    </div>
+    <${KeyVaultCard} gm=${gm} />
     ${gm ? null : html`<div class="small muted">Als Spieler nutzt du die KI für Regelfragen (Regeln → „Regelfrage an die KI“). Die Anfragen laufen über deinen eigenen Schlüssel – die Spielleitung zahlt nichts dafür und sieht nichts davon.</div>`}
     <div class="grid two">${['gemini', 'anthropic', 'openai', 'openrouter'].map((id) => html`<${ProviderCard} key=${id} id=${id} />`)}</div>
     <${ProviderCard} id="custom" />
@@ -190,7 +237,7 @@ function KontoSection() {
   return html`<div class="stack lg">
     <div class="card stack">
       <div class="row nowrap"><${Avatar} name=${user?.name} size="lg" /><div class="grow"><b style="font-size:18px">${user?.name}</b><div class="small muted">${gm ? 'Spielleitung' : 'Spieler'} · ${status}</div></div></div>
-      ${cloud ? html`<div class="small muted">Kampagnen, Charaktere und Tagebuch${gm ? ' sowie deine KI-Schlüssel' : ''} liegen in deinem Konto und sind auf Handy, Tablet und PC gleich – auch offline nutzbar.</div>` : null}
+      ${cloud ? html`<div class="small muted">Kampagnen, Charaktere und Tagebuch liegen in deinem Konto und sind auf Handy, Tablet und PC gleich – auch offline nutzbar.</div>` : null}
       ${cloud ? html`<div class="btn-row">
         <${Btn} icon="key" onClick=${changeSecretDialog}>Geheimwort ändern<//>
         <${Btn} icon=${gm ? 'user' : 'crown'} onClick=${() => switchKind(gm ? 'player' : 'gm')}>${gm ? 'Als Spieler weiterspielen' : 'Als Spielleitung arbeiten'}<//>

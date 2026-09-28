@@ -1,6 +1,16 @@
 # CLAUDE.md – Entwicklernotizen für die Weltenschmiede
 
-Statische PWA ohne Build‑Schritt (GitHub Pages). UI komplett auf **Deutsch**.
+Statische PWA ohne Build‑Schritt, gehostet als Cloudflare Worker mit statischen Dateien (`wrangler.jsonc`, https://weltenschmiede.claudidorer.workers.dev). Das GitHub‑Repo ist **privat** und nur Sicherung. UI komplett auf **Deutsch**.
+
+## Sicherheit (bei jeder Änderung mitdenken)
+- **KI‑Schlüssel nie im Klartext in die Cloud**: `syncablePart()` entfernt sie; Abgleich nur über den Tresor `js/core/keyvault.js` (`users/{uid}/private/vault`, AES‑GCM, Schlüssel per PBKDF2 aus dem Geheimwort, Geräteschlüssel als nicht exportierbarer CryptoKey in der IndexedDB `ws-vault`). Beim Anmelden entsperrt `startVault(uid, geheimwort)`, „Geheimwort ändern“ ruft `rekeyVault()`.
+- **CSP** in `_headers` (auch lokal von `tools/serve.mjs` gesendet): keine Inline‑Skripte, keine `on…=`‑Attribute, kein `eval`. Neue Fremdquellen für Skripte in `script-src` eintragen; die Import‑Map ist per Hash erlaubt (`tools/headers.mjs` rechnet ihn beim Deploy aus).
+- Nutzertexte nur über `esc()`/`renderMarkdown` als HTML ausgeben (Spieler schreiben Notizen, Chat, Beiträge).
+- MCP: `guardPath()` in `mcp/src/tools.js` sperrt `users/*/private` und `invites`; Rücksprung‑Hosts nur ohne fremde Nutzerinhalte.
+- Neue Geheimwörter mindestens `MIN_SECRET` (8) Zeichen, `weakSecret()` prüft.
+
+## Lizenzen (bei jeder Änderung mitdenken)
+Das Projekt soll verkäuflich bleiben. Übersicht, Befunde und Regeln in `LIZENZEN.md`. Kurz: nur SRD‑5.1/5.2.1‑Inhalte (CC‑BY‑4.0, mit Namensnennung) oder Eigenes – keine Namen, Texte, Regeln oder Bilder aus anderen Büchern (Xanathar, Tasha, Monsterhandbuch, Forgotten Realms …), keine Marken wie „D&D“/„Dungeons & Dragons“ als Produktname. Bilder: CC0, eigene SDXL‑Erzeugnisse oder vom Nutzer lokal importiert (nie mitliefern).
 
 ## Stack & Konventionen
 - **Preact + htm** über die Import‑Map in `index.html` (jsDelivr, gepinnte Versionen). Alle Module importieren aus `js/lib/preact.js` – nie direkt aus `preact`.
@@ -143,5 +153,5 @@ campaigns/{cid}/signals/{uid}  { type, ts, events:[{id,type,…}] } Spieler → 
 Cloudflare Worker, damit Claude die App als Connector bedienen kann (`mcp/README.md`). OAuth‑Anmeldung mit Name + Geheimwort → Firebase‑Refresh‑Token versiegelt im Token (`SEAL_SECRET`, zustandslos), Zugriffe per Firestore‑REST mit dem Nutzerkonto (Regeln gelten). **Anbieterunabhängig**: OAuth 2.1 mit PKCE, dynamische Client‑Registrierung und Ressourcen‑Metadaten unter allen `/.well-known/…`‑Varianten; POST `/mcp` antwortet auf Wunsch als `text/event-stream`. Wer zurückspringen darf, steht in `ALLOWED_REDIRECT_HOSTS` (Claude, ChatGPT, Google, Cursor, VS Code …) und `ALLOWED_REDIRECT_SCHEMES` (`vscode://`, `cursor://` …); lokale Schleifenadressen sind immer erlaubt (Gemini CLI). Werkzeuge in `mcp/src/tools.js`, Kartenwerkstatt in `mcp/src/maps.js` (`karten_katalog`, `karte_lesen`, `karte_erstellen`; Katalog/Generatoren kommen automatisch aus der App, neue Elementlisten der Karte ggf. in `LISTS` eintragen) – bei neuen Sammlungen/Feldern mitpflegen. Bündelt `js/lib/markdown.js`, `js/lib/dice.js`, `js/ui/statblock.js` und SRD‑Daten (diese Module dürfen beim Laden kein DOM anfassen). Veröffentlichen: `powershell -ExecutionPolicy Bypass -File mcp\deploy.ps1`.
 
 ## Veröffentlichen
-`powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "…"` – aktualisiert Dateiliste + `VERSION` in `sw.js`, committet, pusht. `.ps1`‑Dateien als UTF‑8 **mit BOM** speichern (Windows PowerShell 5.1 liest sie sonst als ANSI).
+`powershell -ExecutionPolicy Bypass -File tools\publish.ps1 -Message "…"` – aktualisiert Dateiliste + `VERSION` in `sw.js`, committet, pusht (Sicherung) und ruft `tools\deploy.ps1` auf (baut `.deploy` aus dem Commit, setzt `_headers`, `wrangler deploy`). `.ps1`‑Dateien als UTF‑8 **mit BOM** speichern (Windows PowerShell 5.1 liest sie sonst als ANSI).
 Geänderte `firebase/firestore.rules` veröffentlicht die SL selbst (Firebase‑Konsole → Firestore → Regeln → einfügen → Veröffentlichen).

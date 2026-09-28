@@ -38,6 +38,7 @@ const VERSION = '1.0.0';
 const PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'];
 const ACCESS_TTL = 60 * 60 * 1000;
 const CODE_TTL = 5 * 60 * 1000;
+const REFRESH_TTL = 90 * 24 * 60 * 60 * 1000; // gleitend: jede Nutzung verlängert
 
 const CORS = {
   'access-control-allow-origin': '*',
@@ -52,7 +53,9 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 
 // Erlaubte Rücksprungadressen: https bei bekannten KI-Anbietern, http nur lokal,
 // dazu die eigenen Adressschemata der Desktop-Programme (z. B. vscode://, cursor://).
-const DEFAULT_HOSTS = 'claude.ai,claude.com,anthropic.com,chatgpt.com,openai.com,google.com,googleusercontent.com,cursor.com,cursor.sh,vscode.dev,github.com,githubusercontent.com,windsurf.com,codeium.com,zed.dev,raycast.com,perplexity.ai,mistral.ai,localhost,127.0.0.1';
+// „=host“ = nur genau dieser Host, sonst auch Unterdomänen. Keine Hosts mit fremden Inhalten
+// (script.google.com, googleusercontent.com …) – dort könnte jemand den Anmeldecode abgreifen.
+const DEFAULT_HOSTS = 'claude.ai,claude.com,anthropic.com,chatgpt.com,openai.com,=gemini.google.com,=aistudio.google.com,cursor.com,cursor.sh,=vscode.dev,=insiders.vscode.dev,=github.com,windsurf.com,codeium.com,zed.dev,raycast.com,perplexity.ai,mistral.ai';
 const DEFAULT_SCHEMES = 'vscode,vscode-insiders,cursor,windsurf,zed,claude,lmstudio,raycast,msty,cherrystudio,witsy';
 
 function allowedRedirect(env, uri) {
@@ -64,7 +67,7 @@ function allowedRedirect(env, uri) {
   if (local) return u.protocol === 'http:' || u.protocol === 'https:';      // Schleifenadresse (Gemini CLI & Co.)
   if (u.protocol !== 'https:') return false;
   const hosts = String(env.ALLOWED_REDIRECT_HOSTS || DEFAULT_HOSTS).split(',').map((x) => x.trim()).filter(Boolean);
-  return hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+  return hosts.some((h) => (h.startsWith('=') ? u.hostname === h.slice(1) : u.hostname === h || u.hostname.endsWith(`.${h}`)));
 }
 
 // ───────────────────────── OAuth-Metadaten ─────────────────────────
@@ -119,9 +122,11 @@ label{display:block;font-size:14px;font-weight:600;margin:14px 0 6px}input[type=
 button{margin-top:22px;width:100%;padding:12px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-size:16px;font-weight:600;cursor:pointer}
 .err{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);padding:10px 12px;border-radius:10px;font-size:14px;margin-bottom:6px}
 .who{font-size:13px;color:var(--muted);margin-top:16px;text-align:center}
+.warn{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 6px}
 </style></head><body><main>
 <h1>⚒️ Weltenschmiede</h1>
-<p><b>${esc(client.name)}</b> möchte mit deinem Konto auf deine Kampagnen zugreifen – lesen und ändern, mit denselben Rechten wie du in der App.</p>
+<p>Ein Programm, das sich <b>„${esc(client.name)}“</b> nennt, möchte mit deinem Konto auf deine Kampagnen zugreifen – lesen und ändern, mit denselben Rechten wie du in der App.</p>
+<div class="warn">🔒 Nur fortfahren, wenn du gerade <b>selbst</b> in <b>${esc(host)}</b> die Weltenschmiede als Connector hinzufügst – nie über einen Link, den dir jemand geschickt hat. Deine KI-Schlüssel bleiben dabei unlesbar.</div>
 ${error ? `<div class="err">${esc(error)}</div>` : ''}
 <form method="post" action="/authorize">${hidden}
 <label for="n">Name</label><input id="n" name="name" type="text" autocomplete="username" required value="${esc(name)}" autofocus>
@@ -144,6 +149,12 @@ async function authorize(req, env) {
   if (req.method !== 'POST') return loginPage({ params, client });
 
   const name = String(params.get('name') || '').trim();
+  // Anmeldeversuche begrenzen (je Adresse und je Name) – gegen Durchprobieren von Geheimwörtern
+  if (env.LOGIN_LIMIT) {
+    const ip = req.headers.get('cf-connecting-ip') || 'x';
+    const [a, b] = await Promise.all([env.LOGIN_LIMIT.limit({ key: `ip:${ip}` }), env.LOGIN_LIMIT.limit({ key: `n:${name.toLowerCase()}` })]);
+    if (!a.success || !b.success) return loginPage({ params, client, error: 'Zu viele Versuche – bitte eine Minute warten.', name });
+  }
   let user;
   try {
     user = await signInWithPassword(env, name, String(params.get('secret') || ''));
@@ -161,7 +172,7 @@ async function authorize(req, env) {
 
 async function issueTokens(env, { rt, uid, name }) {
   const access_token = await seal(env.SEAL_SECRET, { typ: 'at', rt, uid, name, exp: Date.now() + ACCESS_TTL });
-  const refresh_token = await seal(env.SEAL_SECRET, { typ: 'rt', rt, uid, name });
+  const refresh_token = await seal(env.SEAL_SECRET, { typ: 'rt', rt, uid, name, exp: Date.now() + REFRESH_TTL });
   return json({ access_token, token_type: 'Bearer', expires_in: ACCESS_TTL / 1000, refresh_token, scope: 'weltenschmiede' }, 200, { 'cache-control': 'no-store' });
 }
 

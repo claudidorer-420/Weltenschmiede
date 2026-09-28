@@ -9,6 +9,8 @@
 #>
 $ErrorActionPreference = "Continue"  # Wrangler schreibt Hinweise nach stderr; Fehler über $LASTEXITCODE
 Set-Location $PSScriptRoot
+# Immer diese Konfiguration – im Hauptordner liegt die der App (wrangler.jsonc)
+$cfg = Join-Path $PSScriptRoot 'wrangler.toml'
 
 $who = (npx --yes wrangler@4 whoami 2>&1) -join "`n"
 if ($who -match "not authenticated") {
@@ -17,17 +19,17 @@ if ($who -match "not authenticated") {
   if ($LASTEXITCODE -ne 0) { throw "Anmeldung abgebrochen." }
 }
 
-$secrets = (npx wrangler@4 secret list 2>&1) -join "`n"
+$secrets = (npx wrangler@4 secret list --config $cfg 2>&1) -join "`n"
 if ($secrets -notmatch "SEAL_SECRET") {
   Write-Host "Erzeuge SEAL_SECRET …" -ForegroundColor Yellow
   $bytes = New-Object byte[] 48
   [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
   $secret = [Convert]::ToBase64String($bytes)
-  $secret | npx wrangler@4 secret put SEAL_SECRET
+  $secret | npx wrangler@4 secret put SEAL_SECRET --config $cfg
   if ($LASTEXITCODE -ne 0) { throw "SEAL_SECRET konnte nicht gesetzt werden." }
 }
 
-$out = (npx wrangler@4 deploy 2>&1) -join "`n"
+$out = (npx wrangler@4 deploy --config $cfg 2>&1) -join "`n"
 Write-Host $out
 if ($LASTEXITCODE -ne 0) { throw "Veröffentlichen fehlgeschlagen." }
 $url = [regex]::Match($out, 'https://[a-z0-9.-]+\.workers\.dev').Value

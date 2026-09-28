@@ -2,15 +2,19 @@
 // Start:  node tools/serve.mjs          → http://localhost:5173
 //         node tools/serve.mjs 8080     → anderer Port
 //         node tools/serve.mjs --lan    → auch im WLAN erreichbar (Handy/Tablet testen)
+// Sendet dieselben Sicherheits-Header wie die veröffentlichte App (_headers, inkl. CSP) –
+// was hier läuft, läuft auch online. Ohne:  node tools/serve.mjs --no-headers
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { networkInterfaces } from 'node:os';
+import { renderHeaders, parseHeaders, headersFor } from './headers.mjs';
 
 const root = normalize(fileURLToPath(new URL('..', import.meta.url)));
 const args = process.argv.slice(2);
 const lan = args.includes('--lan');
+const withHeaders = !args.includes('--no-headers');
 const port = Number(args.find((a) => /^\d+$/.test(a)) || process.env.PORT || 5173);
 
 const MIME = {
@@ -41,7 +45,12 @@ createServer(async (req, res) => {
       return;
     }
     const data = await readFile(file);
-    res.writeHead(200, { 'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache' });
+    let extra = {};
+    if (withHeaders) {
+      try { extra = headersFor(parseHeaders(renderHeaders(root)), p.replace(/index\.html$/, '')); } catch (e) { console.warn('[headers]', e.message); }
+      delete extra['strict-transport-security'];
+    }
+    res.writeHead(200, { ...extra, 'content-type': MIME[extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-cache' });
     res.end(data);
   } catch {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('404 – nicht gefunden');

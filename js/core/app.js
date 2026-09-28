@@ -3,10 +3,11 @@ import { createStore, useStore } from './store.js';
 import { db, connectCloud, useLocalDb } from './db.js';
 import {
   settings, getCloudConfig, setCloudConfig, modePref, setCloudSettingsSync, mergeRemoteSettings, applyTheme, ensureSettingsOwner, clearAiKeys,
-  hasBakedCloudConfig,
+  hasBakedCloudConfig, flushSettings,
 } from './settings.js';
 import { uid, now, inviteCode, sortBy } from '../lib/util.js';
 import { renameLinkTarget } from '../lib/markdown.js';
+import { startVault, stopVault, forgetDevice, wipeVaultDevice, hasPlainKeys } from './keyvault.js';
 import { deriveNoteFields as deriveFields, searchNoteList, cleanTitle, cleanPath, uniqueTitleIn } from '../lib/notes.js';
 
 // UI-Brücke (wird von ui/components.js belegt), damit der Kern keine UI importiert
@@ -48,6 +49,19 @@ function decodeB64Url(s) {
 let explicitLogin = false; // true = gerade eben angemeldet → Übersicht statt letzter Kampagne
 let pendingKind = null; // gewählte Rolle beim Anmelden ('gm' | 'player')
 let pendingName = '';
+let pendingSecret = null; // nur kurz im Speicher: entsperrt beim Anmelden den Schlüsseltresor
+export const MIN_SECRET = 8; // für neue Geheimwörter; ältere mit 6 Zeichen funktionieren weiter
+const COMMON_SECRETS = new Set(['12345678', '123456789', '1234567890', 'password', 'passwort', 'passwort1', 'qwertzui', 'qwertyui', 'iloveyou', 'weltenschmiede', 'dungeons', 'abcdefgh', '11111111', '00000000']);
+// Fehlertext, wenn ein neues Geheimwort zu schwach ist – sonst ''
+export function weakSecret(secret, name = '') {
+  const s = String(secret || '');
+  if (s.length < MIN_SECRET) return `Das Geheimwort braucht mindestens ${MIN_SECRET} Zeichen – am besten ein kurzer Satz.`;
+  const low = s.toLowerCase();
+  if (COMMON_SECRETS.has(low) || /^(.)\1+$/.test(s) || (/^\d+$/.test(s) && new Set(s).size < 4)) return 'Dieses Geheimwort ist zu leicht zu erraten.';
+  const n = String(name || '').trim().toLowerCase();
+  if (n && low.includes(n) && s.length < 14) return 'Das Geheimwort darf nicht (fast) nur aus deinem Namen bestehen.';
+  return '';
+}
 
 export async function boot() {
   applyTheme();
@@ -56,7 +70,7 @@ export async function boot() {
     modePref.set('local');
     history.replaceState(null, '', location.pathname + location.search);
   }
-  const jm = /#\/join\/([A-Za-z0-9]{4,12})/.exec(h);
+  const jm = /#\/join\/([A-Za-z0-9]{4,24})/.exec(h); // Spieler 12, Co-SL 16 Zeichen
   if (jm) {
     app.set({ joinCode: jm[1].toUpperCase() });
     if (modePref.get() === 'local') modePref.set('auto');
@@ -80,6 +94,7 @@ export async function boot() {
           await onSignedIn({ uid: fu.uid, name: fu.displayName || pendingName || 'Held' }, { explicit });
         } else {
           stopCampaign();
+          stopVault();
           app.set({ user: null, campaigns: [], cid: null, campaign: null, phase: 'login' });
         }
       });
@@ -101,6 +116,8 @@ async function onSignedIn(baseUser, { explicit = false } = {}) {
   app.set({ user, mode: db.mode, phase: 'loading' });
   try {
     if (db.mode === 'cloud') {
+      const prevOwner = localStorage.getItem('ws.settingsOwner');
+      if (prevOwner && prevOwner !== user.uid) forgetDevice(prevOwner);
       ensureSettingsOwner(user.uid);
       let profile = null;
       try { profile = await db.get('users', user.uid); } catch { /* offline */ }
@@ -109,11 +126,19 @@ async function onSignedIn(baseUser, { explicit = false } = {}) {
       user = { ...user, name: user.name === 'Held' && profile?.name ? profile.name : user.name, kind };
       app.set({ user });
       db.set('users', user.uid, { name: user.name, kind, lastSeen: now() }, { merge: true }).catch(() => {});
+      let legacyKeys = false;
       try {
         const remote = await db.get(`users/${user.uid}/private`, 'settings');
-        if (remote?.data) mergeRemoteSettings(remote.data);
+        if (remote?.data) {
+          legacyKeys = hasPlainKeys(remote.data);
+          mergeRemoteSettings(remote.data);
+        }
       } catch { /* offline */ }
       setCloudSettingsSync((data) => db.set(`users/${user.uid}/private`, 'settings', { data, updatedAt: now() }).catch(() => {}));
+      if (legacyKeys) flushSettings(); // alte Versionen speicherten Schlüssel im Klartext → sofort überschreiben
+      const secret = pendingSecret;
+      pendingSecret = null;
+      startVault(user.uid, secret).catch((e) => console.warn('[vault]', e));
     } else ensureSettingsOwner(user.uid); // KI-Schlüssel eines anderen Kontos nie im Offline-Modus weiterverwenden
     await refreshCampaigns();
     let target = null;
@@ -145,11 +170,13 @@ export async function signIn(name, secret, kind) {
   explicitLogin = true;
   pendingKind = kind || null;
   pendingName = name;
+  pendingSecret = secret;
   try {
     return await db.cloud.signIn(name, secret);
   } catch (e) {
     explicitLogin = false;
     pendingKind = null;
+    pendingSecret = null;
     throw e;
   }
 }
@@ -158,6 +185,7 @@ export async function register(name, secret, kind = 'gm') {
   explicitLogin = true;
   pendingKind = kind;
   pendingName = name;
+  pendingSecret = secret;
   try {
     const u = await db.cloud.register(name, secret);
     await db.set('users', u.uid, { name, kind, createdAt: now() }, { merge: true }).catch(() => {});
@@ -165,6 +193,7 @@ export async function register(name, secret, kind = 'gm') {
   } catch (e) {
     explicitLogin = false;
     pendingKind = null;
+    pendingSecret = null;
     throw e;
   }
 }
@@ -178,10 +207,12 @@ export async function signOut({ wipe = false } = {}) {
   }
   stopCampaign();
   setCloudSettingsSync(null);
+  stopVault({ forget: true });
   clearAiKeys();
   await db.cloud.signOut();
   if (wipe) {
     Object.keys(localStorage).filter((k) => k.startsWith('ws.')).forEach((k) => localStorage.removeItem(k));
+    await wipeVaultDevice();
     await db.cloud.wipeLocal();
     await new Promise((res) => {
       const r = indexedDB.deleteDatabase('weltenschmiede');
@@ -370,7 +401,8 @@ async function makeInvite(cid, name, role) {
   return code;
 }
 
-export const inviteExpired = (d) => !!d?.expiresAt && d.expiresAt <= now();
+// Codes ohne Ablaufdatum stammen aus alten Versionen und gelten als abgelaufen (die Regeln lassen sie auch nicht mehr zu)
+export const inviteExpired = (d) => !d?.expiresAt || d.expiresAt <= now();
 
 // Einladungscodes einer Kampagne (nur SL) – beim ersten Aufruf und nach Ablauf neu erzeugt
 export async function getInvitesFor(cid, name = '') {

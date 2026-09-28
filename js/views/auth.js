@@ -1,7 +1,7 @@
 // Start: erst Rolle wählen (Spielleitung oder Spieler), dann mit Name + Geheimwort anmelden – keine E-Mail nötig.
 import { html, useState } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
-import { app, signIn, register } from '../core/app.js';
+import { app, signIn, register, weakSecret, MIN_SECRET } from '../core/app.js';
 import { authErrorMessage } from '../core/db-cloud.js';
 import { Btn, Icon, Field, Segmented } from '../ui/components.js';
 
@@ -64,7 +64,11 @@ function LoginForm({ role, joinCode, onBack }) {
     const n = name.trim();
     if (n.length < 2) return setErr('Bitte einen Namen mit mindestens 2 Zeichen eingeben.');
     if (secret.length < 6) return setErr('Das Geheimwort braucht mindestens 6 Zeichen.');
-    if (tab === 'register' && secret !== secret2) return setErr('Die beiden Geheimwörter stimmen nicht überein.');
+    if (tab === 'register') {
+      const weak = weakSecret(secret, n);
+      if (weak) return setErr(weak);
+      if (secret !== secret2) return setErr('Die beiden Geheimwörter stimmen nicht überein.');
+    }
     setBusy(true);
     try {
       localStorage.setItem('ws.lastName', n);
@@ -89,7 +93,7 @@ function LoginForm({ role, joinCode, onBack }) {
       <${Field} label="Name" hint=${tab === 'register' ? 'So sehen dich deine Mitspieler. Mit diesem Namen meldest du dich auch auf anderen Geräten an.' : ''}>
         <input class="input" value=${name} onInput=${(e) => setName(e.target.value)} autocomplete="username" placeholder="z. B. Claudio" autoFocus />
       <//>
-      <${Field} label="Geheimwort" hint=${tab === 'register' ? 'Mindestens 6 Zeichen. Gut merken – es gibt keine E-Mail zum Zurücksetzen.' : ''}>
+      <${Field} label="Geheimwort" hint=${tab === 'register' ? `Mindestens ${MIN_SECRET} Zeichen, am besten ein kurzer Satz. Gut merken – es gibt keine E-Mail zum Zurücksetzen, und es schützt auch deine verschlüsselten KI-Schlüssel.` : ''}>
         <div class="input-group">
           <input class="input" type=${show ? 'text' : 'password'} value=${secret} onInput=${(e) => setSecret(e.target.value)} autocomplete=${tab === 'login' ? 'current-password' : 'new-password'} />
           <${Btn} kind="ghost" icon=${show ? 'eye-off' : 'eye'} title="Anzeigen" onClick=${() => setShow(!show)} />

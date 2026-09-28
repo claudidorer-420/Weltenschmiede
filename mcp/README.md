@@ -4,7 +4,7 @@ Damit bedienst du die Weltenschmiede direkt aus Claude (claude.ai, Desktop-App, 
 Quests und Sitzungen pflegen, Handouts und Szenen zeigen, im Chat schreiben und würfeln, Charaktere und den Kampf ansehen,
 Monster und Zauber nachschlagen. Änderungen erscheinen **sofort live** in der App bei allen Mitspielern.
 
-GitHub Pages kann nur statische Dateien ausliefern, deshalb läuft der Server als kostenloser **Cloudflare Worker**.
+Die App selbst besteht nur aus statischen Dateien; der MCP‑Server braucht Logik und läuft deshalb als eigener kostenloser **Cloudflare Worker**.
 Er speichert nichts: Du meldest dich einmal mit **Name + Geheimwort** an (wie in der App), alle Zugriffe laufen mit deinem
 Konto durch die Firestore-Regeln – Spieler-Konten sehen also auch hier nur Freigegebenes.
 

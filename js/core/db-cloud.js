@@ -17,7 +17,7 @@ const AUTH_ERRORS = {
   'auth/wrong-password': 'Name oder Geheimwort falsch.',
   'auth/user-not-found': 'Name oder Geheimwort falsch.',
   'auth/invalid-email': 'Der Name enthält keine gültigen Zeichen.',
-  'auth/weak-password': 'Das Geheimwort braucht mindestens 6 Zeichen.',
+  'auth/weak-password': 'Das Geheimwort ist zu schwach – bitte mindestens 8 Zeichen.',
   'auth/missing-password': 'Bitte ein Geheimwort eingeben.',
   'auth/operation-not-allowed': 'In Firebase ist „E-Mail/Passwort“-Anmeldung noch nicht aktiviert (README → Cloud einrichten, Schritt 3).',
   'auth/network-request-failed': 'Keine Verbindung zum Server.',
@@ -143,6 +143,12 @@ export async function initCloud(config) {
     },
     async changeSecret(newSecret) {
       await authM.updatePassword(auth.currentUser, newSecret);
+    },
+    // Geheimwort prüfen, ohne die Sitzung zu wechseln (z. B. um den Schlüsseltresor zu entsperren)
+    async verifySecret(secret) {
+      const u = auth.currentUser;
+      if (!u?.email) throw new Error('Nicht angemeldet.');
+      await authM.reauthenticateWithCredential(u, authM.EmailAuthProvider.credential(u.email, secret));
     },
     async rename(displayName) {
       await authM.updateProfile(auth.currentUser, { displayName });

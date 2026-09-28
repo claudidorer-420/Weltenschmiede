@@ -93,10 +93,11 @@ export function updateSettings(patch) {
   settings.replace(deepMerge(settings.get(), patch));
 }
 
-// KI-Schlüssel gehören zum Konto und liegen im privaten Bereich (users/{uid}/private/settings).
+// KI-Schlüssel gehen nie im Klartext in die Cloud – zwischen Geräten gleicht sie der verschlüsselte Tresor ab (core/keyvault.js).
 export function syncablePart(s) {
   const out = structuredClone(s);
   delete out.layout;
+  for (const p of Object.values(out.ai?.providers || {})) if (p) delete p.key;
   return out;
 }
 
