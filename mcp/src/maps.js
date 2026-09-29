@@ -272,6 +272,7 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
     verschieben: { type: 'array', items: { type: 'number' }, description: '[dx, dy] – alle Elemente verschieben (z. B. beim Vergrößern nach links/oben)' },
     stil: str('Stil, z. B. real (Standard), klassisch, pergament, blaupause, dunkel'),
     generator: str('Generator aus dem Katalog (dungeon, hoehle, taverne, tempel, lichtung, wald, dorf, leer …). Bei bestehenden Karten nur mit ersetzen=true'),
+    gruppe: num('Gruppengröße (Zahl der Spielercharaktere) – die Waldlichtung stellt so viele Zelte auf; Standard 4'),
     ersetzen: bool('true = bestehenden Inhalt komplett durch den Generator ersetzen'),
     sichtbarkeit: str('gm oder players', { enum: ['gm', 'players'] }),
     einstellungen: anyObj('Karteneinstellungen, z. B. { "dark": 0.5, "wallTex": "old_stone_wall", "floorTex": "worn_brick_floor", "ground": "dark_rock", "outdoor": false, "fog": { "enabled": true } } – unbekannte Felder werden übernommen'),
@@ -315,7 +316,7 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
       if (!isNew && !a.ersetzen) throw new Error('Diese Karte hat schon Inhalt – für einen Generator ersetzen=true setzen.');
       const gw = Math.round(a.breite || W0);
       const gh = Math.round(a.hoehe || H0);
-      Object.assign(m, g.fn(gw, gh), { w: gw, h: gh });
+      Object.assign(m, g.fn(gw, gh, { party: Number(a.gruppe) || 4 }), { w: gw, h: gh });
     }
 
     // 2. Einstellungen, Größe, Verschieben

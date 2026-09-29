@@ -13,13 +13,7 @@ if (!src) { console.error('Aufruf: node tools/build-spells.mjs <ordner>'); proce
 const load = (f) => (existsSync(join(src, f)) ? JSON.parse(readFileSync(join(src, f), 'utf8')) : []);
 
 const CLS = { bard: 'barde', cleric: 'kleriker', druid: 'druide', paladin: 'paladin', ranger: 'waldlaeufer', sorcerer: 'zauberer', warlock: 'hexenmeister', wizard: 'magier' };
-// Magieschmied (2014, Tashas Kessel) – nur Zauber, die im SRD vorkommen
-const ARTIFICER = ['acid-splash', 'dancing-lights', 'fire-bolt', 'guidance', 'light', 'mage-hand', 'mending', 'message', 'poison-spray', 'prestidigitation', 'ray-of-frost', 'resistance', 'shocking-grasp', 'spare-the-dying', 'thorn-whip',
-  'alarm', 'cure-wounds', 'detect-magic', 'disguise-self', 'expeditious-retreat', 'faerie-fire', 'false-life', 'feather-fall', 'grease', 'identify', 'jump', 'longstrider', 'purify-food-and-drink', 'sanctuary',
-  'aid', 'alter-self', 'arcane-lock', 'blur', 'continual-flame', 'darkvision', 'enhance-ability', 'enlarge-reduce', 'heat-metal', 'invisibility', 'lesser-restoration', 'levitate', 'magic-mouth', 'magic-weapon', 'protection-from-poison', 'rope-trick', 'see-invisibility', 'spider-climb', 'web',
-  'blink', 'create-food-and-water', 'dispel-magic', 'fly', 'glyph-of-warding', 'haste', 'protection-from-energy', 'revivify', 'water-breathing', 'water-walk',
-  'arcane-eye', 'fabricate', 'freedom-of-movement', 'secret-chest', 'faithful-hound', 'private-sanctum', 'resilient-sphere', 'stone-shape', 'stoneskin',
-  'animate-objects', 'arcane-hand', 'creation', 'greater-restoration', 'wall-of-stone'];
+// Klassenlisten nur aus dem SRD – Listen weiterer Klassen kommen über Regelpakete (spellLists).
 const SAVE = { 'Stärke': 'str', Geschicklichkeit: 'dex', Konstitution: 'con', Intelligenz: 'int', Weisheit: 'wis', Charisma: 'cha' };
 const NUM = { eineinhalb: 1.5, drei: 3, viereinhalb: 4.5, sechs: 6, siebeneinhalb: 7.5, neun: 9, zwölf: 12, fünfzehn: 15, achtzehn: 18, einundzwanzig: 21, vierundzwanzig: 24, dreißig: 30, sechsunddreißig: 36, sechzig: 60 };
 const num = (t) => (t in NUM ? NUM[t] : parseFloat(String(t).replace(',', '.')));
@@ -122,7 +116,6 @@ function build(list, ed, other = new Map()) {
     seen.add(s.id);
     const r = rangeOf(s.range);
     const classes = [...new Set((s.classes || []).map((c) => CLS[c]).filter(Boolean))];
-    if (ed === '2014' && ARTIFICER.includes(s.id)) classes.push('magieschmied');
     const sp = {
       id: s.id, name: s.de, en: s.en, level: s.level, school: s.school, classes,
       time: s.time, action: actionOf(s.time), range: s.range, rangeKind: r.kind, rangeM: r.m,

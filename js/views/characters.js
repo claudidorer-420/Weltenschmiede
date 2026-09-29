@@ -3,6 +3,7 @@
 // Werte sind fest (Assistent & Stufenaufstieg); änderbar ist der Spielstand. Korrektur-Modus für Ausnahmen.
 import { html, useState, useEffect, useRef, useMemo } from '../lib/preact.js';
 import { useStore } from '../core/store.js';
+import { rulesState } from '../core/rulesets.js';
 import { app, myUid, isRealGM, openCampaign } from '../core/app.js';
 import { db } from '../core/db.js';
 import { openView } from '../core/workspace.js';
@@ -165,6 +166,7 @@ const TABS = [
 ];
 
 export function CharacterSheet({ id, owner }) {
+  useStore(rulesState, (s) => s.rev); // Regelpakete der Kampagne geändert → neu zeichnen
   const path = owner ? `users/${owner}/characters` : null;
   const remote = useDoc(path, id);
   const me = useStore(app, (s) => s.user?.uid);
@@ -1003,10 +1005,10 @@ function FeaturesTab({ c, ed, canEdit, upd, units }) {
   return html`<div class="stack">
     ${(c.classes || []).map((x) => {
       const cls = findClass(x.cls);
-      const feats = classFeatures(x.cls, ed, x.level).filter((f) => f.kind !== 'asi' && f.kind !== 'boon');
+      const feats = classFeatures(x.cls, ed, x.level, 1, x.subclass).filter((f) => f.kind !== 'asi' && f.kind !== 'boon');
       return html`<div class="sheet-card stack sm">
         <h3><${Icon} name="shield" size=${13} />${cls?.name} ${x.level}${x.subclass ? ` · ${x.subclass}` : ''}</h3>
-        <div class="feat-list">${feats.map((f) => html`<div><b>St. ${f.level} · ${f.kind === 'sub' ? (x.subclass ? `${x.subclass}: Merkmal` : f.name) : f.name}</b>${f.desc && f.kind !== 'sub' ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>
+        <div class="feat-list">${feats.map((f) => html`<div><b>St. ${f.level} · ${f.kind === 'sub' ? (x.subclass ? `${x.subclass}: Merkmal` : f.name) : f.kind === 'subfeature' ? `${x.subclass}: ${f.name}` : f.name}</b>${f.desc && f.kind !== 'sub' ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>
       </div>`;
     })}
     ${sp ? html`<div class="sheet-card stack sm">

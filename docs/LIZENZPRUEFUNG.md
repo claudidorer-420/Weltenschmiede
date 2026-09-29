@@ -14,13 +14,19 @@ für Urheber- und Markenrecht die rot markierten Punkte und den Produktnamen bes
 | 🟢 | Symbole | game-icons.net (CC BY 3.0) | Namensnennung vorhanden |
 | 🟢 | Bibliotheken | Preact (MIT), htm (Apache 2.0), Firebase SDK (Apache 2.0), Anthropic SDK (MIT) | in `LIZENZEN.md` gelistet |
 | 🟢 | Eigene Tabellen, Vorlagen, Demo-Texte, Regelzusammenfassungen | eigene Formulierungen | – |
-| 🔴 | Monsternamen-Listen und „Welten“ (`js/data/monsternames.js`, `js/data/origins.js`) | fremde Marken + Nicht-SRD-Namen | ca. ½ Tag |
-| 🔴 | Charaktererschaffung (`js/data/chargen.js`) | großteils Spielerhandbuch + Erweiterungsbände | ca. 2–4 Tage |
-| 🔴 | Markennennungen in der Oberfläche („D&D“, „Spielerhandbuch“, „Taschas Kessel“ …) | nach SRD-Lizenz unzulässig | ca. ½ Tag |
-| 🟡 | Produktname „Weltenschmiede“ | wird bereits anderweitig genutzt | Markenrecherche |
+| 🟢 | Monsternamen-Listen und „Welten“ | Listen entfernt, neutrale Genres, eigene Namenslisten per Import | **erledigt** (29.09.2026) |
+| 🟢 | Charaktererschaffung (`js/data/chargen.js`) | nur noch SRD 5.1/5.2.1; alles Weitere über Regelpakete der Spielleitung | **erledigt** (29.09.2026) |
+| 🟢 | Markennennungen in der Oberfläche | ersetzt durch „5E-kompatibel“, „Regeln 2014/2024“ | **erledigt** (29.09.2026) |
+| 🟡 | Produktname „Weltenschmiede“ | wird bereits anderweitig genutzt | Markenrecherche, Vorschläge unten |
 
 Gesamtaufwand für eine verkaufsfähige Fassung: **etwa 4–6 Arbeitstage**, der größte Teil davon ist der Umbau der
 Charaktererschaffung auf „SRD + eigene Inhalte“.
+
+**Stand 29.09.2026:** Die roten Punkte sind umgesetzt. Die App liefert nur noch den SRD-Grundbestand; eigene oder
+anderswo gekaufte Regeln bringen Spielleitungen als **Regelpaket** mit (Regelwerk-Editor, Import/Export im Format
+`weltenschmiede-regeln`), Kreaturen und Namenslisten ebenso (`weltenschmiede-kreaturen`, `weltenschmiede-namen`).
+Was Nutzer selbst eintragen oder importieren, liegt in ihrer Verantwortung – der Editor weist darauf hin. Offen ist
+nur noch der Produktname (Abschnitt 4).
 
 ## 🔴 1. Monsternamen und Monster-Welten
 
@@ -108,6 +114,21 @@ Der Name wird bereits genutzt: u. a. eine andere Rollenspiel-Kampagnen-Webapp na
 Forenbereich auf fantasy-foren.de und ein Spieleentwickler von 1990. Vor dem Verkauf im DPMA-Register und in TMview
 (EUIPO) nach eingetragenen Marken in den Klassen 9, 41 und 42 suchen; ggf. einen unterscheidungskräftigeren Namen
 wählen oder den Namen selbst als Marke anmelden.
+
+**Englische Namensvorschläge** (Websuche und DNS-Abfrage am 29.09.2026 – ersetzt keine Markenrecherche in
+DPMA, TMview/EUIPO, USPTO und WIPO Global Brand Database, Klassen 9, 41, 42):
+
+| Name | Idee | Funde im Netz | Domains .com / .app / .io |
+|---|---|---|---|
+| **Tavernwright** | „wright“ = Handwerker; die Taverne als Treffpunkt der Gruppe | keine | alle frei |
+| **Hexhearth** | Hex (Karten, Magie) + Herd (Runde am Tisch) | nur ein Instagram-Konto „Hex & Hearth“ (Briefpapier) | alle frei |
+| **Sagahearth** | Sagen am Lagerfeuer | keine | alle frei |
+| **Mythhearth** | Mythen am Herd | keine | alle frei |
+| **Sigilwright** | Siegel-Schmied | keine; aber „Sigil“ ist auch eine Stadt eines bekannten Rollenspiel-Settings – eher meiden | alle frei |
+| Realmhearth | Reich + Herd | Begriff aus einer Web-Novel | .com frei |
+
+Bereits vergeben bzw. zu nah an bestehenden Produkten: Worldforge, Realmwright (Worldbuilding-App), Loresmith,
+Lorewright, Questsmith, Sagaforge (KI-Spielleiter), Mythwright, Tomewright, Loreloom, alles mit „Anvil“ (World Anvil).
 
 ## 🟢 5. Was sauber ist – und warum
 

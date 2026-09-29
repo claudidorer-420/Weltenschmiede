@@ -275,7 +275,7 @@ export async function openBattle() {
   if (r === 'new') {
     const f = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neue Kampfkarte', icon: 'castle' });
     if (!f) return;
-    const id = await db.add(col('maps'), newScrawlMap(f));
+    const id = await db.add(col('maps'), newScrawlMap({ ...f, party: (await loadParty().catch(() => [])).length || 4 }));
     openView('map', { id, title: f.name });
     return;
   }
@@ -314,7 +314,7 @@ export function MapsView({ tabId, active }) {
   const createScrawl = async () => {
     const r = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neue Karte', icon: 'castle' });
     if (!r) return;
-    const id = await db.add(col('maps'), newScrawlMap(r));
+    const id = await db.add(col('maps'), newScrawlMap({ ...r, party: (await loadParty().catch(() => [])).length || 4 }));
     openView('map', { id, title: r.name });
   };
   // Bildkarte: Bild hochladen, Raster erkennen, als bespielbare Karte anlegen

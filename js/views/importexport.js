@@ -15,7 +15,7 @@ import { now, download, dataURLToBlob, readFileAsText } from '../lib/util.js';
 
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', avif: 'image/avif' };
 const SKIP = /(^|\/)(\.obsidian|\.trash|\.git|__MACOSX|node_modules)(\/|$)|(^|\/)\.DS_Store$/;
-const COLLS = ['notes', 'secrets', 'trash', 'files', 'sessions', 'quests', 'maps', 'pins', 'tokens', 'handouts', 'monsters', 'npcs', 'kills', 'encounters', 'combat', 'gm', 'chat', 'posts', 'party'];
+const COLLS = ['notes', 'secrets', 'trash', 'files', 'sessions', 'quests', 'maps', 'pins', 'tokens', 'handouts', 'monsters', 'npcs', 'kills', 'encounters', 'rules', 'combat', 'gm', 'chat', 'posts', 'party'];
 
 async function entriesFromZip(file) {
   const zip = await readZip(await file.arrayBuffer());

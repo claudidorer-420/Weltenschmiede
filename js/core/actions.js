@@ -7,7 +7,7 @@ import { roll, rollDie, rollDetailed } from '../lib/dice.js';
 import { now, uid } from '../lib/util.js';
 import { charMods, findWeapon, weaponAttack, spellSlots, resourcesFor, classLevel } from '../data/chargen.js';
 import { WEAPON_RANGE, weaponReach } from '../data/items.js';
-import { loadSpells, damageAt, healAt, healHasMod, fmtDice, levelName, schoolName, rangeShort } from '../data/spells.js';
+import { loadSpells, damageAt, healAt, healHasMod, fmtDice, levelName, schoolName, rangeShort, SPELL_OVERLAY } from '../data/spells.js';
 import { specFor } from '../data/spellfx.js';
 import { DAMAGE_ART } from '../data/artmap.js';
 import { normalizeMonster } from '../ui/statblock.js';
@@ -148,7 +148,7 @@ export function monsterSlotOptions(c, a) {
 }
 const SPELLS = {};
 export async function spellsFor(ed) {
-  if (!SPELLS[ed]) SPELLS[ed] = await loadSpells(ed);
+  if (!SPELLS[ed] || SPELLS[`rev${ed}`] !== SPELL_OVERLAY.rev) { SPELLS[ed] = await loadSpells(ed); SPELLS[`rev${ed}`] = SPELL_OVERLAY.rev; }
   return SPELLS[ed];
 }
 export const spellsCached = (ed) => SPELLS[ed] || null;

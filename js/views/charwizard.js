@@ -3,6 +3,8 @@
 import { html, useState, useMemo, useEffect } from '../lib/preact.js';
 import { SpellManager, casterNeeds, checkSpells, normalizeEntries } from './spellbook.js';
 import { useSpells, spellNeeds } from '../data/spells.js';
+import { useStore } from '../core/store.js';
+import { rulesState } from '../core/rulesets.js';
 import { app, myUid, rulesEdition } from '../core/app.js';
 import { db } from '../core/db.js';
 import { settings } from '../core/settings.js';
@@ -16,7 +18,7 @@ import {
   AB, AB_NAME, AB_SHORT, abMod, profBonus, skillName, ALL_SKILLS, STANDARD_ARRAY, POINT_COST, POINT_BUDGET, fmtDist,
   SPECIES, BACKGROUNDS, ARMOR, ARMOR_TYPE, WEAPONS, LANGUAGES, CLASSES, classesFor, findClass, findSpecies, findBackground, findFeat,
   featsFor, featAsi, perEd, classSkills, classFeatures, subclassLevel, spellSlots, spellcasting, hpAverage, hpBonusPerLevel,
-  charMods, totalLevel, multiclassOk, findArmor, findWeapon, edOf, classLevel, SUBCLASS_DESC,
+  charMods, totalLevel, multiclassOk, findArmor, findWeapon, edOf, classLevel, SUBCLASS_DESC, subclassText, ABILITY_MAX,
 } from '../data/chargen.js';
 
 const CLASS_BLURB = {
@@ -32,7 +34,6 @@ const CLASS_BLURB = {
   zauberer: 'Angeborene Magie im Blut – formt Zauber mit Metamagie.',
   hexenmeister: 'Magie aus einem Pakt mit einem mächtigen Schutzherrn.',
   magier: 'Gelehrter Zauberwirker mit dem größten Zauberrepertoire.',
-  magieschmied: 'Erfinder, der Magie in Gegenstände bannt (2014, Tascha).',
 };
 
 // ───────────────────────── Berechnung ─────────────────────────
@@ -108,7 +109,7 @@ export function finalScores(d) {
   const base = baseScores(d);
   const ob = originBonus(d);
   const out = {};
-  for (const k of AB) out[k] = base[k] == null ? null : Math.min(20, base[k] + ob[k]);
+  for (const k of AB) out[k] = base[k] == null ? null : Math.min(ABILITY_MAX, base[k] + ob[k]);
   if (variantFeatAllowed(d) && d.variantFeat && d.variantFeatAb && featAsi(findFeat(d.variantFeat), d.edition) && out[d.variantFeatAb] != null) out[d.variantFeatAb] = Math.min(20, out[d.variantFeatAb] + 1);
   for (const l of asiLevels(d)) {
     const a = d.asis[l.level];
@@ -431,12 +432,12 @@ function AbilityTable({ d, base, bonus, final }) {
 function StepBasis({ d, set, setEdition }) {
   const campaigns = app.get().campaigns;
   return html`<div class="stack lg">
-    <p class="muted" style="margin:0">Der Assistent führt dich durch die Regeln des Spielerhandbuchs. Werte wie Attribute, Übungen und Trefferpunkte entstehen hier – im Charakterbogen änderst du sie später nur beim Stufenaufstieg.</p>
+    <p class="muted" style="margin:0">Der Assistent führt dich durch die Regeln deiner Kampagne. Werte wie Attribute, Übungen und Trefferpunkte entstehen hier – im Charakterbogen änderst du sie später nur beim Stufenaufstieg.</p>
     <${Field} label="Name"><input class="input" value=${d.name} onInput=${(e) => set({ name: e.target.value })} placeholder="z. B. Thorin Eisenfaust" autoFocus /><//>
-    <${Field} label="Regelwerk" hint=${d.edition === '2024' ? 'Spielerhandbuch 2024: Attributsboni und ein Herkunftstalent kommen vom Hintergrund, die Spezies gibt Merkmale.' : 'Spielerhandbuch 2014: Attributsboni kommen vom Volk, der Hintergrund gibt Fertigkeiten, Werkzeuge und ein Merkmal.'}>
+    <${Field} label="Regelwerk" hint=${d.edition === '2024' ? 'Regeln 2024: Attributsboni und ein Herkunftstalent kommen vom Hintergrund, die Spezies gibt Merkmale.' : 'Regeln 2014: Attributsboni kommen vom Volk, der Hintergrund gibt Fertigkeiten, Werkzeuge und ein Merkmal.'}>
       ${app.get().cid
-        ? html`<div class="row"><span class="badge accent">D&D 5e (${d.edition})</span><span class="small muted">vorgegeben durch die Kampagne „${app.get().campaign?.name || ''}“</span></div>`
-        : html`<${Segmented} value=${d.edition} onChange=${setEdition} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} />`}
+        ? html`<div class="row"><span class="badge accent">Regeln ${d.edition}</span><span class="small muted">vorgegeben durch die Kampagne „${app.get().campaign?.name || ''}“</span></div>`
+        : html`<${Segmented} value=${d.edition} onChange=${setEdition} options=${[{ value: '2014', label: 'Regeln 2014' }, { value: '2024', label: 'Regeln 2024' }]} />`}
     <//>
     <div class="grid two">
       <${Field} label="Startstufe" hint="Normal ist Stufe 1. Bei höheren Stufen gibt es Trefferpunkte nach Durchschnitt, und du triffst die Aufstiegs-Entscheidungen im Schritt „Talente & Stufen“.">
@@ -464,7 +465,7 @@ function StepKlasse({ d, set }) {
   return html`<div class="stack lg">
     <div class="pick-grid">${classesFor(d.edition).map((c) => html`<${Pick} key=${c.key} active=${d.cls === c.key}
       onClick=${() => set({ cls: c.key, subclass: '', style: '', classSkills: [], expertise: [], asis: {}, weapons: [], weaponsTouched: false, armorBody: '', shield: false, equipClass: 'A' })}
-      title=${c.name} badge=${`W${c.hd}`} sub=${CLASS_BLURB[c.key]}>
+      title=${c.name} badge=${`W${c.hd}`} sub=${CLASS_BLURB[c.key] || c.desc || ""}>
       <span class="tiny faint">${c.primary.map((k) => AB_NAME[k]).join(' / ')} · Rettung ${c.saves.map((k) => AB_SHORT[k]).join(' & ')}</span>
     <//>`)}</div>
     ${cls ? html`<div class="card stack">
@@ -480,7 +481,7 @@ function StepKlasse({ d, set }) {
       ${d.level >= subLvl ? html`<${Field} label=${`${cls.subLabel} (ab Stufe ${subLvl})`}>
         <${BG3Pick} compact value=${d.subclass || ''} onChange=${(v) => set({ subclass: v })}
           empty=${`Wähle links ${cls.subLabel === 'Eid' ? 'einen Eid' : `eine ${cls.subLabel}`} – hier steht, was sie ausmacht.`}
-          items=${(cls.subclasses[d.edition] || cls.subclasses[2014]).map((s) => ({ key: s, name: s, desc: SUBCLASS_DESC[s] || '' }))} />
+          items=${(cls.subclasses[d.edition] || cls.subclasses[2014] || []).map((s) => ({ key: s, name: s, desc: subclassText(cls.key, s) }))} />
       <//>` : html`<div class="small faint">${cls.subLabel} wählst du auf Stufe ${subLvl}.</div>`}
       ${cls.style && d.level >= cls.style ? html`<${Field} label="Kampfstil">
         <${BG3Pick} compact value=${d.style || ''} onChange=${(v) => set({ style: v })} empty="Wähle links einen Kampfstil – hier steht, was er bewirkt."
@@ -594,7 +595,7 @@ function StepAttribute({ d, set }) {
 
     ${d.edition === '2014' && sp ? html`<div class="card stack sm">
       <b>Attributswerterhöhung durch das Volk</b>
-      ${ts.amounts.length && ts.amounts.length < 6 ? html`<${Toggle} checked=${d.tasha} onChange=${(v) => set({ tasha: v, tashaAssign: [], asiPicks: [] })} label="Boni frei verteilen (Optionale Regel aus Taschas Kessel)" />` : null}
+      ${ts.amounts.length && ts.amounts.length < 6 ? html`<${Toggle} checked=${d.tasha} onChange=${(v) => set({ tasha: v, tashaAssign: [], asiPicks: [] })} label="Boni frei verteilen (Hausregel)" />` : null}
       ${d.tasha && ts.amounts.length < 6 ? html`<div class="row">${ts.amounts.map((amt, i) => html`<label class="small">+${amt} auf <${Select} class="sm" value=${d.tashaAssign[i] || ''} onChange=${(v) => { const a = [...d.tashaAssign]; a[i] = v; set({ tashaAssign: a }); }} options=${[{ value: '', label: '–' }, ...AB.map((k) => ({ value: k, label: AB_NAME[k] }))]} /></label>`)}</div>`
         : html`<div class="small muted">${Object.entries(ts.fixed).map(([k, v]) => `${AB_NAME[k]} +${v}`).join(', ') || '–'}</div>
           ${ts.choice ? html`<div class="stack sm"><span class="small">Wähle ${ts.choice.n} × +${ts.choice.amount}:</span><div class="chips">${AB.filter((k) => !(ts.choice.exclude || []).includes(k)).map((k) => {
@@ -839,6 +840,7 @@ const STEPS = [
 ];
 
 function CharWizard({ close, campaignId }) {
+  useStore(rulesState, (s) => s.rev); // eigene Regeln der Kampagne
   const [d, setD] = useState(() => blankDraft(campaignId));
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -940,6 +942,7 @@ export function applyLevelUp(c, lu) {
 }
 
 function LevelUp({ c, close }) {
+  useStore(rulesState, (s) => s.rev);
   const ed = edOf(c);
   const total = totalLevel(c);
   const [clsKey, setClsKey] = useState(c.classes?.[0]?.cls || '');
@@ -958,7 +961,7 @@ function LevelUp({ c, close }) {
   const entry = c.classes?.find((x) => x.cls === clsKey);
   const newLvl = (entry?.level || 0) + 1;
   const isNew = !entry;
-  const feats = cls ? classFeatures(clsKey, ed, newLvl, newLvl) : [];
+  const feats = cls ? classFeatures(clsKey, ed, newLvl, newLvl, entry?.subclass) : [];
   const needSub = cls && newLvl === subclassLevel(clsKey, ed) && !entry?.subclass;
   const asiF = feats.find((f) => f.kind === 'asi' || f.kind === 'boon');
   const needStyle = cls?.style && newLvl === cls.style && !(c.feats || []).some((f) => f.key.startsWith('style-'));
@@ -1021,8 +1024,8 @@ function LevelUp({ c, close }) {
         ${feats.filter((f) => f.kind === 'feature').length ? html`<div class="feat-list">${feats.filter((f) => f.kind === 'feature').map((f) => html`<div><b>${f.name}</b>${f.desc ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>` : null}
         ${nextX && (nextX.count !== prevX?.count || nextX.cantrips !== prevX?.cantrips) ? html`<div class="small accent-text">Zauber: ${nextX.cantrips} Zaubertricks, ${nextX.count} Zauber ${nextX.mode}${prevX ? ` (vorher ${prevX.cantrips} / ${prevX.count})` : ''}</div>` : null}
         ${needSub ? html`<${Field} label=${cls.subLabel}><${BG3Pick} compact value=${sub} onChange=${setSub}
-          items=${(cls.subclasses[ed] || cls.subclasses[2014]).map((s) => ({ key: s, name: s, desc: SUBCLASS_DESC[s] || '' }))} /><//>` : null}
-        ${feats.some((f) => f.kind === 'sub') && !needSub ? html`<div class="small muted">Neues Merkmal deiner Unterklasse ${entry?.subclass ? `(${entry.subclass})` : ''} – Details im Spielerhandbuch.</div>` : null}
+          items=${(cls.subclasses[ed] || cls.subclasses[2014] || []).map((s) => ({ key: s, name: s, desc: subclassText(cls.key, s) }))} /><//>` : null}
+        ${feats.some((f) => f.kind === 'sub') && !needSub ? html`<div class="small muted">Neues Merkmal deiner Unterklasse ${entry?.subclass ? `(${entry.subclass})` : ''} – Details in den Regeln deiner Kampagne.</div>` : null}
         ${needStyle ? html`<${Field} label="Kampfstil"><${BG3Pick} compact value=${style} onChange=${setStyle}
           empty="Wähle links einen Kampfstil – hier steht, was er bewirkt." items=${styleItems(ed, clsKey)} /><//>` : null}
         ${asiF ? html`<div class="stack sm">

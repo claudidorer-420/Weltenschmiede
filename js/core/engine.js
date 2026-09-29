@@ -128,6 +128,9 @@ function monsterBase(sb) {
 function speciesResist(char, ed) {
   const sp = findSpecies(ed, char.speciesKey);
   if (!sp) return [];
+  // Spezies aus Regelpaketen tragen ihre Resistenzen selbst (resist bei Spezies, Unterart oder Auswahl)
+  const own = [...(sp.resist || []), ...((sp.subs || []).find((s) => s.key === char.subspeciesKey)?.resist || []), ...((sp.option?.list || []).find((o) => o.key === char.speciesOption)?.resist || [])];
+  if (own.length) return [...new Set(own)];
   if (sp.key === 'dwarf') return ['poison'];
   if (sp.key === 'aasimar') return ['necrotic', 'radiant'];
   if (sp.key === 'tiefling') {

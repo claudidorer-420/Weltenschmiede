@@ -284,7 +284,7 @@ export function durationRounds(sp) {
 // Kampfwirkung eines Zaubers für ein Regelwerk (Daten + Ergänzungen)
 export function specFor(sp, ed = '2014') {
   if (!sp) return null;
-  const raw = SPELLFX[sp.en] || {};
+  const raw = SPELLFX[sp.en] || sp.fx || {}; // eigene Zauber aus Regelpaketen bringen ihre Kampfwirkung als fx mit
   const e = ed === '2024' ? raw.e24 : raw.e14;
   const x = { ...raw, ...(e || {}) };
   delete x.e14;

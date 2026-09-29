@@ -22,7 +22,8 @@ import { normalizeMonster, monsterToMarkdown } from '../ui/statblock.js';
 import { useCol } from '../core/hooks.js';
 import { uid, now, sortBy, debounce, fmtDate } from '../lib/util.js';
 import { crToNumber } from '../data/rules5e.js';
-import { ORIGINS, namesFor, matchNames, hasNameList, originOf, originShort } from '../data/origins.js';
+import { ORIGINS, namesFor, matchNames, hasNameList, originOf, originShort, normOrigin, DND } from '../data/origins.js';
+import { ensureMonsterLib, libState, saveToLibrary } from '../core/monsterlib.js';
 
 const ENVIRONMENTS = ['Wald', 'Höhle', 'Ruine', 'Sumpf', 'Gebirge', 'Stadtgassen', 'Taverne', 'Schiff', 'Wüste', 'Friedhof', 'Tempel', 'Kanalisation', 'Brücke', 'Schneesturm'];
 const GOALS = ['Kampf bis zum Tod', 'Hinterhalt', 'Verteidigung', 'Flucht', 'Boss-Kampf', 'Welle um Welle', 'Ritual unterbrechen', 'Geisel befreien', 'Verfolgungsjagd'];
@@ -34,12 +35,13 @@ const defaultDraft = () => ({ levels: [5, 5, 5, 5], monsters: [blankMonster()], 
 // damit die Gegnerzeile frei startet (Genre und Name sind jetzt Freitext).
 function migrateDraft(d) {
   if (!d?.monsters?.length) return d;
-  if (!d.monsters.some((m) => m.origin === 'Standard D&D (5e)')) return d;
+  if (!d.monsters.some((m) => m.origin === 'Standard D&D (5e)' || m.origin === DND)) return d;
   return { ...d, monsters: [blankMonster()] };
 }
 
-// Namensfeld mit Suchliste: Monster der gewählten Welt (Wiki-Listen, bei D&D SRD + offizielle Bücher) und das eigene Bestiarium
+// Namensfeld mit Suchliste: Monster des gewählten Genres (SRD bzw. eigene Namenslisten), das Bestiarium der Kampagne und „Meine Kreaturen“
 function MonsterNameInput({ value, origin, onChange, bestiary }) {
+  const nameRev = useStore(libState, (s) => s.rev);
   const [open, setOpen] = useState(false);
   const [list, setList] = useState(null);
   const [act, setAct] = useState(0);
@@ -59,9 +61,9 @@ function MonsterNameInput({ value, origin, onChange, bestiary }) {
     setList(null);
     namesFor(origin).then((l) => alive && setList(l)).catch(() => alive && setList([]));
     return () => { alive = false; };
-  }, [origin]);
+  }, [origin, nameRev]);
   const own = useMemo(() => (bestiary || [])
-    .filter((b) => !hasNameList(origin) || originOf(b) === origin)
+    .filter((b) => !hasNameList(origin) || originOf(b) === normOrigin(origin))
     .map((b) => ({ name: b.name, meta: `HG ${b.cr ?? '?'}`, own: true })), [bestiary, origin]);
   const items = useMemo(() => {
     const seen = new Set();
@@ -144,10 +146,14 @@ function JsonEditor({ close, monster }) {
 }
 const editJson = (monster) => openModal(({ close }) => html`<${JsonEditor} close=${close} monster=${monster} />`, { title: 'Statblock bearbeiten', icon: 'pencil', size: 'lg' });
 
+// Speichert ins Bestiarium der Kampagne und – damit man es nie neu erstellen muss – auch in „Meine Kreaturen“
 export async function saveToBestiary(m) {
   const { qty, ...rest } = normalizeMonster(m);
-  await db.add(col('monsters'), { ...rest, origin: m.origin || rest.origin || '', createdAt: now() });
-  toast(`„${rest.name}“ im Bestiarium gespeichert`, 'success', { action: { label: 'Öffnen', onClick: () => openView('bestiary') } });
+  const data = { ...rest, origin: m.origin || rest.origin || '', ...(m.image ? { image: m.image } : {}) };
+  let libId = null;
+  try { libId = await saveToLibrary(data, { quiet: true }); } catch { /* offline o. ä. – Kampagne reicht */ }
+  await db.add(col('monsters'), { ...data, ...(libId ? { libId } : {}), createdAt: now() });
+  toast(`„${rest.name}“ gespeichert – im Bestiarium der Kampagne und in „Meine Kreaturen“`, 'success', { action: { label: 'Öffnen', onClick: () => openView('bestiary') } });
 }
 
 export async function monsterToNote(m) {
@@ -167,7 +173,11 @@ export function EncounterView({ tabId, params = {} }) {
   const [loot, setLoot] = useState(null);
   const gen = useGeneration('encounter');
   const saved = useCol(app.get().cid ? col('encounters') : null);
-  const bestiary = useCol(app.get().cid ? col('monsters') : null);
+  const campMonsters = useCol(app.get().cid ? col('monsters') : null);
+  useEffect(() => { ensureMonsterLib(); }, []);
+  const libMonsters = useStore(libState, (s) => s.monsters);
+  // Kampagne zuerst (gleicher Name → der Statblock der Kampagne gilt), dann „Meine Kreaturen“
+  const bestiary = useMemo(() => (campMonsters ? [...campMonsters, ...(libMonsters || []).filter((l) => !campMonsters.some((c) => c.name.toLowerCase() === String(l.name).toLowerCase()))] : null), [campMonsters, libMonsters]);
   const persist = useMemo(() => debounce((d) => updateSettings({ encounterDraft: d }), 700), []);
   const set = (patch) => setDraft((d) => {
     const n = { ...d, ...patch };
@@ -268,7 +278,7 @@ export function EncounterView({ tabId, params = {} }) {
             </div>
           </div>
 
-          <datalist id="ws-genres">${[...new Set([...ORIGINS, ...(bestiary || []).map((b) => b.origin).filter(Boolean)])].map((o) => html`<option key=${o} value=${o}></option>`)}</datalist>
+          <datalist id="ws-genres">${[...new Set([...ORIGINS, ...(bestiary || []).map((b) => originOf(b)).filter(Boolean)])].map((o) => html`<option key=${o} value=${o}></option>`)}</datalist>
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="ghost" size=${18} />Gegner</h3></div>
             ${draft.monsters.map((m, i) => html`<div class="monster-row" key=${m.id}>
@@ -294,7 +304,7 @@ export function EncounterView({ tabId, params = {} }) {
             <//>
             <${Field} label="Zusatzwünsche"><${AutoTextarea} value=${draft.extra} onInput=${(e) => set({ extra: e.target.value })} minRows=${2} placeholder="z. B. Der Anführer soll eine Hortaktion haben; Silberschwäche wie im Witcher" /><//>
             <div class="row">
-              <span class="badge" title="Regelwerk der Kampagne – festgelegt beim Anlegen">D&D 5e ${version}</span>
+              <span class="badge" title="Regelstand der Kampagne – festgelegt beim Anlegen">Regeln ${version}</span>
               <${Toggle} checked=${draft.paint} onChange=${(v) => set({ paint: v })} label="Bemal-Guide" />
             </div>
           </div>
@@ -425,7 +435,7 @@ export function BestiaryView({ tabId }) {
           </div>
           <div class="card stack">
             <div class="card-head" style="margin:0"><h3><${Icon} name="download" size=${18} />SRD-Monster importieren</h3><span class="grow"></span>${!srd ? html`<${Btn} size="sm" loading=${srdBusy === 'list'} onClick=${loadSrdList}>Liste laden<//>` : null}</div>
-            <div class="tiny faint">Über die freie D&D-5e-API (englische Texte). ${SRD_ATTRIBUTION}</div>
+            <div class="tiny faint">Über die freie SRD-5.1-Schnittstelle dnd5eapi.co (englische Texte). ${SRD_ATTRIBUTION}</div>
             ${srd ? html`<input class="input sm" placeholder="z. B. goblin, owlbear, lich" value=${srdQ} onInput=${(e) => setSrdQ(e.target.value)} />
               <div class="list" style="max-height:300px;overflow:auto">${srd.filter((s) => !srdQ || s.name.toLowerCase().includes(srdQ.toLowerCase())).slice(0, 60).map((s) => html`<div class="list-item" onClick=${() => importSrd(s)}><span class="title">${s.name}</span>${srdBusy === s.index ? html`<${Spinner} size="sm" />` : html`<${Icon} name="plus" size=${14} />`}</div>`)}</div>` : null}
           </div>

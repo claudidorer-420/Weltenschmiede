@@ -30,8 +30,8 @@ export async function loadSampleCampaign() {
 }
 
 const EDITIONS = [
-  { value: '2024', label: 'D&D 5e (2024)', desc: 'Aktuelle Regeln: Spielerhandbuch 2024 – Hintergründe geben die Attributswerte, Waffenmeisterschaften, neue Zauber.' },
-  { value: '2014', label: 'D&D 5e (2014)', desc: 'Klassische Regeln: Völker mit Attributsboni, Unterrassen, Encounter-Formel mit Multiplikator.' },
+  { value: '2024', label: 'Regeln 2024', desc: 'Aktuelle Regeln (SRD 5.2.1): Hintergründe geben die Attributswerte, Waffenmeisterschaften, neue Zauber.' },
+  { value: '2014', label: 'Regeln 2014', desc: 'Klassische Regeln (SRD 5.1): Völker mit Attributsboni, Unterrassen, Encounter-Formel mit Multiplikator.' },
 ];
 
 function NewCampaignForm({ close }) {

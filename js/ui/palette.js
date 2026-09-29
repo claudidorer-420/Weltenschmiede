@@ -28,6 +28,7 @@ export const COMMANDS = [
   { label: 'Neue Notiz', icon: 'file-plus', hint: 'Strg+N', gm: true, run: () => newNoteQuick() },
   { label: 'Volltextsuche in allen Notizen', icon: 'search', hint: 'Strg+⇧+F', run: () => showLeftPanel('search') },
   { label: 'Graph-Ansicht', icon: 'graph', hint: 'Strg+G', run: () => openView('graph') },
+  { label: 'Regelwerk-Editor (eigene Regelpakete)', icon: 'layers', gm: true, run: () => openView('rulebuilder') },
   { label: 'Startseite', icon: 'home', run: () => openView('home') },
   { label: 'Weltenschmiede (KI-Weltenbau)', icon: 'anvil', gm: true, run: () => openView('forge') },
   { label: 'NPC-Schmiede', icon: 'mask', gm: true, run: () => openView('npc') },

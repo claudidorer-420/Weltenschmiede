@@ -8,7 +8,7 @@ import { generate } from '../core/ai.js';
 import { rulesSystemPrompt } from '../core/prompts.js';
 import { RULES, CONDITIONS, SRD_ATTRIBUTION } from '../data/rules5e.js';
 import { ViewFrame } from '../ui/frame.js';
-import { Icon, Btn, MarkdownView, ModelPicker, Segmented, toast, AutoTextarea } from '../ui/components.js';
+import { Icon, Btn, MarkdownView, ModelPicker, Segmented, toast, AutoTextarea, ViewToggle } from '../ui/components.js';
 
 export function RulesView({ tabId }) {
   const [q, setQ] = useState('');
@@ -49,9 +49,10 @@ export function RulesView({ tabId }) {
 
   return html`<${ViewFrame} tabId=${tabId} title="Regeln">
     <div class="page stack lg">
-      <div class="page-head">
+      <div class="page-head head-tools">
         <h1><${Icon} name="book" size=${24} />Regeln</h1><span class="grow"></span>
-        <span class="badge" title="Regelwerk der Kampagne">D&D 5e ${version}</span>
+        <span class="badge" title="Regelstand der Kampagne">Regeln ${version}</span>
+        ${isGM() ? html`<div class="head-tools-btns"><${ViewToggle} value="rules" options=${[{ value: 'rules', label: 'Regeln', icon: 'book', view: 'rules' }, { value: 'rulebuilder', label: 'Regelwerk-Editor', icon: 'layers', view: 'rulebuilder' }]} /></div>` : null}
       </div>
       <div class="search-box" style="margin:0"><${Icon} name="search" size=${16} /><input class="input" placeholder="Regel suchen (z. B. Deckung, gepackt, Sturz) …" value=${q} onInput=${(e) => setQ(e.target.value)} /></div>
 

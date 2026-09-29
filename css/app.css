@@ -2241,3 +2241,108 @@ body.resizing .sb-resize::after { background: var(--accent); }
 [data-theme="light"] .combat-log .cl-heal, [data-theme="parchment"] .combat-log .cl-heal { color: #1f7a3a; }
 [data-theme="light"] .combat-log .cl-cond, [data-theme="parchment"] .combat-log .cl-cond { color: #6a3fb5; }
 [data-theme="light"] .combat-log .cl-round, [data-theme="parchment"] .combat-log .cl-round { color: #8a5a00; }
+
+/* Schlüsseltresor (Einstellungen → KI) – eigene Klassen, .row.nowrap würde über .nowrap den Zeilenumbruch abschalten */
+.kv-head { display: flex; gap: 12px; align-items: flex-start; }
+.kv-head > .grow { min-width: 0; overflow-wrap: anywhere; }
+.kv-form { display: flex; gap: 8px; align-items: center; }
+.kv-form .input { flex: 1; min-width: 0; }
+@media (max-width: 480px) { .kv-form { flex-direction: column; align-items: stretch; } }
+
+/* ── Regelwerk-Editor (views/rulebuilder.js) ─────────────────────────── */
+/* Spalten richten sich nach dem verfügbaren Platz (Seitenleisten!), nicht nach der Fensterbreite */
+.rb { container-type: inline-size; container-name: rb; }
+.rb .rb-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 18px; align-items: start; }
+.rb-side { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; }
+.rb-packs { display: flex; flex-direction: column; gap: 4px; }
+.rb-pack { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-panel); }
+.rb-pack.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel)); }
+.rb-pack.paused { opacity: 0.65; }
+.rb-pack input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.rb-pack-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: none; border: 0; color: inherit; padding: 2px 0; cursor: pointer; }
+.rb-pack-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.rb-pack-order { display: flex; flex-direction: column; }
+.rb-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; container-name: rbmain; }
+.rb-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rb-title { font-size: 20px; font-weight: 700; flex: 1 1 260px; min-width: 0; }
+.rb-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.rb-tabs button { border: 1px solid transparent; background: none; color: var(--text-2); padding: 5px 10px; border-radius: 999px; font-size: 13px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.rb-tabs button:hover { background: var(--bg-hover); }
+.rb-tabs button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.rb-tabs button span { font-size: 11px; background: var(--bg-2); border-radius: 999px; padding: 0 6px; color: var(--text-3); }
+.rb-warn { color: var(--warning); }
+.rb-cat { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; align-items: start; }
+.rb-cat-list { display: flex; flex-direction: column; gap: 8px; position: sticky; top: 0; }
+.rb-items { display: flex; flex-direction: column; gap: 2px; max-height: 62vh; overflow: auto; }
+.rb-item { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 1px; padding: 6px 8px; border-radius: 8px; border: 1px solid transparent; background: none; color: inherit; cursor: pointer; position: relative; }
+.rb-item:hover { background: var(--bg-hover); }
+.rb-item.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.rb-item .badge { position: absolute; right: 6px; top: 6px; font-size: 10px; }
+.rb-cat-edit { min-width: 0; container-type: inline-size; container-name: rbedit; }
+.rb-edit-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.rb-edit-head h3 { margin: 0; }
+.rb-edit-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.rb-prev-col { position: sticky; top: 0; }
+.rb-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; }
+.rb-form .field { margin: 0 0 8px; min-width: 0; }
+.rb-form .rb-wide { grid-column: 1 / -1; }
+.rb-num { max-width: 110px; }
+.rb-unit { display: inline-flex; align-items: center; gap: 6px; }
+.rb-unit .input { max-width: 110px; }
+.rb-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.rb-chip { border: 1px solid var(--border); background: var(--bg-2); color: var(--text-2); border-radius: 999px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; }
+.rb-chip.small { font-size: 11.5px; padding: 2px 8px; }
+.rb-chip.on { border-color: var(--accent); color: var(--text); background: color-mix(in srgb, var(--accent) 16%, var(--bg-2)); }
+.rb-pairs, .rb-objlist { display: flex; flex-direction: column; gap: 8px; }
+.rb-pair { display: flex; gap: 8px; align-items: flex-start; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); }
+.rb-pair-tools { display: flex; flex-direction: column; gap: 2px; }
+.rb-lvl { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--text-3); width: 64px; flex: none; }
+.rb-obj { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); }
+.rb-obj-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer; }
+.rb-obj-body { padding: 4px 10px 10px; border-top: 1px solid var(--border); }
+.rb-abmap { display: flex; flex-wrap: wrap; gap: 6px; }
+.rb-abmap label { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--text-3); }
+.rb-abmap .input { width: 62px; text-align: center; }
+.rb-levelrow { display: grid; grid-template-columns: repeat(10, minmax(44px, 1fr)); gap: 4px; }
+.rb-levelrow label { display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 10.5px; color: var(--text-3); }
+.rb-levelrow .input { width: 100%; padding: 4px 2px; text-align: center; }
+.rb-section { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.rb-section h4 { margin: 0; display: flex; gap: 6px; align-items: center; }
+.rb-ctable { display: flex; flex-direction: column; gap: 4px; }
+.rb-crow { display: flex; gap: 10px; align-items: flex-start; padding: 5px 6px; border-radius: 8px; }
+.rb-crow:nth-child(odd) { background: var(--bg-2); }
+.rb-clvl { width: 26px; flex: none; text-align: right; padding-top: 3px; color: var(--text-3); }
+.rb-feat { display: inline-flex; align-items: center; border: 1px solid var(--border-2); border-radius: 999px; background: var(--bg-panel); font-size: 12.5px; }
+.rb-feat.on { border-color: var(--accent); }
+.rb-feat button { border: 0; background: none; color: inherit; padding: 3px 4px 3px 10px; cursor: pointer; }
+.rb-feat button.x { padding: 3px 8px 3px 2px; color: var(--text-3); }
+.rb-addfeat { width: 150px; padding: 3px 8px; font-size: 12.5px; }
+.rb-featdesc { display: flex; flex-direction: column; gap: 4px; }
+.rb-preview { border: 1px solid #8a6d3b; border-radius: 12px; padding: 12px; background: linear-gradient(180deg, #2a2219, #15110d); color: #efe3c8; font-size: 13px; line-height: 1.5; }
+.rb-prev-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.rb-prev-h b { font-family: Georgia, serif; font-size: 16px; color: #f6e4b8; }
+.rb-prev-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.rb-prev-chips span { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(224, 178, 74, 0.35); color: #e9c77b; }
+.rb-preview p { margin: 0 0 6px; color: #dccfb2; }
+.rb-prev-table { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.rb-prev-table > div { display: flex; gap: 8px; }
+.rb-prev-table b { width: 20px; text-align: right; color: #b69a64; flex: none; }
+.rb-counts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.rb-count { display: flex; flex-direction: column; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel); color: inherit; cursor: pointer; text-align: left; }
+.rb-count b { font-size: 20px; }
+.rb-count span { font-size: 12px; color: var(--text-3); }
+.rb-baselist { display: flex; flex-direction: column; gap: 2px; max-height: 55vh; overflow: auto; }
+.rb-baserow { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 8px; }
+.rb-baserow:hover { background: var(--bg-hover); }
+.rb-remove { border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
+.rb-remove summary { cursor: pointer; padding: 4px 0; }
+.rb-remove-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 12px; padding: 6px 0; max-height: 50vh; overflow: auto; }
+@container rb (max-width: 860px) { .rb .rb-layout { grid-template-columns: 1fr; } .rb-side { position: static; } }
+@container rbmain (max-width: 760px) { .rb-cat { grid-template-columns: 1fr; } .rb-cat-list { position: static; } .rb-items { max-height: 30vh; } }
+@container rbedit (max-width: 780px) { .rb-edit-grid { grid-template-columns: 1fr; } .rb-prev-col { position: static; order: -1; } }
+@container rbedit (max-width: 560px) { .rb-levelrow { grid-template-columns: repeat(5, minmax(44px, 1fr)); } }
+
+/* Spielersicht der SL (Karte) */
+.map-pv { position: absolute; right: 12px; bottom: 56px; z-index: 6; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--bg-panel) 94%, transparent); color: var(--text); font-size: 12.5px; box-shadow: var(--shadow-sm); cursor: pointer; }
+.map-pv .x { margin-left: 4px; opacity: .7; font-size: 15px; line-height: 1; }
+.map-pv:hover .x { opacity: 1; }

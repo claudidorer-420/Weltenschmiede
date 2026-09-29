@@ -298,7 +298,7 @@ export function MembersView({ tabId }) {
   const share = async (role) => {
     const code = inv?.[role];
     const link = inviteLink(code);
-    const r = await shareText({ title: `Einladung: ${campaign?.name}`, text: `Tritt meiner D&D-Kampagne „${campaign?.name}“ bei${role === 'gm' ? ' (als Co-Spielleitung)' : ''}: Link öffnen, Namen + Geheimwort wählen. Code: ${code}`, url: link });
+    const r = await shareText({ title: `Einladung: ${campaign?.name}`, text: `Tritt meiner Kampagne „${campaign?.name}“ in der Weltenschmiede bei${role === 'gm' ? ' (als Co-Spielleitung)' : ''}: Link öffnen, Namen + Geheimwort wählen. Code: ${code}`, url: link });
     if (r === 'copied') toast('Einladung kopiert', 'success');
   };
   const renew = async (role) => {

@@ -1,6 +1,7 @@
-// Charaktererschaffung nach D&D 5e – Regelstand 2014 (SRD 5.1 / Spielerhandbuch) und 2024 (SRD 5.2 / Spielerhandbuch):
+// Charaktererschaffung für die fünfte Edition – Grundbestand aus SRD 5.1 (Regeln 2014) und SRD 5.2.1 (Regeln 2024):
 // Völker/Spezies, Hintergründe, Klassen, Talente, Rüstungen, Waffen, Zaubertabellen und Rechenhilfen.
-// Alle Beschreibungen sind kurze Zusammenfassungen in eigenen Worten.
+// Alles darüber hinaus kommt aus Regelpaketen der Kampagne (core/rulesets.js) – nie hier eintragen.
+// Beschreibungen sind kurze Zusammenfassungen in eigenen Worten.
 import { SKILLS } from './rules5e.js';
 
 export const AB = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -12,9 +13,20 @@ export const skillName = (k) => SKILLS.find((s) => s.key === k)?.name || k;
 export const skillAbility = (k) => SKILLS.find((s) => s.key === k)?.ability || 'int';
 export const ALL_SKILLS = SKILLS.map((s) => s.key);
 
-export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
-export const POINT_COST = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
-export const POINT_BUDGET = 27;
+// Grundregeln – Regelpakete dürfen sie ändern (setBaseRules, core/rulesets.js); die Bindungen sind live.
+const BASE_RULES = { standardArray: [15, 14, 13, 12, 10, 8], pointCost: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }, pointBudget: 27, abilityMax: 20 };
+export let STANDARD_ARRAY = BASE_RULES.standardArray;
+export let POINT_COST = BASE_RULES.pointCost;
+export let POINT_BUDGET = BASE_RULES.pointBudget;
+export let ABILITY_MAX = BASE_RULES.abilityMax;
+export const baseRules = () => structuredClone(BASE_RULES);
+export function setBaseRules(r) {
+  const x = { ...BASE_RULES, ...(r || {}) };
+  STANDARD_ARRAY = Array.isArray(x.standardArray) && x.standardArray.length === 6 ? x.standardArray.map(Number) : BASE_RULES.standardArray;
+  POINT_COST = x.pointCost && Object.keys(x.pointCost).length ? Object.fromEntries(Object.entries(x.pointCost).map(([k, v]) => [Number(k), Number(v)])) : BASE_RULES.pointCost;
+  POINT_BUDGET = Number(x.pointBudget) || BASE_RULES.pointBudget;
+  ABILITY_MAX = Number(x.abilityMax) || BASE_RULES.abilityMax;
+}
 
 export function fmtDist(ft, units = 'm') {
   if (units === 'ft') return `${ft} ft`;
@@ -27,12 +39,6 @@ const DRAGONS = [['Schwarz', 'Säure'], ['Blau', 'Blitz'], ['Messing', 'Feuer'],
 
 export const SPECIES = {
   2024: [
-    { key: 'aasimar', name: 'Aasimar', size: 'Mittelgroß oder Klein', speed: 30, dark: 60, traits: [
-      ['Himmlischer Widerstand', 'Resistenz gegen nekrotischen und gleißenden Schaden.'],
-      ['Heilende Hände', 'Magie-Aktion, 1× pro langer Rast: eine berührte Kreatur erhält Übungsbonus × W4 TP zurück.'],
-      ['Lichtbringer', 'Du kennst den Zaubertrick Licht (Charisma).'],
-      ['Himmlische Offenbarung (ab Stufe 3)', 'Bonusaktion für 1 Minute: Himmelsflügel, innere Strahlung oder nekrotischer Schleier; einmal pro Zug Zusatzschaden = Übungsbonus.'],
-    ] },
     { key: 'dragonborn', name: 'Drachenblütige', size: 'Mittelgroß', speed: 30, dark: 60, option: { label: 'Drachenahne', list: DRAGONS }, traits: [
       ['Odemwaffe', 'Ersetzt einen Angriff: Kegel 4,5 m oder Linie 9 m, GES-Rettungswurf (SG 8 + KON + ÜB), 1W10 Schaden (2W10 ab 5, 3W10 ab 11, 4W10 ab 17); Übungsbonus-mal pro langer Rast.'],
       ['Schadensresistenz', 'Resistenz gegen die Schadensart deiner Drachenahnen.'],
@@ -106,13 +112,10 @@ export const SPECIES = {
     { key: 'elf', name: 'Elf', asi: { dex: 2 }, size: 'Mittelgroß', speed: 30, dark: 60, skills: ['perception'],
       subs: [
         { key: 'hochelf', name: 'Hochelf', asi: { int: 1 }, traits: [['Elfische Waffenausbildung', 'Langschwert, Kurzschwert, Kurz- und Langbogen.'], ['Zaubertrick', 'Ein Magier-Zaubertrick (INT).'], ['Zusätzliche Sprache', 'Eine weitere Sprache.']] },
-        { key: 'waldelf', name: 'Waldelf', asi: { wis: 1 }, speed: 35, traits: [['Elfische Waffenausbildung', 'Langschwert, Kurzschwert, Kurz- und Langbogen.'], ['Leichtfüßig', 'Bewegung 10,5 m.'], ['Maske der Wildnis', 'Verstecken bei leichter natürlicher Verschleierung.']] },
-        { key: 'drow', name: 'Dunkelelf (Drow)', asi: { cha: 1 }, dark: 120, traits: [['Überlegene Dunkelsicht', '36 m.'], ['Sonnenlichtempfindlichkeit', 'Nachteil auf Angriffe und Wahrnehmung (Sicht) im Sonnenlicht.'], ['Drow-Magie', 'Tanzende Lichter; St. 3 Feenfeuer; St. 5 Dunkelheit.']] },
       ],
       traits: [['Scharfe Sinne', 'Übung in Wahrnehmung.'], ['Feenblut', 'Vorteil gegen Bezauberung, magischer Schlaf wirkt nicht.'], ['Trance', '4 Stunden Meditation ersetzen 8 Stunden Schlaf.']] },
     { key: 'gnome', name: 'Gnom', asi: { int: 2 }, size: 'Klein', speed: 25, dark: 60,
       subs: [
-        { key: 'waldgnom', name: 'Waldgnom', asi: { dex: 1 }, traits: [['Natürlicher Illusionist', 'Zaubertrick Kleine Illusion (INT).'], ['Mit kleinen Tieren sprechen', 'Einfache Verständigung mit kleinen Tieren.']] },
         { key: 'felsgnom', name: 'Felsgnom', asi: { con: 1 }, traits: [['Wissen des Handwerkers', 'Doppelter Übungsbonus auf Geschichte bei magischen/technischen Gegenständen.'], ['Tüftler', 'Baut kleine Uhrwerkgeräte.']] },
       ],
       traits: [['Gnomische Gerissenheit', 'Vorteil auf INT-, WEI- und CHA-Rettungswürfe gegen Magie.']] },
@@ -123,7 +126,6 @@ export const SPECIES = {
     { key: 'halfling', name: 'Halbling', asi: { dex: 2 }, size: 'Klein', speed: 25, dark: 0, luck: true,
       subs: [
         { key: 'leichtfuss', name: 'Leichtfuß', asi: { cha: 1 }, traits: [['Natürlich verstohlen', 'Verstecken hinter größeren Kreaturen.']] },
-        { key: 'robust', name: 'Robust', asi: { con: 1 }, traits: [['Robuste Widerstandskraft', 'Vorteil gegen Gift, Resistenz gegen Giftschaden.']] },
       ],
       traits: [['Glück', 'Eine natürliche 1 bei Angriff, Attributs- oder Rettungswurf würfelst du neu.'], ['Tapfer', 'Vorteil gegen Verängstigt.'], ['Halblingsgewandtheit', 'Bewegung durch den Bereich größerer Kreaturen.']] },
     { key: 'halforc', name: 'Halbork', asi: { str: 2, con: 1 }, size: 'Mittelgroß', speed: 30, dark: 60, skills: ['intimidation'], traits: [
@@ -134,7 +136,6 @@ export const SPECIES = {
     { key: 'human', name: 'Mensch', size: 'Mittelgroß', speed: 30, dark: 0,
       subs: [
         { key: 'standard', name: 'Mensch (Standard)', asi: { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 }, traits: [] },
-        { key: 'variante', name: 'Mensch (Variante)', asiChoice: { n: 2, amount: 1 }, skillAny: 1, feat: true, traits: [['Variante', '+1 auf zwei Attribute, eine Fertigkeit und ein Talent.']] },
       ],
       traits: [] },
     { key: 'tiefling', name: 'Tiefling', asi: { cha: 2, int: 1 }, size: 'Mittelgroß', speed: 30, dark: 60, traits: [
@@ -144,21 +145,9 @@ export const SPECIES = {
     { key: 'dwarf', name: 'Zwerg', asi: { con: 2 }, size: 'Mittelgroß', speed: 25, dark: 60,
       subs: [
         { key: 'huegelzwerg', name: 'Hügelzwerg', asi: { wis: 1 }, hpPerLevel: 1, traits: [['Zwergische Zähigkeit', '+1 TP-Maximum pro Stufe.']] },
-        { key: 'bergzwerg', name: 'Bergzwerg', asi: { str: 2 }, traits: [['Zwergische Rüstungsausbildung', 'Leichte und mittelschwere Rüstung.']] },
       ],
       traits: [['Zwergische Widerstandskraft', 'Vorteil gegen Gift, Resistenz gegen Giftschaden.'], ['Zwergische Kampfausbildung', 'Streitaxt, Handbeil, leichter Hammer, Kriegshammer.'], ['Steingespür', 'Doppelter Übungsbonus auf Geschichte bei Steinmetzarbeiten.'], ['Robust', 'Schwere Rüstung verringert deine Bewegung nicht.']] },
-    { key: 'aasimar', name: 'Aasimar', asi: { cha: 2, wis: 1 }, size: 'Mittelgroß', speed: 30, dark: 60, traits: [
-      ['Himmlischer Widerstand', 'Resistenz gegen nekrotischen und gleißenden Schaden.'],
-      ['Heilende Hände', 'Aktion, 1× pro langer Rast: Stufe viele TP heilen.'],
-      ['Lichtbringer', 'Zaubertrick Licht (CHA).'],
-    ] },
-    { key: 'goliath', name: 'Goliath', asi: { str: 2, con: 1 }, size: 'Mittelgroß', speed: 30, dark: 0, skills: ['athletics'], traits: [
-      ['Naturtalent Athletik', 'Übung in Athletik.'],
-      ['Steinerne Ausdauer', 'Reaktion, 1× pro kurzer Rast: Schaden um 1W12 + KON verringern.'],
-      ['Kräftiger Körperbau', 'Zählt beim Tragen als eine Größe größer.'],
-      ['Bergbewohner', 'Akklimatisiert an Höhe und Kälte.'],
-    ] },
-    { key: 'custom', name: 'Eigenes Volk (Tascha-Regel)', asiChoice: { n: 1, amount: 2 }, size: 'Mittelgroß oder Klein', speed: 30, dark: 60, skillAny: 1, feat: true, traits: [['Eigene Abstammung', '+2 auf ein Attribut, ein Talent, eine Fertigkeit, Dunkelsicht 18 m.']] },
+    { key: 'custom', name: 'Eigenes Volk (Hausregel)', asiChoice: { n: 1, amount: 2 }, size: 'Mittelgroß oder Klein', speed: 30, dark: 60, skillAny: 1, feat: true, traits: [['Eigene Abstammung', '+2 auf ein Attribut, ein Talent, eine Fertigkeit, Dunkelsicht 18 m.']] },
   ],
 };
 
@@ -166,36 +155,12 @@ export const SPECIES = {
 export const BACKGROUNDS = {
   2024: [
     { key: 'acolyte', name: 'Tempeldiener', abilities: ['int', 'wis', 'cha'], feat: 'magic-initiate-cleric', skills: ['insight', 'religion'], tool: 'Kalligrafiewerkzeug', equip: 'Kalligrafiewerkzeug, Buch (Gebete), Heiliges Symbol, Pergament (10 Blatt), Robe, 8 GM' },
-    { key: 'artisan', name: 'Handwerker', abilities: ['str', 'dex', 'int'], feat: 'crafter', skills: ['investigation', 'persuasion'], tool: 'Handwerkerwerkzeug nach Wahl', equip: 'Handwerkerwerkzeug, 2 Beutel, Reisekleidung, 32 GM' },
-    { key: 'charlatan', name: 'Scharlatan', abilities: ['dex', 'con', 'cha'], feat: 'skilled', skills: ['deception', 'sleight'], tool: 'Fälscherwerkzeug', equip: 'Fälscherwerkzeug, Kostüm, feine Kleidung, 15 GM' },
     { key: 'criminal', name: 'Krimineller', abilities: ['dex', 'con', 'int'], feat: 'alert', skills: ['sleight', 'stealth'], tool: 'Diebeswerkzeug', equip: '2 Dolche, Diebeswerkzeug, Brecheisen, 2 Beutel, Reisekleidung, 16 GM' },
-    { key: 'entertainer', name: 'Unterhaltungskünstler', abilities: ['str', 'dex', 'cha'], feat: 'musician', skills: ['acrobatics', 'performance'], tool: 'Musikinstrument nach Wahl', equip: 'Musikinstrument, 2 Kostüme, Spiegel, Parfüm, Reisekleidung, 11 GM' },
-    { key: 'farmer', name: 'Bauer', abilities: ['str', 'con', 'wis'], feat: 'tough', skills: ['animal', 'nature'], tool: 'Zimmermannswerkzeug', equip: 'Sichel, Zimmermannswerkzeug, Heilerausrüstung, Eisentopf, Schaufel, Reisekleidung, 30 GM' },
-    { key: 'guard', name: 'Wache', abilities: ['str', 'int', 'wis'], feat: 'alert', skills: ['athletics', 'perception'], tool: 'Spielset nach Wahl', equip: 'Speer, leichte Armbrust, 20 Bolzen, Spielset, Kapuzenlaterne, Handschellen, Köcher, Reisekleidung, 12 GM' },
-    { key: 'guide', name: 'Führer', abilities: ['dex', 'con', 'wis'], feat: 'magic-initiate-druid', skills: ['stealth', 'survival'], tool: 'Kartografenwerkzeug', equip: 'Kurzbogen, 20 Pfeile, Kartografenwerkzeug, Schlafsack, Köcher, Zelt, Reisekleidung, 3 GM' },
-    { key: 'hermit', name: 'Einsiedler', abilities: ['con', 'wis', 'cha'], feat: 'healer', skills: ['medicine', 'religion'], tool: 'Kräuterkundeausrüstung', equip: 'Kampfstab, Kräuterkundeausrüstung, Schlafsack, Buch (Philosophie), Lampe, Öl (3 Flaschen), Reisekleidung, 16 GM' },
-    { key: 'merchant', name: 'Händler', abilities: ['con', 'int', 'cha'], feat: 'lucky', skills: ['animal', 'persuasion'], tool: 'Navigatorwerkzeug', equip: 'Navigatorwerkzeug, 2 Beutel, Reisekleidung, 22 GM' },
-    { key: 'noble', name: 'Adliger', abilities: ['str', 'int', 'cha'], feat: 'skilled', skills: ['history', 'persuasion'], tool: 'Spielset nach Wahl', equip: 'Spielset, feine Kleidung, Parfüm, 29 GM' },
     { key: 'sage', name: 'Weiser', abilities: ['con', 'int', 'wis'], feat: 'magic-initiate-wizard', skills: ['arcana', 'history'], tool: 'Kalligrafiewerkzeug', equip: 'Kampfstab, Kalligrafiewerkzeug, Buch (Geschichte), Pergament (8 Blatt), Robe, 8 GM' },
-    { key: 'sailor', name: 'Seefahrer', abilities: ['str', 'dex', 'wis'], feat: 'tavern-brawler', skills: ['acrobatics', 'perception'], tool: 'Navigatorwerkzeug', equip: 'Dolch, Navigatorwerkzeug, Seil, Reisekleidung, 20 GM' },
-    { key: 'scribe', name: 'Schreiber', abilities: ['dex', 'int', 'wis'], feat: 'skilled', skills: ['investigation', 'perception'], tool: 'Kalligrafiewerkzeug', equip: 'Kalligrafiewerkzeug, feine Kleidung, Lampe, Öl (3 Flaschen), Pergament (12 Blatt), 23 GM' },
     { key: 'soldier', name: 'Soldat', abilities: ['str', 'dex', 'con'], feat: 'savage-attacker', skills: ['athletics', 'intimidation'], tool: 'Spielset nach Wahl', equip: 'Speer, Kurzbogen, 20 Pfeile, Spielset, Heilerausrüstung, Köcher, Reisekleidung, 14 GM' },
-    { key: 'wayfarer', name: 'Wanderer', abilities: ['dex', 'wis', 'cha'], feat: 'lucky', skills: ['insight', 'stealth'], tool: 'Diebeswerkzeug', equip: '2 Dolche, Diebeswerkzeug, Spielset, Schlafsack, 2 Beutel, Reisekleidung, 16 GM' },
   ],
   2014: [
     { key: 'acolyte', name: 'Tempeldiener', skills: ['insight', 'religion'], languages: 2, feature: 'Zuflucht der Gläubigen', equip: 'Heiliges Symbol, Gebetbuch, 5 Räucherstäbchen, Gewänder, gewöhnliche Kleidung, 15 GM' },
-    { key: 'charlatan', name: 'Scharlatan', skills: ['deception', 'sleight'], tool: 'Verkleidungs- und Fälscherwerkzeug', feature: 'Falsche Identität', equip: 'Feine Kleidung, Verkleidungswerkzeug, Schwindlerwerkzeug, 15 GM' },
-    { key: 'criminal', name: 'Krimineller', skills: ['deception', 'stealth'], tool: 'Spielset, Diebeswerkzeug', feature: 'Kontakt zur Unterwelt', equip: 'Brecheisen, dunkle Kleidung mit Kapuze, 15 GM' },
-    { key: 'entertainer', name: 'Unterhaltungskünstler', skills: ['acrobatics', 'performance'], tool: 'Verkleidungswerkzeug, Musikinstrument', feature: 'Auf vielfachen Wunsch', equip: 'Musikinstrument, Andenken eines Bewunderers, Kostüm, 15 GM' },
-    { key: 'folkhero', name: 'Volksheld', skills: ['animal', 'survival'], tool: 'Handwerkerwerkzeug, Landfahrzeuge', feature: 'Rustikale Gastfreundschaft', equip: 'Handwerkerwerkzeug, Schaufel, Eisentopf, gewöhnliche Kleidung, 10 GM' },
-    { key: 'guildartisan', name: 'Gildenhandwerker', skills: ['insight', 'persuasion'], tool: 'Handwerkerwerkzeug', languages: 1, feature: 'Gildenmitgliedschaft', equip: 'Handwerkerwerkzeug, Empfehlungsschreiben der Gilde, Reisekleidung, 15 GM' },
-    { key: 'hermit', name: 'Einsiedler', skills: ['medicine', 'religion'], tool: 'Kräuterkundeausrüstung', languages: 1, feature: 'Entdeckung', equip: 'Schriftrollenhülle mit Notizen, Winterdecke, gewöhnliche Kleidung, Kräuterkundeausrüstung, 5 GM' },
-    { key: 'noble', name: 'Adliger', skills: ['history', 'persuasion'], tool: 'Spielset', languages: 1, feature: 'Privilegierte Stellung', equip: 'Feine Kleidung, Siegelring, Adelsbrief, 25 GM' },
-    { key: 'outlander', name: 'Außenseiter', skills: ['athletics', 'survival'], tool: 'Musikinstrument', languages: 1, feature: 'Wanderer', equip: 'Kampfstab, Jagdfalle, Trophäe, Reisekleidung, 10 GM' },
-    { key: 'sage', name: 'Weiser', skills: ['arcana', 'history'], languages: 2, feature: 'Forscher', equip: 'Tinte, Feder, kleines Messer, Brief mit ungeklärter Frage, gewöhnliche Kleidung, 10 GM' },
-    { key: 'sailor', name: 'Seefahrer', skills: ['athletics', 'perception'], tool: 'Navigatorwerkzeug, Wasserfahrzeuge', feature: 'Überfahrt', equip: 'Belegnagel, 15 m Seidenseil, Glücksbringer, gewöhnliche Kleidung, 10 GM' },
-    { key: 'soldier', name: 'Soldat', skills: ['athletics', 'intimidation'], tool: 'Spielset, Landfahrzeuge', feature: 'Militärischer Rang', equip: 'Rangabzeichen, Trophäe, Spielset, gewöhnliche Kleidung, 10 GM' },
-    { key: 'urchin', name: 'Straßenkind', skills: ['sleight', 'stealth'], tool: 'Verkleidungswerkzeug, Diebeswerkzeug', feature: 'Geheimnisse der Stadt', equip: 'Kleines Messer, Stadtplan, Haustier-Maus, Andenken der Eltern, gewöhnliche Kleidung, 10 GM' },
     { key: 'custom', name: 'Eigener Hintergrund', skillAny: 2, feature: 'Frei nach Absprache', equip: '' },
   ],
 };
@@ -206,87 +171,29 @@ const MENTAL = ['int', 'wis', 'cha'];
 // a14 / a24: Attribute, von denen eines um 1 steigt (Halbtalente), je Regelstand
 export const FEATS = [
   // Herkunft (2024) – in 2014 normale Talente
-  { key: 'alert', name: 'Aufmerksam', cat: 'origin', desc: 'Du bist auf alles gefasst: Auf deine Initiative addierst du deinen Übungsbonus (2014: +5). Außerdem darfst du deine Initiative mit einem einverstandenen Verbündeten tauschen, dessen Wert niedriger ist. 2014 stattdessen: Du kannst nicht überrascht werden, solange du bei Bewusstsein bist, und versteckte oder unsichtbare Gegner haben keinen Vorteil auf Angriffe gegen dich.' },
-  { key: 'crafter', name: 'Handwerker', cat: 'origin', ed: '2024', desc: 'Du wirst in drei Handwerkerwerkzeugen deiner Wahl geübt. Nicht-magische Gegenstände kaufst du 20 % günstiger, und während einer langen Rast stellst du mit passendem Werkzeug einen Gegenstand aus einer Liste einfacher Ausrüstung her (Kletterausrüstung, Seil, Fackeln, Heilerausrüstung und Ähnliches).' },
-  { key: 'healer', name: 'Heiler', cat: 'origin', desc: 'Mit einer Heilerausrüstung heilst du als Aktion eine Kreatur in Reichweite um 1W6 + 4 + ihre Anzahl an Trefferwürfeln; danach braucht sie eine Rast, bevor du sie so erneut heilen kannst. Eine 1 auf einem deiner Heilwürfel darfst du immer neu würfeln, das neue Ergebnis zählt. Sterbende stabilisierst du mit derselben Ausrüstung als Bonusaktion.' },
-  { key: 'lucky', name: 'Glückspilz', cat: 'origin', fx: { lucky: true }, desc: 'Du hast Glückspunkte, die sich mit einer langen Rast auffrischen – 2014 drei, 2024 so viele wie dein Übungsbonus. 2014: Gib einen Punkt aus, um einen zusätzlichen W20 zu einem eigenen Angriffs-, Attributs- oder Rettungswurf zu würfeln und dir das Ergebnis auszusuchen, oder um einen Angriff gegen dich mit Nachteil zu belegen. 2024: Gib einen Punkt aus, um einen eigenen W20-Test mit Vorteil zu würfeln, bevor du das Ergebnis erfährst.' },
-  { key: 'magic-initiate-cleric', name: 'Magieeingeweihter (Kleriker)', cat: 'origin', desc: 'Du lernst zwei Zaubertricks und einen Zauber 1. Grades aus der Klerikerliste. Den Zauber 1. Grades wirkst du einmal pro langer Rast ohne Zauberplatz – oder ganz normal, wenn du passende Zauberplätze hast. Zauberattribut ist Weisheit. Das Talent kann mehrfach genommen werden (2024, jedes Mal eine andere Liste).' },
-  { key: 'magic-initiate-druid', name: 'Magieeingeweihter (Druide)', cat: 'origin', desc: 'Du lernst zwei Zaubertricks und einen Zauber 1. Grades aus der Druidenliste. Den Zauber 1. Grades wirkst du einmal pro langer Rast ohne Zauberplatz – oder ganz normal, wenn du passende Zauberplätze hast. Zauberattribut ist Weisheit. Das Talent kann mehrfach genommen werden (2024, jedes Mal eine andere Liste).' },
-  { key: 'magic-initiate-wizard', name: 'Magieeingeweihter (Magier)', cat: 'origin', desc: 'Du lernst zwei Zaubertricks und einen Zauber 1. Grades aus der Magierliste. Den Zauber 1. Grades wirkst du einmal pro langer Rast ohne Zauberplatz – oder ganz normal, wenn du passende Zauberplätze hast. Zauberattribut ist Intelligenz. Das Talent kann mehrfach genommen werden (2024, jedes Mal eine andere Liste).' },
-  { key: 'musician', name: 'Musiker', cat: 'origin', ed: '2024', desc: 'Du wirst in drei Musikinstrumenten deiner Wahl geübt. Spielst du am Ende einer kurzen oder langen Rast für deine Gruppe, bekommen so viele Verbündete wie dein Übungsbonus (dich eingeschlossen) Heroische Inspiration.' },
-  { key: 'savage-attacker', name: 'Wilder Angreifer', cat: 'origin', fx: { savage: true }, desc: 'Einmal in jedem deiner Züge würfelst du die Schadenswürfel eines Waffenangriffs zweimal und nimmst das bessere Ergebnis.' },
-  { key: 'skilled', name: 'Begabt', cat: 'origin', grantSkills: 3, desc: 'Du wirst in drei Fertigkeiten oder Werkzeugen deiner Wahl geübt, beliebig gemischt. Das Talent kann mehrfach genommen werden.' },
-  { key: 'tavern-brawler', name: 'Kneipenschläger', cat: 'origin', a14: ['str', 'con'], desc: 'Deine waffenlosen Schläge verursachen 1W4 + Stärkemodifikator Wuchtschaden, du bist mit improvisierten Waffen geübt, und nach einem Treffer darfst du als Bonusaktion packen. 2024: Eine 1 auf dem Schadenswürfel eines waffenlosen Schlags würfelst du neu, und einmal pro Zug stößt du das Ziel nach einem Treffer 1,5 m weg.' },
-  { key: 'tough', name: 'Zäh', cat: 'origin', hpPerLevel: 2, desc: 'Dein Trefferpunktemaximum steigt um das Doppelte deiner Stufe, und bei jedem weiteren Stufenaufstieg kommen 2 Trefferpunkte dazu.' },
+  { key: 'alert', name: 'Aufmerksam', cat: 'origin', ed: '2024', desc: 'Du bist auf alles gefasst: Auf deine Initiative addierst du deinen Übungsbonus (2014: +5). Außerdem darfst du deine Initiative mit einem einverstandenen Verbündeten tauschen, dessen Wert niedriger ist. 2014 stattdessen: Du kannst nicht überrascht werden, solange du bei Bewusstsein bist, und versteckte oder unsichtbare Gegner haben keinen Vorteil auf Angriffe gegen dich.' },
+  { key: 'magic-initiate-cleric', name: 'Magieeingeweihter (Kleriker)', cat: 'origin', ed: '2024', desc: 'Du lernst zwei Zaubertricks und einen Zauber 1. Grades aus der Klerikerliste. Den Zauber 1. Grades wirkst du einmal pro langer Rast ohne Zauberplatz – oder ganz normal, wenn du passende Zauberplätze hast. Zauberattribut ist Weisheit. Das Talent kann mehrfach genommen werden (2024, jedes Mal eine andere Liste).' },
+  { key: 'magic-initiate-druid', name: 'Magieeingeweihter (Druide)', cat: 'origin', ed: '2024', desc: 'Du lernst zwei Zaubertricks und einen Zauber 1. Grades aus der Druidenliste. Den Zauber 1. Grades wirkst du einmal pro langer Rast ohne Zauberplatz – oder ganz normal, wenn du passende Zauberplätze hast. Zauberattribut ist Weisheit. Das Talent kann mehrfach genommen werden (2024, jedes Mal eine andere Liste).' },
+  { key: 'magic-initiate-wizard', name: 'Magieeingeweihter (Magier)', cat: 'origin', ed: '2024', desc: 'Du lernst zwei Zaubertricks und einen Zauber 1. Grades aus der Magierliste. Den Zauber 1. Grades wirkst du einmal pro langer Rast ohne Zauberplatz – oder ganz normal, wenn du passende Zauberplätze hast. Zauberattribut ist Intelligenz. Das Talent kann mehrfach genommen werden (2024, jedes Mal eine andere Liste).' },
+  { key: 'savage-attacker', name: 'Wilder Angreifer', cat: 'origin', ed: '2024', fx: { savage: true }, desc: 'Einmal in jedem deiner Züge würfelst du die Schadenswürfel eines Waffenangriffs zweimal und nimmst das bessere Ergebnis.' },
+  { key: 'skilled', name: 'Begabt', cat: 'origin', ed: '2024', grantSkills: 3, desc: 'Du wirst in drei Fertigkeiten oder Werkzeugen deiner Wahl geübt, beliebig gemischt. Das Talent kann mehrfach genommen werden.' },
   // Allgemein
-  { key: 'actor', name: 'Schauspieler', cat: 'general', a14: ['cha'], a24: ['cha'], desc: 'Charisma +1 (bis 20). Du hast Vorteil auf Charismawürfe (Täuschen und Auftreten), wenn du dich als eine andere Person ausgibst, und kannst Sprechweise und Stimme einer Person nachahmen, die du mindestens eine Minute gehört hast. Wer Verdacht schöpft, braucht eine Weisheitsprobe (Motiv erkennen) gegen deine Charismaprobe (Täuschen).' },
-  { key: 'athlete', name: 'Athlet', cat: 'general', a14: ['str', 'dex'], a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (bis 20). Aufstehen kostet dich nur 1,5 m Bewegung, Klettern kostet keine zusätzliche Bewegung, und für einen Weit- oder Hochsprung genügen dir 1,5 m Anlauf statt 3 m.' },
-  { key: 'charger', name: 'Stürmer', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (2024). Nutzt du die Aktion Spurten, darfst du als Bonusaktion einen Nahkampfangriff mit +1W8 Schaden führen oder das Ziel bis zu 3 m wegstoßen – vorausgesetzt, du hast dich vorher mindestens 3 m geradlinig auf das Ziel zubewegt.' },
-  { key: 'chef', name: 'Koch', cat: 'general', a14: ['con', 'wis'], a24: ['con', 'wis'], desc: 'Konstitution oder Weisheit +1. Mit Kochutensilien bereitest du in einer kurzen Rast Essen für bis zu 4 + Übungsbonus Kreaturen zu: Wer davon isst und einen Trefferwürfel ausgibt, bekommt zusätzlich 1W8 Trefferpunkte. In einer langen Rast backst du so viele Leckerbissen wie dein Übungsbonus, die als Bonusaktion gegessen 1W8 temporäre Trefferpunkte geben.' },
-  { key: 'crossbow-expert', name: 'Armbrustexperte', cat: 'general', a24: ['dex'], desc: 'Geschicklichkeit +1 (2024). Du ignorierst die Ladezeit von Armbrüsten, in deiner Nähe zu sein gibt dir keinen Nachteil auf Fernkampfangriffe, und (2014) nach einem Angriff mit einer einhändigen Waffe schießt du als Bonusaktion mit einer Handarmbrust.' },
-  { key: 'crusher', name: 'Zermalmer', cat: 'general', a14: ['str', 'con'], a24: ['str', 'con'], desc: 'Stärke oder Konstitution +1. Einmal pro Zug schiebst du eine getroffene Kreatur nach Wuchtschaden 1,5 m in eine Richtung deiner Wahl (nur Kreaturen bis Groß). Bei einem kritischen Treffer mit Wuchtschaden haben alle Angriffe gegen das Ziel bis zum Ende deines nächsten Zuges Vorteil.' },
-  { key: 'defensive-duelist', name: 'Defensiver Duellant', cat: 'general', a24: ['dex'], desc: 'Geschicklichkeit +1 (2024). Trifft dich ein Nahkampfangriff, während du eine Finesse-Waffe führst, in der du geübt bist, erhöhst du als Reaktion deine Rüstungsklasse um deinen Übungsbonus – womöglich geht der Angriff dadurch daneben.' },
-  { key: 'dual-wielder', name: 'Zwei-Waffen-Kämpfer', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (2024). Du darfst mit zwei einhändigen Nahkampfwaffen kämpfen, auch wenn sie nicht leicht sind, und ziehst oder verstaust zwei Waffen statt einer. 2014 bekommst du zusätzlich +1 auf die Rüstungsklasse, solange du zwei Waffen führst.' },
-  { key: 'dungeon-delver', name: 'Gewölbeforscher', cat: 'general', ed: '2014', desc: 'Du hast Vorteil auf Wahrnehmung und Nachforschungen, um Geheimtüren zu entdecken, Vorteil auf Rettungswürfe gegen Fallen und Resistenz gegen Fallenschaden. Außerdem durchsuchst du Gänge mit normaler Geschwindigkeit, statt langsam zu werden.' },
-  { key: 'durable', name: 'Robust', cat: 'general', a14: ['con'], a24: ['con'], desc: 'Konstitution +1. Gibst du in einer Rast einen Trefferwürfel aus, bekommst du mindestens das Doppelte deines Konstitutionsmodifikators an Trefferpunkten zurück. 2024: Einmal pro langer Rast heilst du dich als Bonusaktion um das Doppelte deines Konstitutionsmodifikators.' },
-  { key: 'elemental-adept', name: 'Elementarer Adept', cat: 'general', a24: MENTAL, fx: { elemental: true }, desc: 'Intelligenz, Weisheit oder Charisma +1 (2024). Wähle Säure, Blitz, Donner, Feuer oder Kälte: Deine Zauber dieser Schadensart ignorieren Resistenz, und jede 1 auf ihren Schadenswürfeln zählt als 2. Das Talent kann mehrfach genommen werden, jedes Mal für eine andere Schadensart.' },
-  { key: 'elven-accuracy', name: 'Elfische Präzision', cat: 'general', ed: '2014', a14: ['dex', 'int', 'wis', 'cha'], fx: { elven: true }, req: 'Elf oder Halbelf', desc: 'Geschicklichkeit, Intelligenz, Weisheit oder Charisma +1. Hast du bei einem Angriffswurf mit diesem Attribut Vorteil, würfelst du einen dritten W20 und nimmst das beste der drei Ergebnisse.' },
-  { key: 'fey-touched', name: 'Feenberührt', cat: 'general', a14: MENTAL, a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1. Du lernst Nebelschritt und einen weiteren Zauber 1. Grades aus der Schule der Erkenntnis oder der Verzauberung. Beide wirkst du je einmal pro langer Rast ohne Zauberplatz – oder ganz normal mit passenden Zauberplätzen.' },
   { key: 'grappler', name: 'Ringer', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1. Du hast Vorteil auf Angriffe gegen Kreaturen, die du gepackt hast, und triffst du mit einem waffenlosen Schlag, darfst du das Ziel im selben Zug packen (2024: einmal pro Zug). Eine gepackte Kreatur bewegst du mit, ohne dass deine Geschwindigkeit sinkt.' },
-  { key: 'great-weapon-master', name: 'Meister der Großwaffen', cat: 'general', a24: ['str'], desc: '2014: Landest du einen kritischen Treffer oder bringst eine Kreatur auf 0 Trefferpunkte, führst du als Bonusaktion einen weiteren Nahkampfangriff. Außerdem darfst du mit schweren Nahkampfwaffen, in denen du geübt bist, −5 auf den Angriffswurf nehmen, um +10 Schaden zu machen (an- und abschaltbar). 2024: Mit schweren Waffen addierst du deinen Übungsbonus auf den Schaden, und nach einem kritischen Treffer oder einem tödlichen Schlag greifst du als Bonusaktion erneut an.' },
-  { key: 'heavily-armored', name: 'Schwer gerüstet', cat: 'general', a14: ['str'], a24: ['str', 'con'], armor: 'heavy', desc: 'Stärke +1. Du wirst mit schwerer Rüstung geübt. Voraussetzung: Übung mit mittelschwerer Rüstung.' },
-  { key: 'heavy-armor-master', name: 'Meister der schweren Rüstung', cat: 'general', a14: ['str'], a24: ['str', 'con'], desc: 'Stärke +1. Solange du eine schwere Rüstung trägst, verringert sich Hieb-, Stich- und Wuchtschaden von nicht-magischen Waffen um 3 (2024: um deinen Übungsbonus). Voraussetzung: Übung mit schwerer Rüstung.' },
-  { key: 'inspiring-leader', name: 'Inspirierender Anführer', cat: 'general', a24: ['wis', 'cha'], desc: 'Weisheit oder Charisma +1 (2024). Nach einer kurzen oder langen Rast hältst du eine zehnminütige Ansprache: Bis zu sechs Kreaturen in 9 m, die dich verstehen, bekommen temporäre Trefferpunkte in Höhe deiner Stufe plus deines Charismamodifikators.' },
-  { key: 'keen-mind', name: 'Wacher Verstand', cat: 'general', a14: ['int'], a24: ['int'], desc: 'Intelligenz +1. Du weißt immer, wo Norden liegt und wie viele Stunden bis Sonnenauf- oder -untergang bleiben, und du erinnerst dich genau an alles, was du im letzten Monat gesehen oder gehört hast. 2024: Du wirst in Arkane Kunde, Geschichte, Naturkunde oder Religion geübt, bekommst darin Expertise und nutzt die Aktion Studieren als Bonusaktion.' },
-  { key: 'lightly-armored', name: 'Leicht gerüstet', cat: 'general', a14: ['str', 'dex'], a24: ['str', 'dex'], armor: 'light', desc: 'Stärke oder Geschicklichkeit +1. Du wirst mit leichter Rüstung geübt (2024: zusätzlich mit Schilden).' },
-  { key: 'linguist', name: 'Sprachkundiger', cat: 'general', ed: '2014', a14: ['int'], desc: 'Intelligenz +1. Du lernst drei Sprachen deiner Wahl und entwirfst Geheimschriften, die andere nur mit einer Intelligenzprobe gegen SG 8 + Intelligenzmodifikator + Übungsbonus entziffern.' },
-  { key: 'mage-slayer', name: 'Magiertöter', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (2024). Wirkt eine Kreatur in deiner Reichweite einen Zauber, greifst du sie als Reaktion an. Triffst du eine konzentrierende Kreatur, hat sie Nachteil auf den Rettungswurf zur Konzentration. Außerdem hast du Vorteil auf Rettungswürfe gegen Zauber von Kreaturen in deiner Reichweite.' },
-  { key: 'martial-adept', name: 'Kampfkunstadept', cat: 'general', ed: '2014', desc: 'Du lernst zwei Kampfmanöver des Kampfmeisters (Manöver-SG 8 + Übungsbonus + Stärke oder Geschicklichkeit) und bekommst einen Überlegenheitswürfel (W6), der sich mit einer kurzen oder langen Rast auffrischt.' },
-  { key: 'medium-armor-master', name: 'Meister der mittelschweren Rüstung', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (2024). In mittelschwerer Rüstung zählt dein Geschicklichkeitsmodifikator bis +3 statt nur bis +2, und die Rüstung gibt dir keinen Nachteil mehr auf Heimlichkeit. Voraussetzung: Übung mit mittelschwerer Rüstung.' },
-  { key: 'mobile', name: 'Flink', cat: 'general', ed: '2014', desc: 'Deine Bewegungsrate steigt um 3 m. Nutzt du die Aktion Spurten, kostet dich schwieriges Gelände in diesem Zug nichts extra. Und greifst du eine Kreatur im Nahkampf an, bekommst du von ihr in diesem Zug keinen Gelegenheitsangriff – egal, ob du getroffen hast.' },
-  { key: 'moderately-armored', name: 'Mittelschwer gerüstet', cat: 'general', a14: ['str', 'dex'], a24: ['str', 'dex'], armor: 'medium', desc: 'Stärke oder Geschicklichkeit +1. Du wirst mit mittelschwerer Rüstung und Schilden geübt. Voraussetzung: Übung mit leichter Rüstung.' },
-  { key: 'mounted-combatant', name: 'Berittener Kämpfer', cat: 'general', a24: ['str', 'dex', 'wis'], desc: 'Stärke, Geschicklichkeit oder Weisheit +1 (2024). Solange du reitest, hast du Vorteil auf Nahkampfangriffe gegen unberittene Kreaturen, die kleiner sind als dein Reittier. Angriffe auf dein Reittier lenkst du auf dich um, und dein Reittier nimmt bei einem bestandenen Geschicklichkeitsrettungswurf gar keinen und sonst nur halben Schaden.' },
-  { key: 'observant', name: 'Aufmerksamer Beobachter', cat: 'general', a14: ['int', 'wis'], a24: ['int', 'wis'], desc: 'Intelligenz oder Weisheit +1. Deine passive Wahrnehmung und dein passives Nachforschen steigen um 5 (2024: nur die Wahrnehmung), und du liest von den Lippen, wenn du die Sprache verstehst. 2024: Die Aktion Suchen wird bei dir zur Bonusaktion.' },
-  { key: 'piercer', name: 'Durchbohrer', cat: 'general', a14: ['str', 'dex'], a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1. Einmal pro Zug würfelst du einen Schadenswürfel eines Angriffs mit Stichschaden neu und nimmst das neue Ergebnis. Bei einem kritischen Treffer mit Stichschaden würfelst du einen zusätzlichen Schadenswürfel.' },
-  { key: 'poisoner', name: 'Giftmischer', cat: 'general', a24: ['dex', 'int'], desc: 'Geschicklichkeit oder Intelligenz +1 (2024). Deine Giftangriffe ignorieren Giftresistenz, du wirst mit dem Giftmischerset geübt und stellst in einer Stunde so viele Dosen Gift her, wie dein Übungsbonus beträgt. Als Bonusaktion trägst du eine Dose auf eine Waffe auf: Bei einem Treffer 2W8 Giftschaden und vergiftet bis zum Ende deines nächsten Zuges, Konstitutionsrettungswurf gegen SG 8 + Übungsbonus + Geschicklichkeit.' },
-  { key: 'polearm-master', name: 'Meister der Stangenwaffen', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (2024). Greifst du mit Glefe, Hellebarde, Speer oder Kampfstab an, folgt als Bonusaktion ein Schlag mit dem Schaftende für 1W4 Wuchtschaden. Außerdem lösen Kreaturen schon beim Betreten deiner Reichweite einen Gelegenheitsangriff aus, nicht erst beim Verlassen.' },
-  { key: 'resilient', name: 'Widerstandsfähig', cat: 'general', a14: ANY, a24: ANY, grantSave: true, desc: 'Ein Attribut deiner Wahl +1 (bis 20), und du wirst in Rettungswürfen genau dieses Attributs geübt.' },
-  { key: 'ritual-caster', name: 'Ritualwirker', cat: 'general', a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1 (2024). Du bekommst ein Ritualbuch mit zwei Ritualzaubern 1. Grades einer Klassenliste deiner Wahl. Alle Zauber darin wirkst du als Ritual, ohne sie vorbereitet zu haben. Gefundene Ritualzauber schreibst du gegen Zeit und Geld hinein.' },
-  { key: 'sentinel', name: 'Wächter', cat: 'general', a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1 (2024). Triffst du mit einem Gelegenheitsangriff, sinkt die Bewegungsrate des Ziels für diesen Zug auf 0. Kreaturen entgehen deinem Gelegenheitsangriff nicht, indem sie sich zurückziehen. Und greift eine Kreatur in deiner Reichweite jemand anderen als dich an, schlägst du als Reaktion zu.' },
-  { key: 'shadow-touched', name: 'Schattenberührt', cat: 'general', a14: MENTAL, a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1. Du lernst Unsichtbarkeit und einen weiteren Zauber 1. Grades aus der Schule der Illusion oder der Nekromantie. Beide wirkst du je einmal pro langer Rast ohne Zauberplatz – oder ganz normal mit passenden Zauberplätzen.' },
-  { key: 'sharpshooter', name: 'Scharfschütze', cat: 'general', a24: ['dex'], desc: 'Geschicklichkeit +1 (2024). Angriffe auf große Entfernung haben für dich keinen Nachteil, du ignorierst halbe und Dreiviertel-Deckung, und (2014) du darfst −5 auf den Angriffswurf nehmen, um +10 Schaden zu machen (an- und abschaltbar).' },
-  { key: 'shield-master', name: 'Schildmeister', cat: 'general', a24: ['str'], desc: 'Stärke +1 (2024). Führst du einen Schild, stößt du als Bonusaktion eine Kreatur in 1,5 m um 1,5 m weg oder wirfst sie zu Boden. Du addierst den Schildbonus auf Geschicklichkeitsrettungswürfe gegen Effekte, die nur dich betreffen, und nimmst bei einem bestandenen Rettungswurf gar keinen Schaden.' },
-  { key: 'skill-expert', name: 'Fertigkeitsexperte', cat: 'general', a14: ANY, a24: ANY, grantSkills: 1, desc: 'Ein Attribut deiner Wahl +1. Du wirst in einer weiteren Fertigkeit geübt und bekommst in einer Fertigkeit, in der du schon geübt bist, Expertise – dort zählt dein Übungsbonus doppelt.' },
-  { key: 'skulker', name: 'Schleicher', cat: 'general', a24: ['dex'], desc: 'Geschicklichkeit +1 (2024). Du versteckst dich schon bei leichter Deckung, ein verfehlter Fernkampfangriff aus dem Verborgenen verrät deine Position nicht, und im Dämmerlicht hast du keinen Nachteil auf Wahrnehmung.' },
-  { key: 'slasher', name: 'Schlitzer', cat: 'general', a14: ['str', 'dex'], a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1. Einmal pro Zug senkst du nach Hiebschaden die Bewegungsrate des Ziels um 3 m. Bei einem kritischen Treffer mit Hiebschaden hat das Ziel bis zum Ende deines nächsten Zuges Nachteil auf alle Angriffswürfe.' },
-  { key: 'speedy', name: 'Schnell', cat: 'general', ed: '2024', a24: ['dex', 'con'], desc: 'Geschicklichkeit oder Konstitution +1. Deine Bewegungsrate steigt um 3 m, beim Spurten kostet dich schwieriges Gelände nichts extra, und Gelegenheitsangriffe gegen dich haben Nachteil, wenn du in diesem Zug gespurtet bist.' },
-  { key: 'spell-sniper', name: 'Zauberscharfschütze', cat: 'general', a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1 (2024). Die Reichweite deiner Zauber mit Angriffswurf verdoppelt sich, sie ignorieren halbe und Dreiviertel-Deckung, und du lernst einen zusätzlichen Zaubertrick mit Angriffswurf.' },
-  { key: 'telekinetic', name: 'Telekinetisch', cat: 'general', a14: MENTAL, a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1. Du wirkst Magierhand ohne sichtbare Geste und unsichtbar, mit 9 m mehr Reichweite. Als Bonusaktion schiebst oder ziehst du eine Kreatur in 9 m um 1,5 m – Stärkerettungswurf gegen SG 8 + Übungsbonus + dein Zauberattribut.' },
-  { key: 'telepathic', name: 'Telepathisch', cat: 'general', a14: MENTAL, a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1. Du sprichst telepathisch zu jeder Kreatur in 18 m, deren Sprache du sprichst (sie antwortet nicht auf diesem Weg). Außerdem wirkst du einmal pro langer Rast Gedanken wahrnehmen ohne Zauberplatz.' },
-  { key: 'war-caster', name: 'Kriegszauberer', cat: 'general', a24: MENTAL, desc: 'Intelligenz, Weisheit oder Charisma +1 (2024). Du hast Vorteil auf Rettungswürfe zur Konzentration, wirkst Zauber auch mit vollen Händen (somatische Komponenten mit Waffe oder Schild) und darfst statt eines Gelegenheitsangriffs einen Zauber mit Zeitaufwand 1 Aktion wirken, der nur diese eine Kreatur als Ziel hat.' },
-  { key: 'weapon-master', name: 'Waffenmeister', cat: 'general', a14: ['str', 'dex'], a24: ['str', 'dex'], desc: 'Stärke oder Geschicklichkeit +1. Du wirst mit vier Waffen deiner Wahl geübt. 2024: Du beherrschst stattdessen die Meisterschaftseigenschaft einer Waffe, in der du geübt bist, und darfst sie nach jeder langen Rast wechseln.' },
   // Kampfstile
   { key: 'style-archery', name: 'Kampfstil: Bogenschießen', cat: 'style', desc: '+2 auf alle Angriffswürfe mit Fernkampfwaffen.' },
   { key: 'style-defense', name: 'Kampfstil: Verteidigung', cat: 'style', desc: '+1 auf die Rüstungsklasse, solange du eine Rüstung trägst.' },
-  { key: 'style-dueling', name: 'Kampfstil: Duellieren', cat: 'style', desc: '+2 Schaden, wenn du eine einhändige Nahkampfwaffe führst und keine zweite Waffe in der anderen Hand hast.' },
+  { key: 'style-dueling', name: 'Kampfstil: Duellieren', cat: 'style', ed: '2014', desc: '+2 Schaden, wenn du eine einhändige Nahkampfwaffe führst und keine zweite Waffe in der anderen Hand hast.' },
   { key: 'style-gwf', name: 'Kampfstil: Kampf mit Großwaffen', cat: 'style', fx: { gwf: true }, desc: '2014: Eine 1 oder 2 auf einem Schadenswürfel einer zweihändig oder vielseitig geführten Nahkampfwaffe darfst du einmal neu würfeln; das neue Ergebnis zählt. 2024: 1 und 2 zählen stattdessen immer als 3.' },
-  { key: 'style-protection', name: 'Kampfstil: Schutz', cat: 'style', desc: 'Trägst du einen Schild und greift eine sichtbare Kreatur einen Verbündeten in 1,5 m Entfernung an, gibst du diesem Angriffswurf als Reaktion Nachteil.' },
+  { key: 'style-protection', name: 'Kampfstil: Schutz', cat: 'style', ed: '2014', desc: 'Trägst du einen Schild und greift eine sichtbare Kreatur einen Verbündeten in 1,5 m Entfernung an, gibst du diesem Angriffswurf als Reaktion Nachteil.' },
   { key: 'style-twf', name: 'Kampfstil: Kampf mit zwei Waffen', cat: 'style', desc: 'Beim Zusatzangriff mit der zweiten Waffe addierst du deinen Attributsmodifikator auf den Schaden – sonst zählt dort nur der Würfel.' },
-  { key: 'style-blind', name: 'Kampfstil: Blindkampf', cat: 'style', desc: 'Du hast Blindsicht 3 m: In diesem Umkreis nimmst du alles wahr, was nicht hinter voller Deckung steckt – auch wenn du blind bist oder die Kreatur unsichtbar.' },
-  { key: 'style-interception', name: 'Kampfstil: Abfangen', cat: 'style', desc: 'Trifft ein Angriff einen Verbündeten in 1,5 m Entfernung, verringerst du den Schaden als Reaktion um 1W10 + deinen Übungsbonus. Du musst dafür einen Schild oder eine einfache Waffe führen.' },
-  { key: 'style-thrown', name: 'Kampfstil: Wurfwaffenkampf', cat: 'style', desc: 'Du ziehst eine Wurfwaffe als Teil des Angriffs, und deine Wurfwaffen richten +2 Schaden an.' },
-  { key: 'style-unarmed', name: 'Kampfstil: Waffenloser Kampf', cat: 'style', desc: 'Deine waffenlosen Schläge verursachen 1W6 + Stärkemodifikator Wuchtschaden, mit zwei freien Händen 1W8. Zu Beginn jedes deiner Züge nimmt eine von dir gepackte Kreatur 1W4 Wuchtschaden.' },
   // Epische Gaben (2024, Stufe 19)
   { key: 'boon-combat', name: 'Gabe der Kampfkunst', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Einmal in jedem deiner Züge verwandelst du einen verfehlten Angriffswurf in einen Treffer.' },
   { key: 'boon-dimension', name: 'Gabe der Dimensionsreise', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Unmittelbar nach einem Angriff oder der Aktion Magie teleportierst du dich bis zu 9 m weit an einen freien Platz, den du sehen kannst.' },
-  { key: 'boon-energy', name: 'Gabe der Energieresistenz', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Du hast Resistenz gegen zwei Schadensarten deiner Wahl (Säure, Blitz, Donner, Feuer, Gift, Kälte, nekrotisch, psychisch oder strahlend) und lenkst einmal pro Zug als Reaktion solchen Schaden auf eine andere Kreatur in 9 m um.' },
   { key: 'boon-fate', name: 'Gabe des Schicksals', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Würfelt eine Kreatur in 18 m einen W20-Test, addierst du 2W4 oder ziehst sie ab – so oft pro langer Rast, wie dein Charismamodifikator beträgt (mindestens einmal).' },
-  { key: 'boon-fortitude', name: 'Gabe der Standhaftigkeit', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Dein Trefferpunktemaximum steigt um 40, und wenn du über einen Trefferwürfel heilst, addierst du deinen Konstitutionsmodifikator ein zweites Mal.' },
   { key: 'boon-offense', name: 'Gabe des unwiderstehlichen Angriffs', cat: 'epic', ed: '2024', a24: ['str', 'dex'], desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Deine Waffen- und waffenlosen Angriffe ignorieren Resistenz gegen Hieb-, Stich- und Wuchtschaden, und bei einer natürlichen 20 auf dem Angriffswurf richtest du zusätzlich Kraftschaden in Höhe deiner Stufe an.' },
   { key: 'boon-recall', name: 'Gabe des Zauberrückrufs', cat: 'epic', ed: '2024', a24: MENTAL, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Wirkst du einen Zauber bis zum 4. Grad mit einem Zauberplatz, würfle einen W4: Bei einer 4 bleibt der Zauberplatz erhalten.' },
   { key: 'boon-night', name: 'Gabe des Nachtgeists', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). In Dunkelheit wirst du als Bonusaktion unsichtbar, bis du angreifst, einen Zauber wirkst oder ins Licht trittst. Im Dämmerlicht hast du Resistenz gegen alle Schadensarten außer strahlend.' },
   { key: 'boon-truesight', name: 'Gabe des Wahren Blicks', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Du hast Wahren Blick auf 18 m: Du durchschaust Illusionen, erkennst Gestaltwandler, siehst Unsichtbares und blickst in die Ätherebene.' },
-  { key: 'boon-skill', name: 'Gabe der Fertigkeit', cat: 'epic', ed: '2024', a24: ANY, desc: 'Epische Gabe ab Stufe 19. Ein Attribut deiner Wahl +1 (bis 30). Du bist in allen Fertigkeiten geübt und bekommst in vier Fertigkeiten deiner Wahl Expertise.' },
 ];
 
 // ───────────────────────── Rüstungen & Waffen ─────────────────────────
@@ -367,7 +274,7 @@ export const CLASSES = [
     armor: ['light', 'medium', 'shield'], weapons: { 2014: ['simple', 'martial'], 2024: ['simple', 'martial'] }, tools: '',
     unarmored: 'con', mc: { req: [['str']], gain: 'Schilde, einfache und Kriegswaffen' },
     equip: { 2024: 'Zweihandaxt, 4 Handbeile, Entdeckerausrüstung, 15 GM', 2014: 'Zweihandaxt, 2 Handbeile, Entdeckerausrüstung, 4 Wurfspeere' }, gold: { 2024: 75, 2014: '2d4×10' },
-    subclasses: { 2014: ['Pfad des Berserkers', 'Pfad des Totemkriegers', 'Pfad des Ahnenwächters', 'Pfad des Sturmherolds', 'Pfad des Eiferers', 'Pfad der wilden Magie', 'Pfad der Bestie'], 2024: ['Pfad des Berserkers', 'Pfad des Wildherzens', 'Pfad des Weltenbaums', 'Pfad des Eiferers'] },
+    subclasses: { 2014: ['Pfad des Berserkers'], 2024: ['Pfad des Berserkers'] },
     feat: {
       2024: F('1:Kampfrausch,Ungerüstete Verteidigung,Waffenmeisterschaft|2:Gefahrengespür,Tollkühner Angriff|3:@sub,Urwissen|4:@asi|5:Extra-Angriff,Schnelle Bewegung|6:@sub|7:Wilder Instinkt,Instinktives Anspringen|8:@asi|9:Brutaler Schlag|10:@sub|11:Unerbittlicher Kampfrausch|12:@asi|13:Verbesserter brutaler Schlag|14:@sub|15:Anhaltender Kampfrausch|16:@asi|17:Verbesserter brutaler Schlag|18:Unbezwingbare Macht|19:@boon|20:Urchampion'),
       2014: F('1:Kampfrausch,Ungerüstete Verteidigung|2:Tollkühner Angriff,Gefahrengespür|3:@sub|4:@asi|5:Extra-Angriff,Schnelle Bewegung|6:@sub|7:Wilder Instinkt|8:@asi|9:Brutaler kritischer Treffer|10:@sub|11:Unerbittlicher Kampfrausch|12:@asi|13:Brutaler kritischer Treffer|14:@sub|15:Anhaltender Kampfrausch|16:@asi|17:Brutaler kritischer Treffer|18:Unbezwingbare Macht|19:@asi|20:Urchampion'),
@@ -380,7 +287,7 @@ export const CLASSES = [
     cast: { type: 'full', ability: 'cha', cantrips: CANTRIPS(2), known14: [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22], prep24: PREP_FULL_24 },
     expertise: { 2014: { 3: 2, 10: 2 }, 2024: { 2: 2, 9: 2 } },
     equip: { 2024: 'Lederrüstung, 2 Dolche, Musikinstrument, Unterhaltungsausrüstung, 19 GM', 2014: 'Rapier, Diplomatenausrüstung, Laute, Lederrüstung, Dolch' }, gold: { 2024: 90, 2014: '5d4×10' },
-    subclasses: { 2014: ['Kolleg des Wissens', 'Kolleg der Tapferkeit', 'Kolleg des Glanzes', 'Kolleg der Schwerter', 'Kolleg des Flüsterns', 'Kolleg der Schöpfung', 'Kolleg der Beredsamkeit'], 2024: ['Kolleg des Tanzes', 'Kolleg des Glanzes', 'Kolleg des Wissens', 'Kolleg der Tapferkeit'] },
+    subclasses: { 2014: ['Kolleg des Wissens'], 2024: ['Kolleg des Wissens'] },
     feat: {
       2024: F('1:Bardische Inspiration,Zauberwirken|2:Expertise,Alleskönner|3:@sub|4:@asi|5:Quelle der Inspiration|6:@sub|7:Gegenbezauberung|8:@asi|9:Expertise|10:Magische Geheimnisse|11:|12:@asi|13:|14:@sub|15:|16:@asi|17:|18:Überlegene Inspiration|19:@boon|20:Worte der Schöpfung'),
       2014: F('1:Zauberwirken,Bardische Inspiration|2:Alleskönner,Lied der Erholung|3:@sub,Expertise|4:@asi|5:Quelle der Inspiration|6:Gegenbezauberung,@sub|7:|8:@asi|9:|10:Expertise,Magische Geheimnisse|11:|12:@asi|13:|14:Magische Geheimnisse,@sub|15:|16:@asi|17:|18:Magische Geheimnisse|19:@asi|20:Überlegene Inspiration'),
@@ -392,7 +299,7 @@ export const CLASSES = [
     mc: { req: [['wis']], gain: 'Leichte und mittelschwere Rüstung, Schilde' },
     cast: { type: 'full', ability: 'wis', cantrips: CANTRIPS(3), prep14: 'level', prep24: PREP_FULL_24 },
     equip: { 2024: 'Kettenhemd, Schild, Streitkolben, Heiliges Symbol, Priesterausrüstung, 7 GM', 2014: 'Streitkolben, Schuppenpanzer, leichte Armbrust mit 20 Bolzen, Priesterausrüstung, Schild, Heiliges Symbol' }, gold: { 2024: 110, 2014: '5d4×10' },
-    subclasses: { 2014: ['Domäne des Wissens', 'Domäne des Lebens', 'Domäne des Lichts', 'Domäne der Natur', 'Domäne des Sturms', 'Domäne der List', 'Domäne des Krieges', 'Domäne der Schmiede', 'Domäne des Grabes', 'Domäne der Ordnung', 'Domäne des Friedens', 'Domäne des Zwielichts'], 2024: ['Domäne des Lebens', 'Domäne des Lichts', 'Domäne der List', 'Domäne des Krieges'] },
+    subclasses: { 2014: ['Domäne des Lebens'], 2024: ['Domäne des Lebens'] },
     feat: {
       2024: F('1:Zauberwirken,Göttliche Ordnung|2:Göttliche Macht fokussieren|3:@sub|4:@asi|5:Untote versengen|6:@sub|7:Gesegnete Schläge|8:@asi|9:|10:Göttliches Eingreifen|11:|12:@asi|13:|14:Verbesserte gesegnete Schläge|15:|16:@asi|17:@sub|18:|19:@boon|20:Größeres göttliches Eingreifen'),
       2014: F('1:Zauberwirken,@sub|2:Göttliche Macht fokussieren,@sub|3:|4:@asi|5:Untote zerstören|6:@sub|7:|8:@asi,@sub|9:|10:Göttliches Eingreifen|11:|12:@asi|13:|14:|15:|16:@asi|17:@sub|18:|19:@asi|20:Verbessertes göttliches Eingreifen'),
@@ -405,7 +312,7 @@ export const CLASSES = [
     mc: { req: [['wis']], gain: 'Leichte Rüstung, Schilde' },
     cast: { type: 'full', ability: 'wis', cantrips: CANTRIPS(2), prep14: 'level', prep24: PREP_FULL_24 },
     equip: { 2024: 'Lederrüstung, Schild, Sichel, Druidenfokus (Stab), Entdeckerausrüstung, Kräuterkundeausrüstung, 9 GM', 2014: 'Holzschild, Krummsäbel, Lederrüstung, Entdeckerausrüstung, Druidenfokus' }, gold: { 2024: 50, 2014: '2d4×10' },
-    subclasses: { 2014: ['Zirkel des Landes', 'Zirkel des Mondes', 'Zirkel der Träume', 'Zirkel des Hirten', 'Zirkel der Sporen', 'Zirkel der Sterne', 'Zirkel des Wildfeuers'], 2024: ['Zirkel des Landes', 'Zirkel des Mondes', 'Zirkel des Meeres', 'Zirkel der Sterne'] },
+    subclasses: { 2014: ['Zirkel des Landes'], 2024: ['Zirkel des Landes'] },
     feat: {
       2024: F('1:Zauberwirken,Druidisch,Ursprüngliche Ordnung|2:Tiergestalt,Wilder Begleiter|3:@sub|4:@asi|5:Wildes Wiedererstarken|6:@sub|7:Elementarer Zorn|8:@asi|9:|10:@sub|11:|12:@asi|13:|14:@sub|15:Verbesserter elementarer Zorn|16:@asi|17:|18:Tierzauber|19:@boon|20:Erzdruide'),
       2014: F('1:Druidisch,Zauberwirken|2:Tiergestalt,@sub|3:|4:Verbesserte Tiergestalt,@asi|5:|6:@sub|7:|8:Verbesserte Tiergestalt,@asi|9:|10:@sub|11:|12:@asi|13:|14:@sub|15:|16:@asi|17:|18:Zeitloser Körper,Tierzauber|19:@asi|20:Erzdruide'),
@@ -417,7 +324,7 @@ export const CLASSES = [
     armor: ['light', 'medium', 'heavy', 'shield'], weapons: { 2014: ['simple', 'martial'], 2024: ['simple', 'martial'] }, tools: '', style: 1,
     mc: { req: [['str'], ['dex']], any: true, gain: 'Leichte und mittelschwere Rüstung, Schilde, einfache und Kriegswaffen' },
     equip: { 2024: 'A: Kettenpanzer, Zweihandschwert, Flegel, 8 Wurfspeere, Gewölbeforscherausrüstung, 4 GM · B: Beschlagene Lederrüstung, Krummsäbel, Kurzschwert, Langbogen, 20 Pfeile, Köcher, Gewölbeforscherausrüstung, 11 GM', 2014: 'Kettenpanzer, Langschwert, Schild, leichte Armbrust mit 20 Bolzen, Gewölbeforscherausrüstung' }, gold: { 2024: 155, 2014: '5d4×10' },
-    subclasses: { 2014: ['Champion', 'Kampfmeister', 'Mystischer Ritter', 'Arkaner Bogenschütze', 'Kavalier', 'Samurai', 'Psi-Krieger', 'Runenritter', 'Echo-Ritter'], 2024: ['Kampfmeister', 'Champion', 'Mystischer Ritter', 'Psi-Krieger'] },
+    subclasses: { 2014: ['Champion'], 2024: ['Champion'] },
     feat: {
       2024: F('1:Kampfstil,Zweiter Wind,Waffenmeisterschaft|2:Tatendrang,Taktisches Gespür|3:@sub|4:@asi|5:Extra-Angriff,Taktische Verlagerung|6:@asi|7:@sub|8:@asi|9:Unbeugsam,Taktischer Meister|10:@sub|11:Zwei Extra-Angriffe|12:@asi|13:Unbeugsam,Gezielte Angriffe|14:@asi|15:@sub|16:@asi|17:Tatendrang,Unbeugsam|18:@sub|19:@boon|20:Drei Extra-Angriffe'),
       2014: F('1:Kampfstil,Zweiter Wind|2:Tatendrang|3:@sub|4:@asi|5:Extra-Angriff|6:@asi|7:@sub|8:@asi|9:Unbeugsam|10:@sub|11:Zwei Extra-Angriffe|12:@asi|13:Unbeugsam|14:@asi|15:@sub|16:@asi|17:Tatendrang,Unbeugsam|18:@sub|19:@asi|20:Drei Extra-Angriffe'),
@@ -428,7 +335,7 @@ export const CLASSES = [
     skills: { n: 2, list: ['acrobatics', 'athletics', 'history', 'insight', 'religion', 'stealth'] }, armor: [], weapons: { 2014: ['simple', 'kurzschwert'], 2024: ['simple', 'martial-light'] }, tools: 'Ein Handwerkerwerkzeug oder Musikinstrument',
     unarmored: 'wis', mc: { req: [['dex', 'wis']], gain: 'Einfache Waffen, Kurzschwerter' },
     equip: { 2024: 'Speer, 5 Dolche, Handwerkerwerkzeug oder Musikinstrument, Entdeckerausrüstung, 11 GM', 2014: 'Kurzschwert, Gewölbeforscherausrüstung, 10 Wurfpfeile' }, gold: { 2024: 50, 2014: '5d4' },
-    subclasses: { 2014: ['Weg der offenen Hand', 'Weg des Schattens', 'Weg der vier Elemente', 'Weg des Kensei', 'Weg der Sonnenseele', 'Weg der betrunkenen Meisterin', 'Weg der Barmherzigkeit', 'Weg des Astralen Selbst'], 2024: ['Krieger der Barmherzigkeit', 'Krieger des Schattens', 'Krieger der Elemente', 'Krieger der offenen Hand'] },
+    subclasses: { 2014: ['Weg der offenen Hand'], 2024: ['Krieger der offenen Hand'] },
     feat: {
       2024: F('1:Kampfkunst,Ungerüstete Verteidigung|2:Fokus des Mönchs,Ungerüstete Bewegung,Unheimlicher Stoffwechsel|3:Angriffe ablenken,@sub|4:@asi,Langsamer Fall|5:Extra-Angriff,Betäubender Schlag|6:Gestärkte Schläge,@sub|7:Entrinnen|8:@asi|9:Akrobatische Bewegung|10:Erhöhter Fokus,Selbstheilung|11:@sub|12:@asi|13:Energie ablenken|14:Disziplinierte Überlebenskunst|15:Perfekter Fokus|16:@asi|17:@sub|18:Überlegene Verteidigung|19:@boon|20:Körper und Geist'),
       2014: F('1:Ungerüstete Verteidigung,Kampfkunst|2:Ki,Ungerüstete Bewegung|3:@sub,Geschosse abwehren|4:@asi,Langsamer Fall|5:Extra-Angriff,Betäubender Schlag|6:Ki-gestärkte Schläge,@sub|7:Entrinnen,Stille des Geistes|8:@asi|9:Verbesserte ungerüstete Bewegung|10:Reinheit des Körpers|11:@sub|12:@asi|13:Zunge von Sonne und Mond|14:Diamantseele|15:Zeitloser Körper|16:@asi|17:@sub|18:Leerer Körper|19:@asi|20:Perfektes Selbst'),
@@ -440,7 +347,7 @@ export const CLASSES = [
     mc: { req: [['str', 'cha']], gain: 'Leichte und mittelschwere Rüstung, Schilde, einfache und Kriegswaffen' },
     cast: { type: 'half', ability: 'cha', prep14: 'half', prep24: PREP_HALF_24 },
     equip: { 2024: 'Kettenpanzer, Schild, Langschwert, 6 Wurfspeere, Heiliges Symbol, Priesterausrüstung, 9 GM', 2014: 'Langschwert, Schild, 5 Wurfspeere, Priesterausrüstung, Kettenpanzer, Heiliges Symbol' }, gold: { 2024: 150, 2014: '5d4×10' },
-    subclasses: { 2014: ['Eid der Hingabe', 'Eid der Alten', 'Eid der Rache', 'Eid der Eroberung', 'Eid der Krone', 'Eid der Erlösung', 'Eid des Ruhms', 'Eid der Wächter'], 2024: ['Eid der Hingabe', 'Eid des Ruhms', 'Eid der Alten', 'Eid der Rache'] },
+    subclasses: { 2014: ['Eid der Hingabe'], 2024: ['Eid der Hingabe'] },
     feat: {
       2024: F('1:Handauflegen,Zauberwirken,Waffenmeisterschaft|2:Kampfstil,Göttliches Niederstrecken|3:Göttliche Macht fokussieren,@sub|4:@asi|5:Extra-Angriff,Treues Ross|6:Aura des Schutzes|7:@sub|8:@asi|9:Feinde abschwören|10:Aura des Mutes|11:Strahlende Schläge|12:@asi|13:|14:Wiederherstellende Berührung|15:@sub|16:@asi|17:|18:Aura-Ausdehnung|19:@boon|20:@sub'),
       2014: F('1:Göttliches Gespür,Handauflegen|2:Kampfstil,Zauberwirken,Göttliches Niederstrecken|3:Göttliche Gesundheit,@sub|4:@asi|5:Extra-Angriff|6:Aura des Schutzes|7:@sub|8:@asi|9:|10:Aura des Mutes|11:Verbessertes göttliches Niederstrecken|12:@asi|13:|14:Reinigende Berührung|15:@sub|16:@asi|17:|18:Aura-Ausdehnung|19:@asi|20:@sub'),
@@ -453,7 +360,7 @@ export const CLASSES = [
     cast: { type: 'half', ability: 'wis', known14: [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11], prep24: PREP_HALF_24 },
     expertise: { 2024: { 9: 2 } },
     equip: { 2024: 'Beschlagene Lederrüstung, Krummsäbel, Kurzschwert, Langbogen, 20 Pfeile, Köcher, Druidenfokus (Mistelzweig), Entdeckerausrüstung, 7 GM', 2014: 'Schuppenpanzer, 2 Kurzschwerter, Entdeckerausrüstung, Langbogen mit 20 Pfeilen' }, gold: { 2024: 150, 2014: '5d4×10' },
-    subclasses: { 2014: ['Jäger', 'Tiermeister', 'Düsterpirscher', 'Horizontwanderer', 'Monsterjäger', 'Feenwanderer', 'Schwarmhüter'], 2024: ['Tiermeister', 'Feenwanderer', 'Düsterpirscher', 'Jäger'] },
+    subclasses: { 2014: ['Jäger'], 2024: ['Jäger'] },
     feat: {
       2024: F('1:Zauberwirken,Bevorzugter Feind,Waffenmeisterschaft|2:Geschickter Entdecker,Kampfstil|3:@sub|4:@asi|5:Extra-Angriff|6:Umherstreifen|7:@sub|8:@asi|9:Expertise|10:Unermüdlich|11:@sub|12:@asi|13:Unerbittlicher Jäger|14:Schleier der Natur|15:@sub|16:@asi|17:Präziser Jäger|18:Wilde Sinne|19:@boon|20:Feindtöter'),
       2014: F('1:Bevorzugter Feind,Natürlicher Entdecker|2:Kampfstil,Zauberwirken|3:@sub,Urtümliches Bewusstsein|4:@asi|5:Extra-Angriff|6:Bevorzugter Feind,Natürlicher Entdecker|7:@sub|8:@asi,Geländegänger|9:|10:Natürlicher Entdecker,Tarnung in der Wildnis|11:@sub|12:@asi|13:|14:Bevorzugter Feind,Verschwinden|15:@sub|16:@asi|17:|18:Wilde Sinne|19:@asi|20:Feindtöter'),
@@ -466,7 +373,7 @@ export const CLASSES = [
     mc: { req: [['dex']], gain: 'Leichte Rüstung, eine Fertigkeit, Diebeswerkzeug' },
     expertise: { 2014: { 1: 2, 6: 2 }, 2024: { 1: 2, 6: 2 } },
     equip: { 2024: 'Lederrüstung, 2 Dolche, Kurzschwert, Kurzbogen, 20 Pfeile, Köcher, Diebeswerkzeug, Einbrecherausrüstung, 8 GM', 2014: 'Rapier, Kurzbogen mit 20 Pfeilen, Einbrecherausrüstung, Lederrüstung, 2 Dolche, Diebeswerkzeug' }, gold: { 2024: 100, 2014: '4d4×10' },
-    subclasses: { 2014: ['Dieb', 'Assassine', 'Arkaner Betrüger', 'Inquisitiver', 'Drahtzieher', 'Kundschafter', 'Draufgänger', 'Phantom', 'Seelenmesser'], 2024: ['Arkaner Betrüger', 'Assassine', 'Seelenmesser', 'Dieb'] },
+    subclasses: { 2014: ['Dieb'], 2024: ['Dieb'] },
     feat: {
       2024: F('1:Expertise,Hinterhältiger Angriff,Diebessprache,Waffenmeisterschaft|2:Raffinierte Aktion|3:@sub,Ruhiges Zielen|4:@asi|5:Gerissener Schlag,Unglaubliches Ausweichen|6:Expertise|7:Entrinnen,Verlässliches Talent|8:@asi|9:@sub|10:@asi|11:Verbesserter gerissener Schlag|12:@asi|13:@sub|14:Hinterlistige Schläge|15:Schlüpfriger Geist|16:@asi|17:@sub|18:Schwer fassbar|19:@boon|20:Glückstreffer'),
       2014: F('1:Expertise,Hinterhältiger Angriff,Diebessprache|2:Raffinierte Aktion|3:@sub|4:@asi|5:Unglaubliches Ausweichen|6:Expertise|7:Entrinnen|8:@asi|9:@sub|10:@asi|11:Verlässliches Talent|12:@asi|13:@sub|14:Blindgespür|15:Schlüpfriger Geist|16:@asi|17:@sub|18:Schwer fassbar|19:@asi|20:Glückstreffer'),
@@ -478,7 +385,7 @@ export const CLASSES = [
     mc: { req: [['cha']], gain: '–' },
     cast: { type: 'full', ability: 'cha', cantrips: CANTRIPS(4), known14: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15], prep24: [2, 4, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 17, 18, 18, 19, 20, 21, 22] },
     equip: { 2024: 'Speer, 2 Dolche, Arkaner Fokus (Kristall), Gewölbeforscherausrüstung, 28 GM', 2014: 'Leichte Armbrust mit 20 Bolzen, Komponentenbeutel, Gewölbeforscherausrüstung, 2 Dolche' }, gold: { 2024: 50, 2014: '3d4×10' },
-    subclasses: { 2014: ['Drachenblutlinie', 'Wilde Magie', 'Göttliche Seele', 'Schattenmagie', 'Sturmzauberei', 'Aberranter Geist', 'Uhrwerkseele'], 2024: ['Aberrante Zauberei', 'Uhrwerk-Zauberei', 'Drakonische Zauberei', 'Wilde Magie'] },
+    subclasses: { 2014: ['Drachenblutlinie'], 2024: ['Drakonische Zauberei'] },
     feat: {
       2024: F('1:Zauberwirken,Angeborene Zauberei|2:Quelle der Magie,Metamagie|3:@sub|4:@asi|5:Zauberische Wiederherstellung|6:@sub|7:Zauberische Verkörperung|8:@asi|9:|10:Metamagie|11:|12:@asi|13:|14:@sub|15:|16:@asi|17:Metamagie|18:@sub|19:@boon|20:Arkane Apotheose'),
       2014: F('1:Zauberwirken,@sub|2:Quelle der Magie|3:Metamagie|4:@asi|5:|6:@sub|7:|8:@asi|9:|10:Metamagie|11:|12:@asi|13:|14:@sub|15:|16:@asi|17:Metamagie|18:@sub|19:@asi|20:Zauberische Wiederherstellung'),
@@ -490,7 +397,7 @@ export const CLASSES = [
     mc: { req: [['cha']], gain: 'Leichte Rüstung, einfache Waffen' },
     cast: { type: 'pact', ability: 'cha', cantrips: CANTRIPS(2), known14: [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15], prep24: [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15] },
     equip: { 2024: 'Lederrüstung, Sichel, 2 Dolche, Arkaner Fokus (Kugel), Buch (okkultes Wissen), Gelehrtenausrüstung, 15 GM', 2014: 'Leichte Armbrust mit 20 Bolzen, Komponentenbeutel, Gelehrtenausrüstung, Lederrüstung, einfache Waffe, 2 Dolche' }, gold: { 2024: 100, 2014: '4d4×10' },
-    subclasses: { 2014: ['Die Erzfee', 'Der Unhold', 'Der Große Alte', 'Das Himmlische Wesen', 'Die Hexenklinge', 'Der Unergründliche', 'Der Untote', 'Das Genie'], 2024: ['Erzfee-Schutzherr', 'Himmlischer Schutzherr', 'Unhold-Schutzherr', 'Großer-Alter-Schutzherr'] },
+    subclasses: { 2014: ['Der Unhold'], 2024: ['Unhold-Schutzherr'] },
     feat: {
       2024: F('1:Schauerliche Anrufungen,Paktmagie|2:Magische Gerissenheit|3:@sub|4:@asi|5:|6:@sub|7:|8:@asi|9:Kontakt zum Schutzherrn|10:@sub|11:Mystisches Arkanum (6. Grad)|12:@asi|13:Mystisches Arkanum (7. Grad)|14:@sub|15:Mystisches Arkanum (8. Grad)|16:@asi|17:Mystisches Arkanum (9. Grad)|18:|19:@boon|20:Schauerlicher Meister'),
       2014: F('1:@sub,Paktmagie|2:Schauerliche Anrufungen|3:Paktgabe|4:@asi|5:|6:@sub|7:|8:@asi|9:|10:@sub|11:Mystisches Arkanum (6. Grad)|12:@asi|13:Mystisches Arkanum (7. Grad)|14:@sub|15:Mystisches Arkanum (8. Grad)|16:@asi|17:Mystisches Arkanum (9. Grad)|18:|19:@asi|20:Schauerlicher Meister'),
@@ -503,20 +410,11 @@ export const CLASSES = [
     mc: { req: [['int']], gain: '–' },
     cast: { type: 'full', ability: 'int', cantrips: CANTRIPS(3), prep14: 'level', prep24: [4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 16, 17, 18, 19, 21, 22, 23, 24, 25] },
     equip: { 2024: '2 Dolche, Arkaner Fokus (Stab), Robe, Zauberbuch, Gelehrtenausrüstung, 5 GM', 2014: 'Kampfstab, Komponentenbeutel, Gelehrtenausrüstung, Zauberbuch' }, gold: { 2024: 55, 2014: '4d4×10' },
-    subclasses: { 2014: ['Schule der Bannmagie', 'Schule der Beschwörung', 'Schule der Erkenntnismagie', 'Schule der Verzauberung', 'Schule der Hervorrufung', 'Schule der Illusion', 'Schule der Nekromantie', 'Schule der Verwandlung', 'Kriegsmagie', 'Klingengesang', 'Orden der Schreiber'], 2024: ['Bannmagier', 'Erkenntnismagier', 'Hervorrufer', 'Illusionist'] },
+    subclasses: { 2014: ['Schule der Hervorrufung'], 2024: ['Hervorrufer'] },
     feat: {
       2024: F('1:Zauberwirken,Ritualkundiger,Arkane Erholung|2:Gelehrter|3:@sub|4:@asi|5:Auswendig gelernter Zauber|6:@sub|7:|8:@asi|9:|10:@sub|11:|12:@asi|13:|14:@sub|15:|16:@asi|17:|18:Zaubermeisterschaft|19:@boon|20:Signaturzauber'),
       2014: F('1:Zauberwirken,Arkane Erholung|2:@sub|3:|4:@asi|5:|6:@sub|7:|8:@asi|9:|10:@sub|11:|12:@asi|13:|14:@sub|15:|16:@asi|17:|18:Zaubermeisterschaft|19:@asi|20:Signaturzauber'),
     },
-  },
-  {
-    key: 'magieschmied', name: 'Magieschmied', ed: '2014', hd: 8, primary: ['int'], saves: ['con', 'int'], subLabel: 'Spezialisierung', subLevel: { 2014: 3, 2024: 3 },
-    skills: { n: 2, list: ['arcana', 'history', 'investigation', 'medicine', 'nature', 'perception', 'sleight'] }, armor: ['light', 'medium', 'shield'], weapons: { 2014: ['simple'], 2024: ['simple'] }, tools: 'Diebes-, Tüftler- und ein Handwerkerwerkzeug',
-    mc: { req: [['int']], gain: 'Leichte und mittelschwere Rüstung, Schilde, Diebes- und Tüftlerwerkzeug' },
-    cast: { type: 'artificer', ability: 'int', cantrips: (l) => (l >= 14 ? 4 : l >= 10 ? 3 : 2), prep14: 'half' },
-    equip: { 2014: '2 einfache Waffen, leichte Armbrust mit 20 Bolzen, beschlagene Lederrüstung, Diebeswerkzeug, Gewölbeforscherausrüstung' }, gold: { 2014: '5d4×10' },
-    subclasses: { 2014: ['Alchemist', 'Rüstungsschmied', 'Artillerist', 'Kampfschmied'] },
-    feat: { 2014: F('1:Magisches Tüfteln,Zauberwirken|2:Infusionen|3:@sub,Das richtige Werkzeug|4:@asi|5:@sub|6:Werkzeugexpertise|7:Geistesblitz|8:@asi|9:@sub|10:Magiegegenstand-Adept|11:Zauberspeicher|12:@asi|13:|14:Magiegegenstand-Gelehrter|15:@sub|16:@asi|17:|18:Magiegegenstand-Meister|19:@asi|20:Seele des Kunsthandwerks') },
   },
 ];
 
@@ -592,20 +490,33 @@ export const classLabel = (c) => (c?.classes?.length
   ? c.classes.map((x) => `${findClass(x.cls)?.name || x.cls} ${x.level}${x.subclass ? ` (${x.subclass})` : ''}`).join(' / ')
   : c?.cls || '');
 
-// Merkmale einer Klasse von Stufe from bis to
-export function classFeatures(clsKey, ed, to, from = 1) {
+export const subclassFeatures = (clsKey, sub) => (sub ? SUBCLASS_FEATURES[`${clsKey}|${sub}`] || null : null);
+// Beschreibung einer Unterklasse für die Auswahl – mit ihren Merkmalen je Stufe, falls ein Regelpaket sie angibt
+export function subclassText(clsKey, name) {
+  const base = SUBCLASS_DESC[name] || '';
+  const f = subclassFeatures(clsKey, name);
+  if (!f) return base;
+  const lines = Object.entries(f).sort((a, b) => a[0] - b[0]).flatMap(([l, list]) => list.map((x) => `Stufe ${l} – ${x.name}${x.desc ? `: ${x.desc}` : ''}`));
+  return [base, ...lines].filter(Boolean).join('\n\n');
+}
+// Merkmale einer Klasse von Stufe from bis to (sub: gewählte Unterklasse – deren Merkmale aus Regelpaketen erscheinen einzeln)
+export function classFeatures(clsKey, ed, to, from = 1, sub = '') {
   const cls = findClass(clsKey);
   if (!cls) return [];
-  const table = cls.feat[ed] || cls.feat[2014];
-  const subLvl = cls.subLevel[ed] || cls.subLevel[2014];
+  const table = (cls.feat && (cls.feat[ed] || cls.feat[2014] || cls.feat[2024])) || {};
+  const subLvl = cls.subLevel?.[ed] || cls.subLevel?.[2014] || 3;
+  const subF = subclassFeatures(clsKey, sub);
   const out = [];
   for (let l = from; l <= to; l++) {
+    const own = subF?.[l] || [];
     for (const f of table[l] || []) {
       if (f === '@asi') out.push({ level: l, kind: 'asi', name: 'Attributswerterhöhung', desc: FEATURE_INFO['Attributswerterhöhung'] });
       else if (f === '@boon') out.push({ level: l, kind: 'boon', name: 'Epische Gabe', desc: FEATURE_INFO['Epische Gabe'] });
-      else if (f === '@sub') out.push({ level: l, kind: 'sub', name: l === subLvl ? `${cls.subLabel} wählen` : `${cls.subLabel}: Merkmal`, desc: l === subLvl ? `Du wählst deine Unterklasse (${cls.subLabel}).` : `Neues Merkmal deiner Unterklasse (${cls.subLabel}).` });
-      else out.push({ level: l, kind: 'feature', name: f, desc: FEATURE_INFO[f] || '' });
+      else if (f === '@sub') {
+        if (l === subLvl || !own.length) out.push({ level: l, kind: 'sub', name: l === subLvl ? `${cls.subLabel} wählen` : `${cls.subLabel}: Merkmal`, desc: l === subLvl ? `Du wählst deine Unterklasse (${cls.subLabel}).` : `Neues Merkmal deiner Unterklasse (${cls.subLabel}).` });
+      } else out.push({ level: l, kind: 'feature', name: f, desc: FEATURE_INFO[f] || '' });
     }
+    for (const f of own) out.push({ level: l, kind: 'subfeature', name: f.name, desc: f.desc || FEATURE_INFO[f.name] || '', sub });
   }
   return out;
 }
@@ -619,10 +530,12 @@ const THIRD_SUBS = ['Mystischer Ritter', 'Arkaner Betrüger'];
 
 function casterType(x) {
   const cls = findClass(x.cls);
-  if (cls?.cast) return cls.cast.type;
-  if (THIRD_SUBS.includes(x.subclass)) return 'third';
+  if (cls?.cast?.type && cls.cast.type !== 'none') return cls.cast.type;
+  if (THIRD_SUBS.includes(x.subclass) || SUBCLASS_META[x.subclass]?.caster === 'third') return 'third';
   return null;
 }
+// Zaubertricks je Stufe: Funktion (Grundbestand), Liste mit 20 Werten oder feste Zahl (Regelpakete)
+const perLevel = (v, lvl) => (typeof v === 'function' ? v(lvl) : Array.isArray(v) ? Number(v[Math.max(0, Math.min(v.length, lvl) - 1)]) || 0 : Number(v) || 0);
 
 export function pactSlots(level) {
   if (!level) return null;
@@ -659,16 +572,17 @@ export function spellSlots(c) {
 export function spellcasting(x, ed, mods) {
   const cls = findClass(x.cls);
   const lvl = x.level;
-  let cast = cls?.cast;
-  if (!cast && THIRD_SUBS.includes(x.subclass) && lvl >= 3) {
+  let cast = cls?.cast?.type && cls.cast.type !== 'none' ? cls.cast : null;
+  const meta = SUBCLASS_META[x.subclass];
+  if (!cast && (THIRD_SUBS.includes(x.subclass) || meta?.caster === 'third') && lvl >= 3) {
     const t = [3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13];
-    return { ability: 'int', cantrips: x.subclass === 'Arkaner Betrüger' ? (lvl >= 10 ? 4 : 3) : lvl >= 10 ? 3 : 2, count: t[lvl - 3], mode: ed === '2024' ? 'vorbereitet' : 'bekannt' };
+    return { ability: meta?.ability || 'int', cantrips: x.subclass === 'Arkaner Betrüger' ? (lvl >= 10 ? 4 : 3) : lvl >= 10 ? 3 : 2, count: t[lvl - 3], mode: ed === '2024' ? 'vorbereitet' : 'bekannt' };
   }
   if (!cast) return null;
   if (cast.type === 'half' && ed === '2014' && lvl < 2) return null;
   const ab = cast.ability;
   const m = mods?.[ab] ?? 0;
-  const cantrips = cast.cantrips ? cast.cantrips(lvl) : 0;
+  const cantrips = cast.cantrips ? perLevel(cast.cantrips, lvl) : 0;
   let count;
   let mode;
   if (ed === '2024' && cast.prep24) {
@@ -684,7 +598,8 @@ export function spellcasting(x, ed, mods) {
     count = Math.max(1, m + Math.floor(lvl / 2));
     mode = 'vorbereitet';
   }
-  return { ability: ab, cantrips, count, mode, spellbook: x.cls === 'magier' ? 6 + (lvl - 1) * 2 : null };
+  if (count == null && cast.prep != null) { count = perLevel(cast.prep, lvl); mode = cast.mode === 'known' ? 'bekannt' : 'vorbereitet'; }
+  return { ability: ab, cantrips, count, mode, spellbook: x.cls === 'magier' || cast.mode === 'book' ? 6 + (lvl - 1) * 2 : null };
 }
 
 // ───────────────────────── Berechnungen für den Bogen ─────────────────────────
@@ -896,144 +811,41 @@ export function multiclassOk(c, clsKey) {
   return { ok, why: ok ? '' : `Voraussetzung: ${txt}` };
 }
 
-// Kurzbeschreibungen der Unterklassen (für die Auswahl im Assistenten, Ansicht wie in Baldur's Gate 3)
+// Merkmale je Stufe aus Regelpaketen: SUBCLASS_FEATURES['klasse|Unterklasse'] = { 3: [{ name, desc }], … }
+export const SUBCLASS_FEATURES = {};
+// Weitere Angaben zu Unterklassen aus Regelpaketen: { caster: 'third', ability: 'int' }
+export const SUBCLASS_META = {};
+
+// Kurzbeschreibungen der Unterklassen (für die Auswahl im Assistenten)
 export const SUBCLASS_DESC = {
   // Barbar
   'Pfad des Berserkers': 'Rohe Wut ohne Rücksicht auf dich selbst. Im Kampfrausch führst du als Bonusaktion einen zusätzlichen Nahkampfangriff (Blutrausch) – 2014 zahlst du dafür mit Erschöpfung. Später schüchterst du Gegner allein durch dein Auftreten ein (Furchteinflößende Präsenz) und kämpfst weiter, selbst wenn dich Zauber betäuben oder bezaubern.',
-  'Pfad des Totemkriegers': 'Ein Geisttier leiht dir seine Kraft. Beim Eintritt wählst du ein Totem: Bär gibt dir im Rausch Resistenz gegen fast jede Schadensart, Adler lässt dich als Bonusaktion spurten und Gelegenheitsangriffen ausweichen, Wolf gibt Verbündeten neben deinem Ziel Vorteil. Auf höheren Stufen kommen Geisterwanderung, Rituale und die Gestalt deines Totems dazu.',
-  'Pfad des Ahnenwächters': 'Die Geister deiner Ahnen schützen deine Gefährten. Wen du im Rausch als Erstes triffst, der hat Nachteil auf Angriffe gegen alle anderen und richtet nur halben Schaden an ihnen an. Später leiten die Ahnen Schaden von Verbündeten auf dich um, und du sprichst mit den Geistern der Toten.',
-  'Pfad des Sturmherolds': 'Um dich tobt im Rausch eine magische Aura – Wüste, Meer oder Tundra. Die Wüste verbrennt alle Gegner in der Nähe, das Meer schleudert ein Ziel zu Boden, die Tundra gibt Verbündeten temporäre Trefferpunkte. Auf höheren Stufen wird die Aura größer und stärker, und du bekommst Resistenz gegen ihre Schadensart.',
-  'Pfad des Eiferers': 'Göttliche Raserei treibt dich. Im Rausch richtet dein erster Treffer pro Zug zusätzlichen nekrotischen oder strahlenden Schaden an, und Wiederbelebungszauber auf dich brauchen keine teuren Materialien. Später hält dich der Tod im Rausch nicht auf: Fällst du auf 0 Trefferpunkte, kämpfst du weiter, und deine Wut zählt auf jeden Rettungswurf.',
-  'Pfad der wilden Magie': 'In deiner Wut bricht ungebändigte Magie hervor. Jeder Kampfrausch löst eine zufällige Wirkung aus – von Kraftschaden im Umkreis bis zu einem Teleport als Bonusaktion. Später verstärkst du damit die Würfe deiner Verbündeten und erhältst magische Aufladungen, die du gezielt einsetzt.',
-  'Pfad der Bestie': 'Im Rausch wächst dir eine natürliche Waffe: Klauen für mehrere Angriffe, ein Gebiss, das dich heilt, oder ein Schwanz, der Angriffe abwehrt und Gegner auf Abstand hält. Später teilst du deine Verwandlung mit Verbündeten und schwimmst, kletterst oder springst wie ein Tier.',
-  'Pfad des Wildherzens': 'Du rufst Tiergeister an: Bär gibt Resistenz und zieht Angriffe auf dich, Adler macht dich beweglich, Elch trägt die Gruppe schneller, Wolf hilft im Nahkampf, Tiger springt weiter und Eule sieht im Dunkeln. Später spürst du mit den Sinnen der Tiere und rufst mehrere Geister gleichzeitig.',
-  'Pfad des Weltenbaums': 'Deine Wut wurzelt im Weltenbaum. Im Rausch bekommst du temporäre Trefferpunkte, die du mit einem Verbündeten teilst, und ziehst Kreaturen mit Ranken zu dir oder von einem Verbündeten weg. Später wächst du selbst über dich hinaus und lässt Verbündete durch die Äste des Baums reisen.',
   // Barde
   'Kolleg des Wissens': 'Gelehrter, Spötter und Sammler fremder Magie. Du bekommst drei zusätzliche Fertigkeiten und „Worte der Schmähung“: Ein Inspirationswürfel wird abgezogen, statt addiert – der Gegner verdirbt damit Angriff, Probe oder Schaden. Später lernst du Magische Geheimnisse, also Zauber aus jeder Klassenliste.',
-  'Kolleg der Tapferkeit': 'Der Barde an vorderster Front. Du wirst mit mittelschwerer Rüstung, Schilden und Kriegswaffen geübt, und deine Inspiration wird zum Kampfwürfel, den Verbündete auf Angriff oder Rüstungsklasse legen. Später bekommst du einen Extraangriff und verstärkst mit Inspiration deine eigenen Treffer.',
-  'Kolleg des Glanzes': 'Die große Bühne. Deine Inspiration springt nach Gebrauch auf eine andere Kreatur weiter, und mit „Faszinierendes Auftreten“ bezauberst oder erschreckst du eine Menge. Später machst du einen Verbündeten kurzzeitig fast unverwundbar und verwandelst einen Fehlschlag in einen Treffer.',
-  'Kolleg der Schwerter': 'Klingentänzer aus dem fahrenden Volk. Du bekommst mittelschwere Rüstung, Kriegswaffen als Zauberfokus und Kunststücke: ablenken, umwerfen oder gleichzeitig zwei Gegner treffen. Später kommen Extraangriff, ein Kampfstil und eine Reaktion, die Schaden abwehrt.',
-  'Kolleg des Flüsterns': 'Der Barde als stiller Schrecken. Deine Inspiration wird zu „Vergifteten Worten“, die zusätzlichen psychischen Schaden anrichten, und mit Schreckenskunde versetzt du eine Kreatur in Todesangst. Später stiehlst du das Gesicht und die Erinnerungen eines Toten.',
-  'Kolleg der Schöpfung': 'Alles ist Lied und Schöpfung. Du erschaffst mit dem Lied der Schöpfung einen nichtmagischen Gegenstand aus dem Nichts und rufst eine tanzende Stimmung, die für dich angreift und Verbündete schützt. Später werden deine Schöpfungen größer und beständiger.',
-  'Kolleg der Beredsamkeit': 'Perfekte Rede. Mit „Silberzunge“ zählt jedes Ergebnis unter 10 auf Überzeugen und Täuschen als 10 – du versagst praktisch nie. Später wenden sich Gegner durch deine Worte gegeneinander, und deine Inspiration springt weiter, statt verbraucht zu werden.',
-  'Kolleg des Tanzes': 'Bardischer Tanz statt Rüstung. Solange du tanzt, steigt deine Rüstungsklasse mit Weisheit und Charisma, du fällst nicht durch Sturzschaden und springst weiter. Später schlägst du im Tanz mit charismagetriebenen Wirbelschlägen zu und weichst Angriffen aus.',
   // Kleriker
-  'Domäne des Wissens': 'Wissen ist Macht. Du bekommst zwei Wissensfertigkeiten mit Expertise, dazu zwei zusätzliche Sprachen. Mit „Wissen des Zeitalters“ beherrschst du zehn Minuten lang jedes Handwerk, später liest du Gedanken und erfährst die Vergangenheit eines Gegenstands.',
   'Domäne des Lebens': 'Die stärkste Heilung im Spiel. Schwere Rüstung schützt dich, und jeder Heilzauber gibt zusätzlich 2 + Zaubergrad Trefferpunkte. Mit „Leben bewahren“ heilst du mehrere Kreaturen auf einmal, später heilt jede Berührung auch die Umstehenden.',
-  'Domäne des Lichts': 'Flammender Zorn deines Gottes. Du bekommst Entflammen und zusätzliche Feuer- und Lichtzauber, und mit „Schutzschimmer“ lenkst du als Reaktion einen Angriff ins Leere. Später entzündest du mit Kanalisieren alle Untoten und Gegner im Umkreis.',
-  'Domäne der Natur': 'Priester der Wildnis. Du bekommst schwere Rüstung, eine Naturfertigkeit und einen Druidenzaubertrick, dazu Zauber wie Tiere sprechen und Dornenwuchs. Mit Kanalisieren befiehlst du Tieren und Pflanzen, später verwandelst du die Erde selbst in schwieriges Gelände.',
-  'Domäne des Sturms': 'Donner und Blitz. Du bekommst schwere Rüstung und Kriegswaffen, und mit „Zorn des Sturms“ schlägt jeder zurück, der dich im Nahkampf trifft. Später wirst du gegen Blitz und Donner immun, fliegst im Sturm und schleuderst Feinde zu Boden.',
-  'Domäne der List': 'Segen der Schatten. Du bekommst Heimlichkeit, den Zaubertrick Taschenspielerei und Zauber wie Verkleidung und Unsichtbarkeit. Mit „Segen der Trickserei“ gibst du einem Verbündeten Vorteil auf Heimlichkeit, später erschaffst du mehrere Abbilder von dir und schlägst aus dem Nichts zu.',
-  'Domäne des Krieges': 'Kriegspriester mit schwerer Rüstung und Kriegswaffen. Als Bonusaktion führst du zusätzliche Angriffe, mit Kanalisieren addierst du +10 auf einen Angriffswurf. Später gibt dir göttliche Rüstung Schutz, und Angriffe deiner Verbündeten werden treffsicherer.',
-  'Domäne der Schmiede': 'Am Amboss geweiht. Du bekommst schwere Rüstung, Schmiedewerkzeug und Zauber wie Brennende Hände und Feurige Klinge. Mit „Segen des Schmieds“ verzauberst du eine Waffe oder Rüstung der Gruppe (+1), später stellst du in einer Rast magische Gegenstände her und verstärkst deine Treffer.',
-  'Domäne des Grabes': 'Wächter der Schwelle zwischen Leben und Tod. Du spürst Sterbende, machst sie aus der Ferne stabil und machst mit „Weg zum Grab“ ein Ziel verwundbar gegen den nächsten Angriff. Später steht dir eine Reaktion offen, die einen tödlichen Treffer abfängt, und deine Heilung wirkt sofort in voller Höhe.',
-  'Domäne der Ordnung': 'Gesetz, Hierarchie und Gehorsam. Du bekommst schwere Rüstung, Zauber der Beeinflussung und „Stimme der Autorität“: Wirkst du einen Zauber auf einen Verbündeten, greift dieser sofort an. Später gehorchen Bezauberte deinen Befehlen ohne Nachfrage.',
-  'Domäne des Friedens': 'Das Band zwischen den Gefährten. Mit dem „Band der Verbundenheit“ teilen bis zu drei Kreaturen Würfelboni und nehmen Schaden füreinander auf. Später schützt deine bloße Gegenwart alle Verbündeten, und Heilung fällt reicher aus.',
-  'Domäne des Zwielichts': 'Hüter der Dämmerung. Du bekommst schwere Rüstung, Dunkelsicht auf 90 m für die ganze Gruppe und eine Aura, die vor Furcht und Bezauberung schützt und temporäre Trefferpunkte gibt. Später erschaffst du eine Sphäre aus Zwielicht, in der Verbündete sehen und Gegner erblinden.',
   // Druide
   'Zirkel des Landes': 'Der klassische Naturmagier. Du bekommst einen zusätzlichen Zaubertrick, Zauber je nach Landschaft (Arktis, Küste, Wüste, Wald, Sumpf, Berge, Grasland, Unterreich) und stellst mit „Natürliche Erholung“ in einer Rast Zauberplätze wieder her. Später ignorierst du schwieriges Gelände und widerstehst Naturmagie.',
-  'Zirkel des Mondes': 'Gestaltwandler im Kampf. Du wechselst schon als Bonusaktion in die Tiergestalt und darfst stärkere Bestien wählen; in Tiergestalt heilst du dich mit Zauberplätzen. Später greifen deine Tiergestalten magisch an, und du nimmst Elementar- und sogar außerweltliche Gestalten an.',
-  'Zirkel der Träume': 'Feenmagie der Sommerhöfe. Mit „Balsam des Sommerhofs“ heilst du aus einem Vorrat von Würfeln, die sich mit jeder langen Rast füllen. Später schaffst du ein verborgenes, sicheres Lager für die Nacht und schreitest im Zwielicht von Schatten zu Schatten.',
-  'Zirkel des Hirten': 'Rufer der Geister. Du sprichst mit allen Bestien und stellst einen Geistertotem auf – Bär gibt temporäre Trefferpunkte, Falke Vorteil auf Angriffe, Einhorn Heilung für alle. Später werden deine beschworenen Tiere zäher, und im Tod rufst du sie noch einmal zurück.',
-  'Zirkel der Sporen': 'Pilzmagie zwischen Leben und Tod. Eine unsichtbare Sporenwolke um dich richtet automatisch Schaden an, und du erweckst Leichen als kurzlebige Diener. Später verwandelst du dich in einen Pilzkörper, der weiterkämpft, und deine Sporen verstärken die Angriffe deiner Untoten.',
-  'Zirkel der Sterne': 'Sternbildgestalt statt Tiergestalt. Du liest in einer Sternenkarte und nimmst die Gestalt von Bogenschütze (Schaden aus der Ferne), Kelch (Heilung für alle) oder Drache (verlässliche Konzentration) an. Später leuchtet die Gestalt heller und länger, und ein kritischer Treffer gegen dich wird zum normalen Treffer.',
-  'Zirkel des Wildfeuers': 'Ein Wildfeuergeist ist dein Gefährte. Er kämpft an deiner Seite, versetzt Verbündete über das Feld und entzündet Gegner. Später heilt sein Erscheinen alle Umstehenden, und ihr teilt euch Magie und Sicht.',
-  'Zirkel des Meeres': 'Sturm und Brandung. Eine Aura aus Wind und Wasser umgibt dich: Wer hineingerät, nimmt Kälte- oder Blitzschaden und wird mitgerissen. Später atmest du unter Wasser, schwimmst mit voller Geschwindigkeit und verstärkst den Sog deiner Aura.',
   // Kämpfer
   Champion: 'Schlicht, robust, verlässlich. Deine kritischen Treffer beginnen schon bei einer 19 (später bei 18), du bekommst einen zweiten Kampfstil und regenerierst im Kampf Trefferpunkte. Später steigen deine Attributswürfe, und Angriffe verfehlen dich seltener.',
-  Kampfmeister: 'Taktiker mit Manövern. Du lernst Kampfmanöver (entwaffnen, umwerfen, ablenken, kontern, drohen …) und gibst Überlegenheitswürfel aus, um sie auszuführen – jede Runde eine Entscheidung mehr. Später bekommst du mehr Manöver, größere Würfel und erkennst die Stärken deines Gegenübers.',
-  'Mystischer Ritter': 'Kämpfer mit Magierzaubern. Du lernst Zauber der Bannmagie und Hervorrufung (Schild, Nebelschritt, Brennende Hände) und bindest eine Waffe an dich, die auf Ruf in deine Hand zurückkehrt. Später folgt auf einen Zauber ein Waffenangriff, und Zauber wirken auch als Bonusaktion.',
-  'Arkaner Bogenschütze': 'Verzauberte Pfeile. Du lernst zwei arkane Schüsse – durchdringende Salve, bannender Pfeil, verfolgender Pfeil oder ein Schuss, der Wände durchschlägt – und bekommst dazu Magierzaubertricks. Später gibt es mehr Schüsse, stärkere Wirkung und einen Pfeil, der immer trifft.',
-  Kavalier: 'Reiter und Beschützer. Du bindest einen Gegner an dich (er hat Nachteil gegen alle anderen), kämpfst zu Pferd mit Vorteil und fängst Angriffe auf deine Gefährten ab. Später stehst du unverrückbar und wirfst Gegner mit einem Schlag zu Boden.',
-  Samurai: 'Unbeugsamer Kampfgeist. Mit „Kampfgeist“ nimmst du dir Vorteil auf Angriffe und temporäre Trefferpunkte, ohne Magie zu brauchen. Später kommen höfische Fertigkeiten, drei Angriffe in einer Runde und ein letzter Schlag, selbst wenn du fallen solltest.',
-  'Psi-Krieger': 'Geistkraft im Kampf. Aus einem Vorrat psionischer Würfel schiebst du Gegner mit Gedanken, verstärkst deine Treffer und legst einen Kraftschild um Verbündete. Später bewegst du Gegenstände telekinetisch, teleportierst dich und schwebst.',
-  Runenritter: 'Riesenrunen auf deiner Ausrüstung. Du gravierst Runen (Wolke, Feuer, Frost, Stein, Hügel, Sturm), die dauerhaft wirken und einmal pro Rast eine starke Kraft entfalten. Später wächst du im Kampf auf Riesengröße mit größerer Reichweite und mehr Schaden.',
-  'Echo-Ritter': 'Ein Echo deiner selbst aus einer anderen Zeitlinie kämpft mit. Du rufst es als Bonusaktion, tauschst mit ihm den Platz, greifst aus seiner Position an und lässt es Treffer für dich einstecken. Später greift es gleichzeitig mit dir an, und du siehst und hörst durch seine Augen.',
   // Mönch
   'Weg der offenen Hand': 'Reine Kampfkunst. Dein Schlaghagel wirft Gegner um, stößt sie zurück oder verhindert ihre Reaktion, und mit „Ruhe des Geistes“ heilst du dich selbst. Später betäubst du mit einem Schlag die Sinne eines Gegners und beherrschst den berüchtigten Todesschlag.',
-  'Weg des Schattens': 'Schattenmönch. Du wirkst Dunkelheit, Stille, Dunkelsicht und Unauffälligkeit mit Ki und springst von Schatten zu Schatten (Schattenschritt) – mit Vorteil auf den nächsten Angriff. Später verschwindest du im Dämmerlicht und schlüpfst als Schatten in fremde Gestalten.',
-  'Weg der vier Elemente': 'Elementarmagie aus Ki. Du lernst Disziplinen wie Faust des Donners, Welle des Wassers, Ritt des Windes oder Steinhaut und bezahlst sie mit Ki-Punkten. Später kommen mächtigere Wirkungen und höhere Zaubergrade dazu.',
-  'Weg des Kensei': 'Meister der Waffen. Zwei Waffen werden zu Kensei-Waffen: Mit ihnen kämpfst du wie mit Kampfkunst, schießt genauer und erhöhst als Bonusaktion deine Rüstungsklasse. Später machst du deine Waffen magisch, schärfst deinen Schlag und triffst fast immer.',
-  'Weg der Sonnenseele': 'Strahlendes Licht aus dem Inneren. Deine waffenlosen Schläge reichen 9 m weit, und für Ki entzündest du eine Feuerwoge oder eine brennende Aura, die Gegner Runde für Runde versengt. Später wird die Aura größer und heißer.',
-  'Weg der betrunkenen Meisterin': 'Taumelnd, unberechenbar, kaum zu fassen. Nach dem Schlaghagel bewegst du dich frei, ohne Gelegenheitsangriffe auszulösen, und mit „Rauschtaumel“ weichst du Angriffen aus. Später bringst du Gegner zu Fall, indem du ihre Schläge auf andere lenkst.',
-  'Weg der Barmherzigkeit': 'Heiler und Henker in einer Person. Mit der „Hand der Heilung“ heilst du für Ki, mit der „Hand des Schadens“ richtest du nekrotischen Schaden an – sogar ein Gift oder eine Krankheit vertreibst du. Später wirken beide Hände auf mehrere Ziele und holen Sterbende zurück.',
-  'Weg des Astralen Selbst': 'Arme aus Astralenergie mit 1,5 m mehr Reichweite, die mit Weisheit treffen. Dazu erscheinen Antlitz und Körper deines astralen Selbst: Dunkelsicht, Vorteil auf Wahrnehmung und Einschüchtern, mehr Schaden und Schutz. Später schlägt das astrale Selbst ein zusätzliches Mal zu.',
-  'Krieger der Barmherzigkeit': 'Die Fassung 2024: Heilende und verletzende Hand mit klaren Kosten in Fokuspunkten – du heilst Verbündete oder richtest nekrotischen Schaden an, beides als Teil deiner Angriffe. Später wirken beide Hände auf mehrere Ziele und bringen Sterbende zurück.',
-  'Krieger des Schattens': 'Die Fassung 2024 des Schattenmönchs: Dunkelheit als Werkzeug, Dunkelsicht, Schattenschritt zwischen dunklen Stellen mit Vorteil auf den folgenden Angriff. Später umgibt dich der Schatten selbst und verbirgt dich vor fremden Blicken.',
-  'Krieger der Elemente': 'Die Fassung 2024 der vier Elemente: Deine Schläge reichen weiter, und für Fokuspunkte umgibst du dich mit elementarer Kraft – Feuer, Eis, Stein und Wind wirken bei jedem Treffer. Später werden Reichweite und Wirkung deutlich größer.',
   'Krieger der offenen Hand': 'Die klassische Kampfkunst in der Fassung 2024: Dein Schlaghagel wirft Gegner um oder stößt sie weg, du heilst dich selbst in der Rast und führst auf hoher Stufe den berüchtigten letzten Schlag.',
   // Paladin
   'Eid der Hingabe': 'Der klassische Ritter ohne Falsch. Mit Kanalisieren machst du deine Waffe für eine Minute heilig (+CHA auf Angriffe) oder vertreibst Untote. Deine Aura schützt alle Verbündeten vor Bezauberung, später heilst du in einer Aura und wirst kurzzeitig fast unverwundbar.',
-  'Eid der Alten': 'Hüter des Lichts und der Natur. Mit Kanalisieren bannst du Feen und Unholde oder lässt Ranken alles festhalten. Deine Aura gibt Vorteil auf Rettungswürfe gegen Zauber, später alterst du nicht mehr und bist im Sterben kaum zu töten.',
-  'Eid der Rache': 'Unerbittlicher Jäger. Mit Kanalisieren jagst du Furcht in die Herzen deiner Feinde oder markierst ein Ziel, gegen das du Vorteil hast und dem du folgst. Später schlägst du als Reaktion zurück, wenn dein Ziel angreift, und nimmst die Gestalt eines rächenden Engels an.',
-  'Eid der Eroberung': 'Furcht ist deine Waffe. Mit Kanalisieren erstarren verängstigte Gegner an Ort und Stelle, deine Aura lähmt ihre Bewegung. Später richtest du zusätzlichen psychischen Schaden an und schlägst mit einer Welle aus Kraft alles um dich herum zu Boden.',
-  'Eid der Krone': 'Dienst am Gesetz und an der Gemeinschaft. Mit Kanalisieren zwingst du Gegner, nur dich anzugreifen, oder gibst Verbündeten Trefferpunkte zurück. Deine Aura verleiht Vorteil gegen Bezauberung, später fängst du Schaden für deine Gefährten ab.',
-  'Eid der Erlösung': 'Gewaltverzicht als Stärke. Du versuchst zuerst zu reden: Mit Kanalisieren befriedest du Kämpfende oder bannst böse Kreaturen. Deine Aura verringert Fernkampfschaden, später nimmst du Schaden für andere auf dich und bestrafst den, der trotzdem zuschlägt.',
-  'Eid des Ruhms': 'Der strahlende Held. Mit Kanalisieren springst du weiter, läufst schneller und treibst Verbündete zu Höchstleistungen an. Deine Aura gibt allen mehr Bewegung, später erscheinst du als leuchtendes Vorbild, dem Gegner kaum widerstehen.',
-  'Eid der Wächter': 'Beschützer der Schwachen. Mit Kanalisieren ziehst du Flüchtende zu dir zurück oder verringerst den Schaden an einem Gefährten. Deine Aura schützt vor Zaubern, später nimmst du die Hälfte des Schadens eines Verbündeten auf dich.',
   // Waldläufer
   Jäger: 'Spezialist gegen die Übermacht. Du wählst eine Beute – mehr Schaden gegen Einzelziele, ein Angriff gegen alle in Reichweite oder Verteidigung gegen Riesen. Später weichst du Flächenzaubern aus, schlägst mehrere Gegner gleichzeitig und stehst auch gegen eine Horde.',
-  Tiermeister: 'Ein tierischer Gefährte an deiner Seite: Er kämpft, weicht aus und hilft auf dein Wort. Du teilst dir Angriffe mit ihm, später handelt er von selbst und weicht Flächenzaubern ebenso aus wie du.',
-  Düsterpirscher: 'Feenmagie der Dämmerung. Deine Angriffe richten beim ersten Treffer zusätzlichen psychischen Schaden an, und du verschwindest im Dämmerlicht. Später wirst du für ein Ziel unsichtbar, sobald es dich verfehlt.',
-  Horizontwanderer: 'Wanderer zwischen den Ebenen. Du spürst Portale in andere Welten auf und richtest zusätzlichen Kraftschaden an. Später trittst du als Reaktion kurz aus der Welt, um einem Angriff zu entgehen, und nimmst einen Gefährten mit auf die Reise.',
-  Monsterjäger: 'Kenner der Ungeheuer. Du erkennst Widerstände, Verwundbarkeiten und besondere Fähigkeiten deines Gegenübers und störst als Reaktion seine Angriffe oder Zauber. Später würfelst du Schaden neu und widerstehst den Schrecken, die andere lähmen.',
-  Feenwanderer: 'Charisma und Feenmagie. Deine Angriffe richten zusätzlichen psychischen Schaden an und zwingen Gegner, nur dich anzugreifen. Später trittst du durch die Feenwildnis von Ort zu Ort und nimmst Verbündete mit.',
-  Schwarmhüter: 'Ein Schwarm geisterhafter Wesen begleitet dich. Er beißt Gegner, schiebt sie weg oder zieht dich selbst aus der Gefahr. Später wird sein Schaden größer, und er trägt dich auf höhere Stufen der Bewegung.',
   // Schurke
   Dieb: 'Schnelle Finger und flinke Füße. „Flinke Hände“ gibt dir eine zusätzliche Bonusaktion für Taschendiebstahl, Schlösser oder Fallen, dazu kletterst du mit voller Geschwindigkeit. Später nutzt du magische Gegenstände, die eigentlich anderen Klassen vorbehalten sind, und handelst als Erster.',
-  Assassine: 'Der erste Schlag entscheidet. Gegen Überraschte triffst du automatisch kritisch, und du hast Vorteil gegen alle, die noch nicht gehandelt haben. Dazu kommen Verkleidung und Gift, später der Tod aus dem Nichts.',
-  'Arkaner Betrüger': 'Magier unter den Schurken. Du lernst Zauber der Illusion und Verzauberung samt Zauberhand, die du unsichtbar auf 30 m lenkst – zum Stehlen und Ablenken. Später stiehlst du fremde Zauber und tauschst mit deinen Illusionen den Platz.',
-  Inquisitiver: 'Der Ermittler. Du erkennst Lügen und Verkleidungen sofort und findest als Bonusaktion die Schwachstelle eines Gegners – danach triffst du ihn auch ohne Verbündeten hinterhältig. Später durchschaust du alles, was einen Hinterhalt verbergen soll.',
-  Drahtzieher: 'Der Kopf im Hintergrund. Du bekommst Expertise in Überzeugen und Täuschen, fälschst Handschriften und Siegel und beeinflusst, wie andere über dich denken. Später hast du überall Verbündete, die dir Türen öffnen.',
-  Kundschafter: 'Beweglich und wachsam. Du weichst dem Gelegenheitsangriff aus, indem du dich nach deinem Angriff halb so weit zurückziehst, und bist in Natur und Überleben zu Hause. Später schlägst du als Reaktion zu, wenn jemand in deine Nähe kommt.',
-  Draufgänger: 'Hinterhältiger Angriff ohne fremde Hilfe. Im Duell mit einer einzelnen Kreatur triffst du hinterhältig, ohne Vorteil zu brauchen, und bist im Nahkampf besonders wendig. Später weichst du Flächenzaubern fast völlig aus.',
-  Phantom: 'Geisterseelen sammeln sich um dich. Bei einem hinterhältigen Angriff verteilst du zusätzlichen nekrotischen Schaden auf ein weiteres Ziel, und jede Leiche in deiner Nähe leiht dir eine Fertigkeit oder ein Werkzeug. Später rufst du die Seelen als Wirbel um dich.',
-  Seelenmesser: 'Psionische Klingen aus Gedankenkraft ersetzen deine Waffen – sie kehren zurück und wiegen nichts. Dazu Telepathie und ein Vorrat psionischer Würfel. Später springst du durch den Raum und lenkst Gedanken.',
   // Zauberer
   Drachenblutlinie: 'Drachenerbe in deinem Blut. Du bekommst mehr Trefferpunkte pro Stufe, natürliche Rüstung ohne Rüstung (13 + GES) und sprichst Drakonisch. Zauber deiner Elementarart richten mehr Schaden an, später wachsen dir Drachenflügel.',
-  'Wilde Magie': 'Ungezähmte Magie bricht aus dir hervor. Jeder Zauber kann eine zufällige Wirkung auslösen, und mit „Glückswellen“ lenkst du Würfe deiner Gefährten. Später erzwingst du die Wirkung, die du willst.',
-  'Göttliche Seele': 'Himmlisches Erbe. Du bekommst Klerikerzauber zu deiner Liste, heilst stärker und würfelst Rettungswürfe mit einem Bonus. Später hältst du dich bei 0 Trefferpunkten aufrecht und fliegst auf Schwingen aus Licht.',
-  Schattenmagie: 'Ein Hauch der Schattenebene. Du siehst im Dunkeln, überlebst mit Zauberpunkten den Fall auf 0 Trefferpunkte und rufst einen Hund aus Dunkelheit, der deine Gegner jagt. Später wirst du selbst zum Schatten.',
-  Sturmzauberei: 'Wind und Donner. Nach jedem Zauber ab Grad 1 fliegst du als Bonusaktion ein Stück, ohne Gelegenheitsangriffe auszulösen. Später widerstehst du Blitz und Donner, richtest mehr Schaden damit an und trägst Verbündete durch die Luft.',
-  'Aberranter Geist': 'Ein fremdartiger Geist berührt deinen Verstand. Du sprichst telepathisch, lernst psionische Zauber und verwandelst Schaden in psychischen Schaden. Später schützt du dich gegen Gedankenangriffe und veränderst die Körper anderer.',
-  Uhrwerkseele: 'Ordnung aus Mechanus. Du machst Würfe berechenbar: Ein Wurf zählt als 10 statt zu schwanken, und du gleichst Vorteil und Nachteil aus. Später schaffst du ein Feld der Ruhe, in dem Schaden gedämpft und Heilung verstärkt wird.',
-  'Aberrante Zauberei': 'Die Fassung 2024 des fremdartigen Geistes: Telepathie, psionische Zauber, freie Metamagie und Schaden, der sich in psychischen Schaden verwandelt. Später verändert deine Magie sogar die Körper anderer.',
-  'Uhrwerk-Zauberei': 'Ordnungsmagie von Mechanus in der Fassung 2024: berechenbare Würfe, ausgeglichene Vor- und Nachteile und ein Feld der Ruhe, das Schaden dämpft.',
   'Drakonische Zauberei': 'Drachenblut in der Fassung 2024: mehr Trefferpunkte, Rüstung aus Schuppen, verstärkter Elementarschaden und früh einsetzende Drachenflügel.',
   // Hexenmeister
-  'Die Erzfee': 'Pakt mit einer Fürstin der Feenwildnis. Mit „Feenpräsenz“ bezauberst oder erschreckst du alle in einem Würfel vor dir, später verschwindest du im Nebel, wenn du getroffen wirst, und lockst Gegner in die Feenwildnis.',
   'Der Unhold': 'Pakt mit einem Erzteufel. Für jeden erledigten Gegner bekommst du temporäre Trefferpunkte, später widerstehst du einer Schadensart deiner Wahl, würfelst Rettungswürfe neu und entgehst einmal pro Tag dem sicheren Tod.',
-  'Der Große Alte': 'Pakt mit einem Wesen jenseits der Sterne. Du sprichst telepathisch mit allen in 30 m, erfährst Gedanken und hast Vorteil gegen Gedankenangriffe. Später zwingst du Kreaturen in deinen Dienst und bindest ihren Willen an deinen.',
-  'Das Himmlische Wesen': 'Pakt mit einem Wesen des Lichts. Du bekommst Heilzauber und einen Vorrat an Heilwürfeln für die Gruppe, stehst bei 0 Trefferpunkten von selbst wieder auf und widerstehst Strahlendem und Nekrotischem.',
-  'Die Hexenklinge': 'Der kämpfende Hexenmeister. Du bekommst mittelschwere Rüstung und Schilde, bindest eine Waffe an dich, die du mit Charisma führst, und bekommst später einen Extraangriff sowie eine Reaktion, die Schaden umlenkt.',
-  'Der Unergründliche': 'Geheimnisse, Rätsel und Verwirrung. Du liest Gedanken und stiehlst Wissen, entziehst dich Wahrsagerei und trittst als jemand anderes auf. Später verwirrst du Gegner so, dass sie dich vergessen.',
-  'Der Untote': 'Pakt mit einem Lich oder Vampirfürsten. Du nimmst die „Gestalt des Schreckens“ an, die Gegner ängstigt und zusätzlichen nekrotischen Schaden austeilt. Später brauchst du kaum noch Nahrung und Schlaf und kehrst aus dem Tod zurück.',
-  'Das Genie': 'Pakt mit einem Dschinn. Ein magisches Gefäß dient dir als Zuflucht und Lager, deine Treffer richten zusätzlichen Elementarschaden nach Art deines Schutzherrn an. Später erfüllst du dir einmal einen begrenzten Wunsch.',
-  'Erzfee-Schutzherr': 'Feenpakt in der Fassung 2024: Bezauberung und Furcht in einem Schritt, Schrittzauber wie Nebelschritt ohne Zauberplatz und Schutz durch Feenmagie.',
-  'Himmlischer Schutzherr': 'Pakt mit einem himmlischen Wesen (2024): Heilwürfel für die Gruppe, strahlende Zauber, Widerstand gegen Nekrotisches und ein Körper, der sich selbst aufrichtet.',
   'Unhold-Schutzherr': 'Teuflischer Pakt (2024): temporäre Trefferpunkte nach jedem Sieg, höllischer Widerstand und ein Ausweg aus dem sicheren Tod.',
-  'Großer-Alter-Schutzherr': 'Pakt mit einem fremden Geist (2024): Telepathie, psychischer Schaden, Schutz des Verstandes und Diener, die deinem Willen folgen.',
   // Magier
-  'Schule der Bannmagie': 'Schutzmagie. Wirkst du einen Bannzauber, entsteht ein arkaner Schild, der Schaden von dir fernhält und sich mit jedem weiteren Bannzauber auflädt. Später projizierst du den Schutz auf Verbündete und widerstehst Zaubern.',
-  'Schule der Beschwörung': 'Herbeirufen und Verschieben. Du erschaffst kleine Gegenstände aus dem Nichts und springst als Bonusaktion 9 m weit. Später erscheinen deine Beschwörungen schneller und lassen sich im Kampf versetzen.',
-  'Schule der Erkenntnismagie': 'Wissen und Wahrheit. Mit Vorahnung würfelst du zwei W20 im Voraus und ersetzt damit später beliebige Würfe – deine oder fremde. Dazu kommen billigere Erkenntniszauber, Gedankenlesen und der Blick in die Ferne.',
-  'Schule der Verzauberung': 'Beeinflussung. Du bezauberst mit einem Blick als Bonusaktion und lenkst Angriffe auf andere Ziele um. Später machst du Bezauberte zu Verbündeten und löschst Erinnerungen.',
   'Schule der Hervorrufung': 'Zerstörungsmagie mit Augenmaß. Deine Flächenzauber verschonen gewählte Verbündete, und auch bei einem bestandenen Rettungswurf richtest du Mindestschaden an. Später verstärkst du einen Zauber pro Rast auf den Maximalschaden.',
-  'Schule der Illusion': 'Trugbilder. Du formst deine Illusionen als Aktion in Echtzeit um und erschaffst ein zweites Ich, mit dem du den Platz tauschst – Angriffe gegen dich gehen ins Leere. Später werden deine Illusionen teilweise real.',
-  'Schule der Nekromantie': 'Macht über Leben und Tod. Jeder erledigte Gegner gibt dir Trefferpunkte zurück, deine Untoten sind zäher und schlagen härter zu. Später gehorchen dir auch fremde Untote.',
-  'Schule der Verwandlung': 'Stoff und Form. Du formst kleine Gegenstände um und trägst einen Verwandlungsstein, der dir wahlweise Dunkelsicht, mehr Bewegung, Schutz oder Resistenz gibt. Später verwandelst du beliebige Materialien ineinander.',
-  Kriegsmagie: 'Magier im Feld. Du bekommst einen arkanen Schutzwall, der Schaden abfängt, Vorteil auf Initiative und bessere Konzentration. Später leitest du Zauberkraft in deine Verteidigung um.',
-  Klingengesang: 'Tanz mit der Klinge. Im Klingengesang steigt deine Rüstungsklasse um deinen Intelligenzmodifikator, du wirst schneller und konzentrierst dich sicherer. Später wirkst du Zauber mitten im Angriff.',
-  'Orden der Schreiber': 'Das erwachte Zauberbuch. Du tauschst Schadensarten deiner Zauber aus, schreibst neue Zauber schneller ab und ersetzt verbrauchte Zauber nach der Rast. Später sprechen deine Zauber aus dem Buch selbst.',
-  Bannmagier: 'Schutzmagie in der Fassung 2024: arkaner Schild aus Zauberplätzen, projizierter Schutz für Verbündete und Widerstand gegen Magie.',
-  Erkenntnismagier: 'Erkenntnismagie (2024): Vorahnungswürfel, die fremde und eigene Würfe ersetzen, günstigere Erkenntniszauber und Wissen aus dem Nichts.',
   Hervorrufer: 'Hervorrufung (2024): geformte Flächenzauber, die Verbündete verschonen, garantierter Mindestschaden und ein Zauber pro Rast mit Maximalschaden.',
-  Illusionist: 'Illusion (2024): formbare Trugbilder, ein zweites Ich zum Platztausch und Illusionen, die teilweise real werden.',
-  // Künstler
-  Alchemist: 'Tränke und Elixiere. Du stellst nach jeder Rast Elixiere mit zufälliger oder gewählter Wirkung her – Heilung, Schnelligkeit, Mut – und verstärkst Heil- und Schadenszauber. Später wirken deine Tränke auf mehrere Ziele.',
-  Rüstungsschmied: 'Arkane Rüstung als zweite Haut. Du baust sie zum Wächter (Nahkampfwaffen aus Metall, zieht Angriffe auf dich) oder zum Infiltrator (leise, schnell, mit Blitzangriff) aus. Später wird sie stärker und schützt die ganze Gruppe.',
-  Artillerist: 'Ein arkaner Geschützturm, den du als Bonusaktion aufstellst: Flammenwerfer, Kraftballiste oder Schutzschild für Verbündete. Später gibt es zwei Türme gleichzeitig und eine tragbare Kanone.',
-  Kampfschmied: 'Ein stählerner Verteidiger kämpft an deiner Seite und fängt Angriffe für Verbündete ab. Du führst Waffen mit Intelligenz, verzauberst sie und reparierst deinen Gefährten mitten im Kampf.',
 };
 
 // Kurzerklärung zu jeder begrenzten Ressource (Infotext im Charakterbogen)

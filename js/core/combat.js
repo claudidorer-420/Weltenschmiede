@@ -1,7 +1,7 @@
 // Kampfzustand: vollständiger SL-Zustand (combat/gm) + öffentliche Projektion für Spieler (combat/public).
 // Gemeinsame Logik für Kampf-Tracker und Kampfkarte; die Regeln (Zugwechsel, Schaden, Zustände) stehen in engine.js.
 import { db } from './db.js';
-import { col, bridge } from './app.js';
+import { app, col, bridge } from './app.js';
 import { uid, now } from '../lib/util.js';
 import { roll, modifier } from '../lib/dice.js';
 import { normalizeMonster } from '../ui/statblock.js';
@@ -27,7 +27,26 @@ const concPub = (c) => (c.concentration && typeof c.concentration === 'object' ?
 const effPub = (e) => ({ id: e.id, key: e.key, name: e.name || '', src: e.src || null, rounds: e.rounds || 0, ...(e.silent ? { silent: true } : {}), ...(e.data ? { data: e.data } : {}), ...(e.until ? { until: e.until } : {}) });
 const condPub = (k) => ({ name: k.name, rounds: k.rounds || 0, ...(k.src ? { src: k.src } : {}), ...(k.label ? { label: k.label } : {}), ...(k.level ? { level: k.level } : {}), ...(k.until ? { until: k.until } : {}) });
 
-export function projection(state) {
+// Schlüssel einer Kreatur im Bestiarium der Spieler (campaigns/{cid}/kills)
+export const killKey = (c) => {
+  const sb = c?.statblock;
+  return sb ? String(sb.id || sb.srdId || sb.name || c.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60) : '';
+};
+// Was die Gruppe schon besiegt hat, darf sie genauer sehen (RK und TP) – sonst nur die SL
+let known = { cid: null, keys: new Set() };
+async function knownKills() {
+  const cid = app.get().cid;
+  if (known.cid !== cid) {
+    known = { cid, keys: new Set() };
+    try { for (const k of await db.list(col('kills'))) known.keys.add(k.key || k.id); } catch { /* offline */ }
+  }
+  return known.keys;
+}
+export function addKnownKill(key) { if (key) known.keys.add(key); }
+
+export function projection(state, knownKeys = new Set()) {
+  const isKnown = (c) => !c.isPC && !c.ownerUid && knownKeys.has(killKey(c));
+  const knownIds = new Set((state.combatants || []).filter(isKnown).map((c) => c.id));
   const cur = state.combatants[state.turn];
   const t = now();
   return {
@@ -45,14 +64,19 @@ export function projection(state) {
       hpState: hpState(c), down: c.hp <= 0, dead: !!c.dead, stable: !!c.stable, surprised: !!c.surprised, color: c.color || null,
       eco: c.eco || null, reaction: c.reaction !== false, turnNo: c.turnNo || 0,
       art: c.statblock ? { name: c.statblock.name, type: c.statblock.type || '', image: c.statblock.image || null, cr: c.statblock.cr ?? null } : null,
-      ...(c.isPC || c.showHp ? { hp: c.hp, maxHp: c.maxHp, tempHp: c.tempHp || 0 } : {}),
-      ...(c.isPC ? { ac: c.ac, deathSaves: c.deathSaves || { s: 0, f: 0 } } : {}),
+      ...(c.isPC || c.showHp || knownIds.has(c.id) ? { hp: c.hp, maxHp: c.maxHp, tempHp: c.tempHp || 0 } : {}),
+      ...(c.isPC ? { ac: c.ac, deathSaves: c.deathSaves || { s: 0, f: 0 } } : knownIds.has(c.id) ? { ac: c.ac, known: true } : {}),
     })),
     zones: (state.zones || []).map((z) => ({ id: z.id, name: z.name, src: z.src || null, tpl: z.tpl, follow: z.follow || null, color: z.color || null, obscure: !!z.obscure, difficult: z.difficult || 0, silence: !!z.silence, barrier: !!z.barrier, opaque: !!z.opaque })),
     results: (state.results || []).slice(-10),
     prompts: (state.prompts || []).filter((p) => (p.expires || 0) > t),
     // Rechenweg (tip) sehen alle – SL-Zusätze (gm, gtip: RK und TP von Monstern) nicht
-    log: (state.log || []).slice(-80).map((l) => ({ ts: l.ts, text: l.text, ...(l.kind ? { kind: l.kind } : {}), ...(l.e ? { e: l.e } : {}), ...(l.tip ? { tip: l.tip } : {}) })),
+    // RK/TP im Rechenweg nur, wenn das Ziel schon im Bestiarium der Spieler steht
+    log: (state.log || []).slice(-80).map((l) => {
+      const extra = l.gtip && l.e?.o && knownIds.has(l.e.o[0]) ? l.gtip : null;
+      const tip = l.tip || extra ? { ...(l.tip || {}), ...(extra || {}) } : null;
+      return { ts: l.ts, text: l.text, ...(l.kind ? { kind: l.kind } : {}), ...(l.e ? { e: l.e } : {}), ...(tip ? { tip } : {}) };
+    }),
     updatedAt: t,
   };
 }
@@ -64,7 +88,7 @@ export async function saveCombat(state) {
   const s = clean({ ...state, log: (state.log || []).slice(-150), results: (state.results || []).slice(-14), updatedAt: now() });
   await db.batch([
     { op: 'set', col: col('combat'), id: 'gm', data: s },
-    { op: 'set', col: col('combat'), id: 'public', data: projection(s) },
+    { op: 'set', col: col('combat'), id: 'public', data: projection(s, await knownKills()) },
   ]);
   return s;
 }

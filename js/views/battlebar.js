@@ -168,7 +168,7 @@ export function BattleBar({ B, cb, char, acts, turn, speedM, movedLocal, pending
     ${tip ? html`<${Tip} a=${tip.a} x=${tip.x} cb=${cb} ctx=${B.ctx} fix=${fix} onClose=${() => { setFix(false); setTip(null); }} />` : null}
     <div class="bb-left">
       <div class="bb-port">${portrait}
-        ${B.gm || cb.isPC ? html`<span class="bb-ac" title="Rüstungsklasse"><${GameIcon} name="shield" size=${11} />${ac}</span>` : null}
+        ${B.gm || cb.isPC || cb.known ? html`<span class="bb-ac" title="Rüstungsklasse"><${GameIcon} name="shield" size=${11} />${ac}</span>` : null}
         ${onGm ? html`<button type="button" class="bb-gm" title="SL: Trefferpunkte, Zustände, Statblock …" onClick=${onGm}><${Icon} name="settings" size=${13} /></button>` : null}
       </div>
       <${Vitals} cb=${cb} />

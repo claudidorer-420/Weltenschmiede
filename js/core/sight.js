@@ -7,13 +7,20 @@ export const cellsOf = (m) => (Number(m) || 0) / CELL_M;
 const idx = (w, x, y) => y * w + x;
 
 // Lichtstärke je Feld: 2 = helles Licht, 1 = dämmriges Licht, 0 = Dunkelheit.
-// Draußen bei Tag ist alles hell, außer unter Dächern; drinnen zählen nur die Lichtquellen.
+// Grundlicht aus der Stimmung der Karte (doc.dark): draußen ist leichte Dämmerung noch Tag (< 0,45),
+// bis 0,7 dämmrig, darüber Nacht. Drinnen ist ein kaum verdunkelter Raum (≤ 0,25) dämmrig beleuchtet,
+// sonst zählen nur die Lichtquellen.
+export function grundLicht(doc) {
+  const d = Number(doc.dark) || 0;
+  if (doc.outdoor) return d < 0.45 ? 2 : d < 0.7 ? 1 : 0;
+  return d <= 0.25 ? 1 : 0;
+}
 export function lightMap(doc, grid, { glows = [] } = {}) {
   const W = grid.w;
   const H = grid.h;
   const out = new Uint8Array(W * H);
-  const hell = doc.outdoor && !doc.dark;
-  if (hell) out.fill(2);
+  const grund = grundLicht(doc);
+  if (grund) out.fill(grund);
   const quellen = [
     ...(doc.lights || []).map((l) => ({ x: l.x, y: l.y, r: Number(l.r) || 4 })),
     ...glows.map((g) => ({ x: g.x, y: g.y, r: Number(g.r) || 3 })),
@@ -140,6 +147,24 @@ export const SIGHT_LIMITS = [
   { value: 30, label: 'Sturm oder dichtes Schneetreiben (30 m)' },
   { value: 18, label: 'Undurchdringlicher Nebel (18 m)' },
 ];
+
+// ───────── Dächer ─────────
+// Ein Haus, in dem noch niemand aus der Gruppe war, bleibt ganz verdeckt. Steht jemand drin, verschwindet das Dach;
+// danach deckt es nur noch zu ROOF_SEEN – man ahnt das Innere, wie bei schon erkundetem Gebiet.
+export const ROOF_SEEN = 0.8;
+const RKEY = (cid, mapId) => `ws.roofs.${cid}.${mapId}`;
+export function loadRoofs(cid, mapId) {
+  try { return new Set(JSON.parse(localStorage.getItem(RKEY(cid, mapId)) || '[]')); } catch { return new Set(); }
+}
+export function saveRoofs(cid, mapId, set) {
+  try { localStorage.setItem(RKEY(cid, mapId), JSON.stringify([...set])); } catch { /* egal */ }
+}
+// Deckkraft eines Dachs: inside = gerade jemand aus der Gruppe drin, seen = schon einmal betreten, gm = Sicht der SL
+export function roofAlpha({ inside, seen, gm }) {
+  if (gm) return inside ? 0.15 : 0.4;
+  if (inside) return 0;
+  return seen ? ROOF_SEEN : 1;
+}
 
 // Rohdaten des erkundeten Gebiets (für die maskierte Vorschau in der Kartenliste)
 export function exploredBits(cid, mapId) {

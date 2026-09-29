@@ -705,10 +705,10 @@ tool('daten_loeschen', 'Dokument löschen (Experte)', 'Löscht ein einzelnes Dok
 // Für Werkzeuge, die außerhalb dieser Datei entstehen (z. B. mit gebündelten Textdateien in index.js)
 export const registerTool = tool;
 
-export const INSTRUCTIONS = `Weltenschmiede ist eine D&D-5e-Kampagnen-App (deutsch) unter ${APP_URL}.
+export const INSTRUCTIONS = `Weltenschmiede ist eine 5E-kompatible Kampagnen-App für Fantasy-Rollenspiele (deutsch) unter ${APP_URL}.
 Alle Werkzeuge arbeiten mit dem verbundenen Konto; Änderungen erscheinen sofort live in der App bei allen Mitspielern.
 - Beginne mit „kampagnen“. Hat das Konto mehrere Kampagnen, gib „kampagne“ (Name oder ID) an.
-- Codex = Markdown-Notizen im Obsidian-Stil mit [[Wikilinks]], #Tags und Frontmatter (typ, tags, aliases). Vor dem Bearbeiten lesen; für kleine Änderungen „ersetzungen“ oder „anhaengen“ statt den ganzen Text neu zu schreiben.
+- Codex = Markdown-Notizen (Obsidian-kompatibel) mit [[Wikilinks]], #Tags und Frontmatter (typ, tags, aliases). Vor dem Bearbeiten lesen; für kleine Änderungen „ersetzungen“ oder „anhaengen“ statt den ganzen Text neu zu schreiben.
 - Sichtbarkeit: „gm“ = nur Spielleitung, „players“ = Spieler sehen es. Neue Inhalte standardmäßig „gm“; nichts ohne Wunsch für Spieler freigeben.
 - Spieler-Konten dürfen nur lesen, was freigegeben ist, und nur eigene Dinge ändern.
 - Die App wächst: Fehlt einem Werkzeug ein Feld, „felder“ nutzen (wird unverändert gespeichert); beim Lesen stehen unbekannte Felder unter „weitere“. Für neue Sammlungen/Datenformate app_doku (Datenmodell) lesen und daten_lesen/daten_schreiben verwenden. Karten: karten_katalog.

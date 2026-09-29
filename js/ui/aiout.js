@@ -218,7 +218,7 @@ export function OutputToolbar({ gen, title, folder, onRegenerate, extra, frontma
     { label: 'Kopieren', icon: 'copy', onClick: async () => { await copyText(text); toast('Kopiert'); } },
     { label: 'Als Markdown herunterladen', icon: 'download', onClick: () => download(`${title || 'Weltenschmiede'}.md`, text, 'text/markdown;charset=utf-8') },
     { label: 'Teilen …', icon: 'share', onClick: async () => { const r = await shareText({ title, text }); if (r === 'copied') toast('In die Zwischenablage kopiert'); } },
-    { label: 'Per E-Mail senden', icon: 'mail', onClick: () => { location.href = `mailto:?subject=${encodeURIComponent(`D&D-Archiv: ${title}`)}&body=${encodeURIComponent(text.slice(0, 6000))}`; } },
+    { label: 'Per E-Mail senden', icon: 'mail', onClick: () => { location.href = `mailto:?subject=${encodeURIComponent(`Weltenschmiede-Archiv: ${title}`)}&body=${encodeURIComponent(text.slice(0, 6000))}`; } },
     { label: 'An Spieler als Handout', icon: 'scroll', onClick: () => sendHandout(title, text), disabled: !app.get().cid },
     { label: 'Drucken / PDF', icon: 'printer', onClick: () => window.print() },
   ]);

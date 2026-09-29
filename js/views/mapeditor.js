@@ -13,7 +13,7 @@ import { fileUrl, saveFile, deleteFile } from '../core/files.js';
 import { loadParty } from '../core/party.js';
 import { loadCombat, mutateCombat } from '../core/combat.js';
 import { sizeCells } from '../core/tactics.js';
-import { lightMap, visibleCells, loadExplored, saveExplored, rememberSeen, cellsOf, darkMeters } from '../core/sight.js';
+import { lightMap, visibleCells, loadExplored, saveExplored, rememberSeen, cellsOf, darkMeters, loadRoofs, saveRoofs, roofAlpha } from '../core/sight.js';
 import { monsterIconName, creatureType } from '../ui/art.js';
 import {
   useBattle, drawBattle, BattleHud, MonsterPlacer, FigureList, FIG_MIME, dropFigure, onDown as battleDown, onTokenDrop, selectToken, arm, ping, animating, startCombat, clearTemplates, placeMonster, statFor,
@@ -27,7 +27,7 @@ import { STAMPS, TEXTURES } from '../data/mapassets.js';
 import { TEX_MODS, splitTex } from '../data/texvars.js';
 import {
   PROC, FLUIDS, assetInfo, assetThumb, texUrl, texThumb, fluidOf, preloadMap, onAssets, assetsVersion,
-  renderReal, renderObjects, drawObjects, renderLighting, drawStampPreview, texName, REAL_INK,
+  renderReal, renderObjects, drawObjects, renderLighting, drawStampPreview, texName, REAL_INK, drawRoofs,
 } from './maprender.js';
 import { STYLES, isReal, isImageMap, MATS, SETS, SCRAWL_GENERATORS, r2, rnd, pick, stampAt } from './mapgen.js';
 import { userAssets, userAssetInfo, userThumb, importAssetFiles, deleteUserAssets, updateUserAsset, ensureUserImages } from '../core/userassets.js';
@@ -418,23 +418,26 @@ function renderImageMap(target, m, cs, img, bake, opts) {
 }
 
 
-export function newScrawlMap({ name, w = 36, h = 26, style = 'real', gen = 'dungeon' }) {
-  const g = (SCRAWL_GENERATORS[gen] || SCRAWL_GENERATORS.leer).fn(w, h);
+// party = Zahl der Spielercharaktere (die Waldlichtung stellt so viele Zelte auf)
+export function newScrawlMap({ name, w = 36, h = 26, style = 'real', gen = 'dungeon', party = 4 }) {
+  const g = (SCRAWL_GENERATORS[gen] || SCRAWL_GENERATORS.leer).fn(w, h, { party });
   const doc = { name, type: 'scrawl', w, h, style, gridOn: true, hatch: 1, ...g, fog: { enabled: false, revealed: '0'.repeat(w * h) }, visibility: 'gm', createdAt: now() };
   doc.thumb = thumbOf(doc);
   return doc;
 }
 
 // Vorschaubild für die Kartenliste, den PNG-Export und das Spielerbild
-export function renderMapImage(m, cs, img, { lighting = true, bake = null } = {}) {
+export function renderMapImage(m, cs, img, { lighting = true, bake = null, roofs = true } = {}) {
   const st = STYLES[m.style] || STYLES.klassisch;
   const cv = document.createElement('canvas');
-  renderStatic(cv, m, cs, st, img, bake);
+  renderStatic(cv, m, cs, st, img, bake, { roofs: false });
   if (bake) return cv;
   const c = cv.getContext('2d');
   c.setTransform(cs, 0, 0, cs, 0, 0);
   if (st.real || st.image) drawObjects(c, m, { legacyDefs: OBJ });
   else for (const o of m.objects || []) drawObject(c, o, st);
+  // Dächer über die Einrichtung – im Bild sieht man die Häuser von außen
+  if (st.real && roofs) drawRoofs(c, m);
   c.setTransform(1, 0, 0, 1, 0, 0);
   if ((st.real || st.image) && lighting) {
     const dk = document.createElement('canvas');
@@ -564,6 +567,17 @@ export function buildGrid(d) {
     for (const s of baseShapes) paintShape(g, s, '#fff');
     const data = g.getImageData(0, 0, W * R, H * R).data;
     const at = (px, py) => data[(py * W * R + px) * 4 + 3] > 127;
+    if (d.outdoor && d.style !== 'bild') {
+      // Draußen ist überall Boden: Flächen sind Häuser, ihr Rand ist eine Wand zwischen zwei Feldern (Türen öffnen sie)
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          const a = at(x * R + half, y * R + half);
+          if (x < W - 1) for (let k = 1; k <= R; k++) if (at(x * R + half + k, y * R + half) !== a) { wallE[i] = 1; break; }
+          if (y < H - 1) for (let k = 1; k <= R; k++) if (at(x * R + half, y * R + half + k) !== a) { wallS[i] = 1; break; }
+        }
+      }
+    } else {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) walk[y * W + x] = at(x * R + half, y * R + half) ? 1 : 0;
     for (let i = 0; i < walk.length; i++) opaque[i] = walk[i] ? 0 : 1;
     for (let y = 0; y < H; y++) {
@@ -573,6 +587,7 @@ export function buildGrid(d) {
         if (x < W - 1 && walk[i + 1]) { for (let k = 1; k < R; k++) if (!at(x * R + half + k, y * R + half)) { wallE[i] = 1; break; } }
         if (y < H - 1 && walk[i + W]) { for (let k = 1; k < R; k++) if (!at(x * R + half, y * R + half + k)) { wallS[i] = 1; break; } }
       }
+    }
     }
   }
   const cells = (x0, y0, x1, y1, fn) => {
@@ -870,6 +885,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const [fogBrush, setFogBrush] = useState(2);
   const [sel, setSel] = useState([]);
   const [showLight, setShowLight] = useState(true);
+  const [asPlayer, setAsPlayer] = useState(false);   // SL schaut durch die Augen der Spieler
   const [layerQ, setLayerQ] = useState('');
   const [lDrag, setLDrag] = useState({ id: null, over: null, zone: null });   // Ebenenliste: Ziehen & Ablegen
   const [measureText, setMeasureText] = useState('');
@@ -892,8 +908,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   Object.assign(s, {
     gm, me, mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, shapeTex, doorKey, objKey,
     objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
-    textKind, fogBrush, sel, showLight, tokens,
+    textKind, fogBrush, sel, showLight, tokens, asPlayer: gm && asPlayer && mode !== 'build',
   });
+  s.viewGm = gm && !s.asPlayer;
 
   const pickDoc = (m) => ({
     w: m.w || 36, h: m.h || 26, style: m.style || 'klassisch', gridOn: m.gridOn !== false, hatch: m.hatch ?? 1, bgAlpha: m.bgAlpha ?? 0.5,
@@ -923,11 +940,17 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     if (!s.localFog) s.fog = (map.fog?.revealed || '').padEnd((map.w || 36) * (map.h || 26), '0').split('');
     s.dirty = true;
   }, [map]);
-  useEffect(() => { s.dirty = true; }, [tokensRaw, gm, mode, sel]);
+  useEffect(() => { s.dirty = true; }, [tokensRaw, gm, mode, sel, B.overlays]);
   // Sichtfeld der Gruppe: alle Tokens mit Besitzer sehen für alle (geteilte Gruppensicht)
   useEffect(() => {
-    if (mode === 'build') { s.sicht = null; s.sichtBereit = true; s.dirty = true; return; }
-    const späher = tokens.filter((t) => t.ownerUid && t.visibility !== 'gm').map((t) => {
+    if (mode === 'build') { s.sicht = null; s.sichtBereit = true; s.roofIn = null; s.dirty = true; return; }
+    const gruppe = tokens.filter((t) => t.ownerUid && t.visibility !== 'gm');
+    // Dächer: In welchem Haus steht gerade jemand aus der Gruppe?
+    const dächer = (s.doc.shapes || []).filter((sh) => sh.roof && sh.op !== 'sub');
+    s.roofIn = new Set();
+    for (const t of gruppe) { const n = t.size || 1; for (const sh of dächer) if (shapeHit(sh, t.x + n / 2, t.y + n / 2)) s.roofIn.add(sh.id); }
+    if (dächer.length) merkeDächer();
+    const späher = gruppe.map((t) => {
       // Dunkelsicht: eigener Wert am Token, sonst aus dem Statblock, sonst aus dem Volk des Charakters
       const st = statFor(B, t);
       const held = t.charId ? (B.party || []).find((p) => p.char?.id === t.charId)?.char : null;
@@ -944,6 +967,28 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     }
     s.dirty = true;
   }, [tokensRaw, tokens, grid, licht, mode]);
+  // Betretene Häuser merken: im Gerätespeicher und für alle in der geteilten Kartenebene (party/roofs-<karte>)
+  const dachDoc = () => (B.overlays || []).find((o) => o.kind === 'roofs');
+  const dachGesehen = () => {
+    if (!s.roofLocal || s.roofLocalId !== params.id) { s.roofLocal = loadRoofs(cid, params.id); s.roofLocalId = params.id; }
+    const all = new Set(s.roofLocal);
+    for (const id of dachDoc()?.seen || []) all.add(id);
+    return all;
+  };
+  s.roofSeen = dachGesehen;
+  function merkeDächer() {
+    const all = dachGesehen();
+    let neu = false;
+    for (const id of s.roofIn || []) if (!all.has(id)) { all.add(id); neu = true; }
+    if (neu) { s.roofLocal = new Set(all); saveRoofs(cid, params.id, all); }
+    const geteilt = new Set(dachDoc()?.seen || []);
+    const fehlt = [...all].filter((id) => !geteilt.has(id));
+    const key = [...all].sort().join(',');
+    if (fehlt.length && s.roofWrite !== key && cid) {
+      s.roofWrite = key;
+      db.set(col('party'), `roofs-${params.id}`, { kind: 'roofs', mapId: params.id, seen: [...all], ts: now() }).catch(() => { s.roofWrite = ''; });
+    }
+  }
   // Bildkarten kennen kein Land/Belag – dann auf Auswählen wechseln
   useEffect(() => {
     if (isImageMap(s.doc) && (tool === 'land' || tool === 'terrain')) setTool('select');
@@ -1288,7 +1333,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const key = `${s.geom}|${csStatic}|${d.style}|${aver}|${s.useBake ? 'b' : ''}`;
       if (key !== s.cacheKey && (t - settleT > 120 || !s.cacheKey.startsWith(`${s.geom}|`)) && (!busyDraw || t - (s.lastStatic || 0) > 140)) {
         s.maskCv = s.maskCv || document.createElement('canvas');
-        renderStatic(s.cache, d, csStatic, st, s.img, s.useBake ? s.bakeImg : null, { grid: false, maskCv: s.maskCv });
+        renderStatic(s.cache, d, csStatic, st, s.img, s.useBake ? s.bakeImg : null, { grid: false, maskCv: s.maskCv, roofs: false });
         s.cacheKey = key;
         s.lastStatic = t;
         s.dirty = true;
@@ -1311,7 +1356,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
             || vx < dd.x - 1e-6 || vy < dd.y - 1e-6 || vx + vw > dd.x + dd.w + 1e-6 || vy + vh > dd.y + dd.h + 1e-6;
           if (stale && dcs > cs * 1.1) {
             s.detailCv = s.detailCv || document.createElement('canvas');
-            renderReal(s.detailCv, d, dcs, { bg: s.img, rect: { x: rx, y: ry, w: rw, h: rh }, grid: false });
+            renderReal(s.detailCv, d, dcs, { bg: s.img, rect: { x: rx, y: ry, w: rw, h: rh }, grid: false, roofs: false });
             s.detail = { cv: s.detailCv, x: rx, y: ry, w: rw, h: rh, cs: dcs, geom: s.geom, aver };
             s.lastDetail = t;
             s.dirty = true;
@@ -1386,6 +1431,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     ctx.restore();
   }
 
+  // Dächer: beim Bauen deckend (das ausgewählte Haus durchsichtig), im Spiel nach den Regeln in sight.js
+  function dachZeichnen(ctx, d) {
+    const seen = s.mode === 'build' ? null : s.roofSeen?.();
+    drawRoofs(ctx, d, (sh) => (s.mode === 'build' ? (s.sel.some((x) => x.id === sh.id) ? 0.3 : 1) : roofAlpha({ inside: !!s.roofIn?.has(sh.id), seen: !!seen?.has(sh.id), gm: s.viewGm })));
+  }
   function draw() {
     const cv = cvRef.current;
     if (!cv) return;
@@ -1419,6 +1469,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         drawObjects(ctx, d, { legacyDefs: OBJ, skip: s.skipIds, view });
       } else ctx.drawImage(s.objCache, 0, 0, d.w, d.h);
       if (s.skipIds) for (const o of d.objects) if (s.skipIds.has(o.id)) drawStampPreview(ctx, o, OBJ, 1);
+      if (s.real) dachZeichnen(ctx, d);
       const lightOn = s.mode !== 'build' || s.showLight;
       if (s.lightOn?.dark && lightOn) ctx.drawImage(s.darkCv, 0, 0, d.w, d.h);
       if (s.lightOn?.glow && lightOn) {
@@ -1429,6 +1480,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     } else if (!s.useBake) {
       for (const o of d.objects) if (!o.hidden) drawObject(ctx, o, st);
     }
+    if (s.useBake && s.real) dachZeichnen(ctx, d);
     for (const l of d.labels) drawLabel(ctx, l, st);
     if (s.mode === 'build' && s.rich) {
       for (const l of d.lights || []) {
@@ -1440,10 +1492,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         }
       }
     }
+    if (s.mode === 'build') drawBattle(ctx, s, k, { passive: true });   // Figuren sehen, aber nicht anfassen
     if (s.mode !== 'build') {
       drawBattle(ctx, s, k);
       if (map.fog?.enabled && s.fog) {
-        ctx.fillStyle = s.gm ? 'rgba(0,0,0,.5)' : '#000';
+        ctx.fillStyle = s.viewGm ? 'rgba(0,0,0,.5)' : '#000';
         for (let i = 0; i < s.fog.length; i++) {
           if (s.fog[i] === '1') continue;
           ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
@@ -1451,7 +1504,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       }
       // Spielersicht: nie gesehen = schwarz, schon erkundet aber gerade nicht im Blick = 75 % dunkel.
       // Solange das Sichtfeld noch nicht steht, bleibt alles schwarz – sonst blitzt die ganze Karte auf.
-      if (!s.gm) {
+      if (!s.viewGm) {
         if (!s.sichtBereit) {
           ctx.fillStyle = '#05070a';
           ctx.fillRect(-1, -1, d.w + 2, d.h + 2);
@@ -2226,7 +2279,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   // ── Aktionen ──
   const regenerate = async (k) => {
     if ((s.doc.shapes.length || s.doc.objects.length) && !(await confirmDialog(`Karte durch „${SCRAWL_GENERATORS[k].label}“ ersetzen? (Rückgängig mit Strg+Z)`, { ok: 'Ersetzen' }))) return;
-    commit(SCRAWL_GENERATORS[k].fn(s.doc.w, s.doc.h));
+    commit(SCRAWL_GENERATORS[k].fn(s.doc.w, s.doc.h, { party: (B.party || []).length || 4 }));
     setSel([]);
     fit();
   };
@@ -2261,7 +2314,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       await ensureUserImages(own);
       await preloadMap(d, OBJ);
       const cs = clamp(Math.floor(3600 / Math.max(d.w, d.h)), 14, 64);
-      const cv = renderMapImage(d, cs, s.img);
+      const cv = renderMapImage(d, cs, s.img, { roofs: false });   // Dächer kommen live darüber
       const blob = await new Promise((ok) => cv.toBlob(ok, 'image/webp', 0.86)) || await new Promise((ok) => cv.toBlob(ok, 'image/jpeg', 0.85));
       const meta = await saveFile(cid, blob, { name: `${map.name || 'Karte'} (Spielerbild)`, folder: 'Karten', visibility: 'players', maxDim: 4200, kind: 'map', createdBy: me });
       const old = map.bake?.fileId;
@@ -2648,6 +2701,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const actions = html`<div class="row nowrap" style="gap:2px">
     ${mode === 'build' ? html`<${IconBtn} icon="undo" title="Rückgängig (Strg+Z)" disabled=${!s.undo.length} onClick=${undo} />` : null}
     <${IconBtn} icon="maximize" title="Einpassen" onClick=${fit} />
+    ${gm && mode !== 'build' ? html`<${IconBtn} icon=${asPlayer ? 'eye-off' : 'eye'} title=${asPlayer ? 'Spielersicht beenden' : 'Spielersicht: sehen, was die Spieler gerade sehen'} active=${asPlayer} onClick=${() => { setAsPlayer(!asPlayer); s.dirty = true; }} />` : null}
     ${gm ? html`<${IconBtn} icon="settings" title="Karteneinstellungen" onClick=${settingsDialog} />` : null}
   </div>`;
 
@@ -2681,6 +2735,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       </div>` : null}
       ${(sidebarOpen && mode === 'build') || (mode !== 'build' && (B.sel || B.pending)) ? null : html`<div class="map-hint">${s.draft && (s.draft.kind === 'poly' || s.draft.kind === 'path') ? html`<span>${HINTS[tool]}</span> <${Btn} size="sm" kind="primary" onClick=${() => s.finishDraft?.()}>Fertig<//> <${Btn} size="sm" kind="ghost" onClick=${() => { s.draft = null; s.dirty = true; rerender(); }}>Abbrechen<//>` : HINTS[tool]}</div>`}
       ${mode !== 'build' ? html`<${BattleHud} B=${B} s=${s} editToken=${gm ? editToken : null} />` : null}
+      ${gm && asPlayer && mode !== 'build' ? html`<button type="button" class="map-pv" onClick=${() => { setAsPlayer(false); s.dirty = true; }}><${Icon} name="eye" size=${15} /> Spielersicht – so sehen es die Spieler gerade <span class="x">×</span></button>` : null}
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b></div>` : null}
     </div>
   <//>`;

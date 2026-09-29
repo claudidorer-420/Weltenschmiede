@@ -60,7 +60,6 @@ const KIT = {
   zauberer: { ac: 12, acNote: 'ohne Rüstung', w: 'Dolch', dice: 'W4', dmg: 'Stich', fin: true },
   hexenmeister: { ac: 14, acNote: 'Lederrüstung', w: 'Dolch', dice: 'W4', dmg: 'Stich', fin: true },
   magier: { ac: 12, acNote: 'ohne Rüstung', w: 'Kampfstab', dice: 'W6', dmg: 'Wucht', fin: false },
-  magieschmied: { ac: 16, acNote: 'Schuppenpanzer, Schild', w: 'Kurzschwert', dice: 'W6', dmg: 'Stich', fin: true },
 };
 const KIT_DEF = { ac: 12, acNote: 'Lederrüstung', w: 'Kurzschwert', dice: 'W6', dmg: 'Stich', fin: true };
 

@@ -71,7 +71,7 @@ export function GeneratorsView({ tabId }) {
     try {
       await generate({
         task: 'quick', model,
-        system: `Du bist ein kreativer Assistent für D&D-5e-Spielleitungen und antwortest auf Deutsch in kompaktem Markdown (Listen/Tabellen), ohne Vorrede. Setze Eigennamen als [[Wikilinks]] nur, wenn sie eigene Notizen verdienen.\n${worldContext()}`,
+        system: `Du bist ein kreativer Assistent für Spielleitungen von 5E-Fantasy-Rollenspielen und antwortest auf Deutsch in kompaktem Markdown (Listen/Tabellen), ohne Vorrede. Setze Eigennamen als [[Wikilinks]] nur, wenn sie eigene Notizen verdienen.\n${worldContext()}`,
         prompt: q,
         onDelta: (_, full) => setAiOut(full),
       });

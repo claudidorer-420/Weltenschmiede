@@ -124,6 +124,8 @@ service cloud.firestore {
       match /monsters/{id}   { allow read, write: if isGM(cid); }
       match /npcs/{id}       { allow read, write: if isGM(cid); }
       match /kills/{id}      { allow read: if isMember(cid); allow write: if isGM(cid); }
+      // Regelpakete der Kampagne: alle Mitglieder brauchen sie für ihre Charaktere, ändern darf nur die SL
+      match /rules/{id}      { allow read: if isMember(cid); allow write: if isGM(cid); }
       match /encounters/{id} { allow read, write: if isGM(cid); }
 
       // Kampf: vollständiger Zustand nur SL, öffentliche Projektion für alle Mitglieder

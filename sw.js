@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-29-0125';
+const VERSION = 'ws-2026-09-29-1321';
 const CDN_CACHE = 'ws-cdn-v1';
 // Kartenbausteine (Texturen, Stempel) sind unveränderlich und überleben Updates
 const ASSET_CACHE = 'ws-assets-v1';
@@ -29,12 +29,14 @@ const SHELL = [
   './js/core/groups.js',
   './js/core/hooks.js',
   './js/core/keyvault.js',
+  './js/core/monsterlib.js',
   './js/core/panels.js',
   './js/core/party.js',
   './js/core/prompts.js',
   './js/core/react.js',
   './js/core/relay.js',
   './js/core/rolls.js',
+  './js/core/rulesets.js',
   './js/core/settings.js',
   './js/core/sight.js',
   './js/core/store.js',
@@ -50,7 +52,6 @@ const SHELL = [
   './js/data/magicitems-srd.js',
   './js/data/mapassets.js',
   './js/data/mapgen.js',
-  './js/data/monsternames.js',
   './js/data/monsters-srd.js',
   './js/data/npcstat.js',
   './js/data/origins.js',
@@ -116,6 +117,7 @@ const SHELL = [
   './js/views/npclib.js',
   './js/views/npcnote.js',
   './js/views/oracle.js',
+  './js/views/rulebuilder.js',
   './js/views/rules.js',
   './js/views/settings.js',
   './js/views/spellbook.js',

@@ -8,7 +8,7 @@ import { db } from '../core/db.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { watchParty } from '../core/party.js';
 import { doRoll } from '../core/rolls.js';
-import { mutateCombat, combatantForToken, combatantFromCharacter, combatantsFromMonsters, makeCombatant, resort, hpState } from '../core/combat.js';
+import { mutateCombat, combatantForToken, combatantFromCharacter, combatantsFromMonsters, makeCombatant, resort, hpState, killKey, addKnownKill } from '../core/combat.js';
 import { npcStat } from '../data/npcstat.js';
 import { sendEvent } from '../core/relay.js';
 import * as E from '../core/engine.js';
@@ -710,9 +710,10 @@ export async function recordKills(B) {
     if (cb.isPC || !cb.dead) continue;
     const sb = cb.statblock;
     if (!sb) continue;
-    const key = String(sb.id || sb.srdId || sb.name || cb.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
+    const key = killKey(cb);
     if (!key || gemerkt.has(key)) continue;
     gemerkt.add(key);
+    addKnownKill(key); // ab jetzt sehen die Spieler RK und TP dieser Kreatur
     const da = await db.get(col('kills'), key).catch(() => null);
     if (da) { await db.update(col('kills'), key, { count: (Number(da.count) || 1) + 1, lastAt: now() }).catch(() => {}); continue; }
     await db.set(col('kills'), key, {
@@ -931,7 +932,7 @@ function targetInfo(B, selT) {
       const plan = E.attackPlan(B.combat.x, me, cb, att, B.ctx);
       mode = plan.mode;
       const arrow = plan.mode === 'adv' ? ' ▲' : plan.mode === 'dis' ? ' ▼' : '';
-      label = B.gm || cb.isPC ? `${Math.round(E.hitChance(att.bonus, plan.ac, plan.mode) * 100)} %${arrow}` : plan.mode === 'adv' ? '▲ Vorteil' : plan.mode === 'dis' ? '▼ Nachteil' : '';
+      label = B.gm || cb.isPC || cb.known ? `${Math.round(E.hitChance(att.bonus, plan.ac, plan.mode) * 100)} %${arrow}` : plan.mode === 'adv' ? '▲ Vorteil' : plan.mode === 'dis' ? '▼ Nachteil' : '';
     }
     map.set(t.id, { ...v, label, mode, cb });
   }
@@ -1149,12 +1150,23 @@ function drawToken(ctx, B, t, k, tm, selected) {
 }
 
 // Alles, was der Kampf auf die Karte zeichnet (in Feld-Koordinaten)
-export function drawBattle(ctx, s, k) {
+// passive = Bau-Modus: Figuren nur zeigen (leicht durchscheinend), nichts ist anklickbar
+export function drawBattle(ctx, s, k, { passive = false } = {}) {
   const B = s.B;
   if (!B) return;
   const W = s.doc.w;
   const H = s.doc.h;
   const tm = performance.now();
+  if (passive) {
+    B._condHit = [];
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    for (const t of B.tokens) drawToken(ctx, B, t, k, tm, false);
+    ctx.restore();
+    return;
+  }
+  // Spielersicht der SL: dieselben Regeln wie bei den Spielern
+  const gmSicht = B.gm && !s.asPlayer;
   // Spieler sehen nur, was im Sichtfeld der Gruppe liegt (und was der Nebel freigibt)
   // Eine Figur ist zu sehen, sobald irgendeines ihrer Felder im Blick liegt – nicht nur die linke obere Ecke
   const irgendeinFeld = (t, pruef) => {
@@ -1163,7 +1175,8 @@ export function drawBattle(ctx, s, k) {
     return false;
   };
   const hidden = (t) => {
-    if (B.gm) return false;
+    if (gmSicht) return false;
+    if (t.visibility === 'gm') return true;
     if (s.fogOn && s.fog && !irgendeinFeld(t, (i) => s.fog[i] === '1')) return true;
     if (s.sicht && !t.ownerUid && !irgendeinFeld(t, (i) => s.sicht[i])) return true;   // eigene Gruppe bleibt immer sichtbar
     return false;
@@ -1324,7 +1337,7 @@ function InfoCard({ B, t, editToken }) {
   const pe = charOf(B, t);
   const sb = B.gm ? statFor(B, t) : null;
   const hpTxt = cb && cb.hp != null ? `${cb.hp}/${cb.maxHp}${cb.tempHp ? ` +${cb.tempHp}` : ''}` : cb?.hpState || (pe ? `${pe.char.hp}/${pe.char.maxHp}` : null);
-  const ac = cb && (B.gm || cb.isPC) ? E.statsOf(cb, B.ctx).ac : pe ? pe.char.ac ?? null : null;
+  const ac = cb && (B.gm || cb.isPC || cb.known) ? E.statsOf(cb, B.ctx).ac : pe ? pe.char.ac ?? null : null;
   const sub = pe ? `${pe.char.species || ''} · ${pe.char.cls || ''} ${pe.char.level || ''}` : sb ? `${sb.size || ''} ${sb.type || ''} · HG ${sb.cr || '?'}` : cb?.art?.type || (cb ? (cb.isPC ? 'Spielercharakter' : 'Kreatur') : 'Token');
   return html`<div class="bt-info">
     <div class="bt-head">
@@ -1392,7 +1405,7 @@ function ResultCard({ r, B }) {
       await sendEvent(ev);
     } finally { setBusy(false); }
   };
-  const acShown = (t) => t.ac != null && (B.gm || cbById(B, t.id)?.isPC);
+  const acShown = (t) => t.ac != null && (B.gm || cbById(B, t.id)?.isPC || cbById(B, t.id)?.known);
   return html`<div class=${`bt-res ${cls}`}>
     <div class="row nowrap"><b class="grow">${r.actorName}: ${r.title}${r.level ? ` · ${ROMAN[r.level] || r.level}` : ''}</b><${IconBtn} icon="x" size=${14} title="Ausblenden" onClick=${close} /></div>
     ${r.kind === 'error' ? html`<div class="small danger-text">${r.note}</div>` : null}

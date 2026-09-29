@@ -1,13 +1,32 @@
 // Zauberdatenbank (SRD 5.1 bzw. 5.2.1, deutsch): Laden nach Edition, Klassenlisten, Auswahlregeln, Anzeige-Helfer.
 import { useState, useEffect } from '../lib/preact.js';
-import { findClass, spellcasting, pactSlots } from './chargen.js';
+import { findClass, spellcasting, pactSlots, SUBCLASS_META } from './chargen.js';
 import { SCHOOL_ART, DAMAGE_ART } from './artmap.js';
 
+// Ergänzungen aus Regelpaketen (core/rulesets.js): eigene Zauber, zusätzliche Klassenlisten, ausgeblendete Zauber.
+// rev steigt bei jeder Änderung – dann wird die zusammengeführte Liste neu gebaut.
+export const SPELL_OVERLAY = { rev: 0, add: { 2014: [], 2024: [] }, lists: {}, remove: new Set() };
+
 const cache = {};
+const merged = {};
+function withOverlay(key, base) {
+  const ov = SPELL_OVERLAY;
+  if (!ov.rev) return base;
+  if (merged[key]?.rev === ov.rev) return merged[key].list;
+  const lists = Object.entries(ov.lists);
+  const own = new Set(ov.add[key].map((s) => s.id));
+  const list = base.filter((s) => !ov.remove.has(s.id) && !own.has(s.id)).map((s) => {
+    const extra = lists.filter(([, ids]) => ids.includes(s.id)).map(([c]) => c);
+    return extra.length ? { ...s, classes: [...new Set([...(s.classes || []), ...extra])] } : s;
+  });
+  const out = [...list, ...ov.add[key].filter((s) => !ov.remove.has(s.id))].sort((a, b) => (a.level - b.level) || a.name.localeCompare(b.name, 'de'));
+  merged[key] = { rev: ov.rev, list: out };
+  return out;
+}
 export function loadSpells(ed) {
   const key = ed === '2024' ? '2024' : '2014';
   if (!cache[key]) cache[key] = (key === '2024' ? import('./spells-2024.js') : import('./spells-2014.js')).then((m) => m.SPELLS);
-  return cache[key];
+  return cache[key].then((base) => withOverlay(key, base));
 }
 
 export function useSpells(ed) {
@@ -16,7 +35,7 @@ export function useSpells(ed) {
     let alive = true;
     loadSpells(ed).then((l) => alive && setList(l));
     return () => { alive = false; };
-  }, [ed]);
+  }, [ed, SPELL_OVERLAY.rev]);
   return list;
 }
 
@@ -96,15 +115,18 @@ export function findSpell(list, ref) {
 
 // ───────────────────────── Klassenregeln ─────────────────────────
 const THIRD = /Mystischer Ritter|Arkaner Betrüger/;
+const hasCast = (c) => !!c?.cast?.type && c.cast.type !== 'none';
 export function listClassOf(x) {
-  if (findClass(x.cls)?.cast) return x.cls;
+  if (hasCast(findClass(x.cls))) return x.cls;
+  const meta = SUBCLASS_META[x.subclass];
+  if (meta?.caster === 'third') return meta.list || 'magier';
   if (THIRD.test(x.subclass || '')) return 'magier';
   return null;
 }
 export function casterTypeOf(x) {
-  const cast = findClass(x.cls)?.cast;
-  if (cast) return cast.type;
-  return THIRD.test(x.subclass || '') ? 'third' : null;
+  const c = findClass(x.cls);
+  if (hasCast(c)) return c.cast.type;
+  return THIRD.test(x.subclass || '') || SUBCLASS_META[x.subclass]?.caster === 'third' ? 'third' : null;
 }
 // Höchster Zaubergrad, den diese Klasse allein auf ihrer Stufe lernen/vorbereiten darf
 export function maxSpellLevel(x, ed) {
@@ -122,11 +144,15 @@ export function maxSpellLevel(x, ed) {
 export const arcanumLevels = (x) => (x.cls === 'hexenmeister' ? [[11, 6], [13, 7], [15, 8], [17, 9]].filter(([l]) => x.level >= l).map(([, g]) => g) : []);
 
 // known   = feste Auswahl, Tausch nur beim Stufenaufstieg (Barde, Zauberer, Hexenmeister, Mystischer Ritter, Arkaner Betrüger; Waldläufer 2014)
-// prepare = aus der ganzen Klassenliste vorbereiten (Kleriker, Druide, Paladin, Magieschmied; Waldläufer 2024)
+// prepare = aus der ganzen Klassenliste vorbereiten (Kleriker, Druide, Paladin; Waldläufer 2024)
 // book    = Zauberbuch + daraus vorbereiten (Magier)
+// Klassen aus Regelpaketen geben es mit cast.mode an; sonst entscheidet die Art der Tabelle.
 export function spellKind(x, ed) {
   if (x.cls === 'magier') return 'book';
-  if (['kleriker', 'druide', 'paladin', 'magieschmied'].includes(x.cls)) return 'prepare';
+  if (['kleriker', 'druide', 'paladin'].includes(x.cls)) return 'prepare';
+  const cast = findClass(x.cls)?.cast;
+  if (cast?.mode) return cast.mode;
+  if (cast && !['barde', 'zauberer', 'hexenmeister', 'waldlaeufer'].includes(x.cls)) return ed === '2024' ? (cast.prep24 ? 'prepare' : 'known') : cast.known14 ? 'known' : 'prepare';
   if (x.cls === 'waldlaeufer') return ed === '2024' ? 'prepare' : 'known';
   return 'known';
 }

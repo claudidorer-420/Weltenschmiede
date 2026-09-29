@@ -1,7 +1,7 @@
 {
-  "name": "Weltenschmiede – D&D Kampagnen-Werkstatt",
+  "name": "Weltenschmiede – Kampagnen-Werkstatt",
   "short_name": "Weltenschmiede",
-  "description": "Codex, KI-Weltenbau, Encounter, Karten und Online-Spieltisch für D&D 5e.",
+  "description": "Codex, KI-Weltenbau, Encounter, Karten und Online-Spieltisch für Fantasy-Rollenspiele (5E-kompatibel).",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

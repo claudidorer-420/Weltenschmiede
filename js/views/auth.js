@@ -9,7 +9,7 @@ const ROLES = {
   gm: {
     label: 'Spielleitung', icon: 'crown',
     text: 'Welten bauen, Kampagnen leiten und die Runde vorbereiten.',
-    points: ['Codex im Obsidian-Stil', 'KI-Weltenschmiede, NPCs & Encounter', 'Karten, Kampf-Tracker, Mitspieler einladen'],
+    points: ['Codex mit Wiki-Links (Obsidian-kompatibel)', 'KI-Weltenschmiede, NPCs & Encounter', 'Karten, Kampf-Tracker, Mitspieler einladen'],
   },
   player: {
     label: 'Spieler', icon: 'sword',
@@ -28,7 +28,7 @@ export function AuthScreen() {
       <div class="auth-brand">
         <img src="icons/icon.svg" width="76" height="76" alt="" />
         <h1>Weltenschmiede</h1>
-        <p>Die Werkstatt für eure D&D-Welt</p>
+        <p>Die Werkstatt für eure Fantasy-Welt – 5E-kompatibel</p>
       </div>
       ${cloudError ? html`<div class="callout callout-orange small">${cloudError}</div>` : null}
       ${role

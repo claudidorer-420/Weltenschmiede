@@ -756,7 +756,8 @@ function terrainLayer(tc, m, cs) {
   });
 }
 // Realistische Grundkarte: Untergrund, Böden (je Raum eigene Textur), Gelände, Raster, Wände, Dächer
-export function renderReal(target, m, cs, { bg = null, bake = null, rect = null, grid = true, maskCv = null } = {}) {
+// roofs: false = Dächer nicht einbacken (der Editor zeichnet sie selbst, damit sie durchsichtig werden können)
+export function renderReal(target, m, cs, { bg = null, bake = null, rect = null, grid = true, maskCv = null, roofs = true } = {}) {
   const W = m.w;
   const H = m.h;
   OX = rect ? rect.x : 0;
@@ -845,7 +846,7 @@ export function renderReal(target, m, cs, { bg = null, bake = null, rect = null,
     // Unter Dächern kein Raster
     mg2.setTransform(mcs, 0, 0, mcs, 0, 0);
     mg2.globalCompositeOperation = 'destination-out';
-    if (m.roofs !== false) for (const s of m.shapes || []) if (s.roof && s.op !== 'sub') paint(mg2, s, '#000');
+    if (roofs && m.roofs !== false) for (const s of m.shapes || []) if (s.roof && s.op !== 'sub') paint(mg2, s, '#000');
     mg2.setTransform(1, 0, 0, 1, 0, 0);
     mg2.globalCompositeOperation = 'source-over';
   }
@@ -910,16 +911,34 @@ export function renderReal(target, m, cs, { bg = null, bake = null, rect = null,
   ox.fillRect(0, 0, pw, ph);
   ctx.drawImage(ol, 0, 0);
   // Dächer (Außenkarten: Häuser von oben)
-  if (m.roofs !== false) for (const s of m.shapes || []) if (s.roof && s.op !== 'sub') drawRoof(ctx, s, cs);
+  if (roofs && m.roofs !== false) for (const s of m.shapes || []) if (s.roof && s.op !== 'sub') drawRoof(ctx, s, cs);
   freeScratch();
 }
+// Dächer live zeichnen (ctx steht schon in Feldkoordinaten); alphaFor(form) → 0 … 1
+export function drawRoofs(ctx, m, alphaFor = () => 1) {
+  if (m.roofs === false) return;
+  for (const s of m.shapes || []) {
+    if (!s.roof || s.op === 'sub') continue;
+    const a = alphaFor(s);
+    if (a <= 0.01) continue;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, a);
+    roofBody(ctx, s);
+    ctx.restore();
+  }
+}
 function drawRoof(ctx, s, cs) {
+  ctx.save();
+  T(ctx, cs);
+  roofBody(ctx, s);
+  ctx.restore();
+}
+function roofBody(ctx, s) {
   const p = s.pts || [];
   let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
   for (let i = 0; i < p.length; i += 2) { x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]); y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]); }
   const horiz = x1 - x0 >= y1 - y0;
   ctx.save();
-  T(ctx, cs);
   const ov = 0.25;
   tracePath(ctx, s);
   ctx.save();

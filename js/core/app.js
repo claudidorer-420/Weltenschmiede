@@ -8,6 +8,7 @@ import {
 import { uid, now, inviteCode, sortBy } from '../lib/util.js';
 import { renameLinkTarget } from '../lib/markdown.js';
 import { startVault, stopVault, forgetDevice, wipeVaultDevice, hasPlainKeys } from './keyvault.js';
+import { startRules, stopRules } from './rulesets.js';
 import { deriveNoteFields as deriveFields, searchNoteList, cleanTitle, cleanPath, uniqueTitleIn } from '../lib/notes.js';
 
 // UI-Brücke (wird von ui/components.js belegt), damit der Kern keine UI importiert
@@ -291,6 +292,7 @@ let indexCache = null;
 export function stopCampaign() {
   unsubs.forEach((f) => { try { f(); } catch { /* ignore */ } });
   unsubs = [];
+  stopRules();
   indexCache = null;
   vault.replace({ notes: {}, files: {}, members: {}, version: 0, loaded: false });
 }
@@ -310,6 +312,8 @@ export async function openCampaign(cid) {
     app.set({ cid: null, campaign: null });
     return false;
   }
+  // Regelpakete der Kampagne zuerst anwenden – sonst zeigen Bogen und Assistent kurz nur den Grundbestand
+  await startRules(cid);
   app.set({ cid, role: member.role, campaign: null, viewAsPlayer: false });
   localStorage.setItem(`ws.lastCampaign.${u.uid}`, cid);
   localStorage.setItem(`ws.inCampaign.${u.uid}`, '1');
@@ -355,7 +359,7 @@ export async function openCampaign(cid) {
   return true;
 }
 
-const SUBCOLLECTIONS = ['notes', 'secrets', 'trash', 'sessions', 'quests', 'maps', 'pins', 'tokens', 'handouts', 'monsters', 'npcs', 'kills', 'encounters', 'combat', 'chat', 'whispers', 'posts', 'signals', 'party', 'journal', 'gm'];
+const SUBCOLLECTIONS = ['notes', 'secrets', 'trash', 'sessions', 'quests', 'maps', 'pins', 'tokens', 'handouts', 'monsters', 'npcs', 'kills', 'encounters', 'combat', 'chat', 'whispers', 'posts', 'signals', 'party', 'journal', 'rules', 'gm'];
 
 export async function deleteCampaign(cid) {
   const u = app.get().user;

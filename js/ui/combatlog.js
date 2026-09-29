@@ -24,9 +24,41 @@ function Name({ v, sideOf }) {
   const s = sideOf?.(v[0]) || '';
   return html`<b class=${`cl-n ${s}`}>${v[1]}</b>`;
 }
+// Farben je Schadensart im Protokoll – auf dunklem Grund gut unterscheidbar (die körperlichen hell abgestuft)
+const LOG_COLOR = { ...Object.fromEntries(Object.entries(DAMAGE_ART).map(([k, v]) => [k, v.color])), slashing: '#e9e4da', piercing: '#b9c8e6', bludgeoning: '#d8b48a', force: '#d98cff', necrotic: '#7ed49a', poison: '#a6d23c' };
+export const dmgColor = (t) => LOG_COLOR[t] || null;
 function Dmg({ n, t }) {
-  const art = DAMAGE_ART[t];
-  return html`<b class="cl-dmg" style=${art ? { color: art.color } : null}>${n} ${DMG_DE[t] || 'Schaden'}</b>`;
+  const c = dmgColor(t);
+  return html`<b class="cl-dmg" style=${c ? { color: c } : null}>${n} ${DMG_DE[t] || 'Schaden'}</b>`;
+}
+
+// Freitext einfärben: bekannte Namen nach Seite, Schadensarten in ihrer Farbe (ältere Zeilen und Hinweise)
+const DMG_WORDS = [['Säure', 'acid'], ['Wucht', 'bludgeoning'], ['Kälte', 'cold'], ['Feuer', 'fire'], ['Energie', 'force'], ['Kraft', 'force'], ['Blitz', 'lightning'],
+  ['nekrotisch', 'necrotic'], ['Stich', 'piercing'], ['Gift', 'poison'], ['psychisch', 'psychic'], ['gleißend', 'radiant'], ['strahlend', 'radiant'], ['Hieb', 'slashing'], ['Schall', 'thunder'], ['Donner', 'thunder']];
+const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const DMG_RE = `(?:\\d+\\s)?(?:${DMG_WORDS.map(([w]) => w).join('|')})(?:schaden|e[nrs]?\\sSchaden|en|er|es|e)?`;
+function Colored({ text, names }) {
+  const s = String(text ?? '');
+  const ns = [...names.keys()].filter((n) => n && n.length > 1).sort((a, b) => b.length - a.length);
+  const alts = [...(ns.length ? [`(?<n>${ns.map(reEsc).join('|')})`] : []), `(?<d>${DMG_RE})`];
+  const re = new RegExp(`(?<![\\p{L}])(?:${alts.join('|')})(?![\\p{L}])`, 'giu');
+  const out = [];
+  let last = 0;
+  for (const m of s.matchAll(re)) {
+    if (m.index > last) out.push(s.slice(last, m.index));
+    if (m.groups.n) {
+      const key = [...names.keys()].find((k) => k.toLowerCase() === m.groups.n.toLowerCase());
+      out.push(html`<b class=${`cl-n ${names.get(key) || ''}`}>${m[0]}</b>`);
+    } else {
+      const word = m.groups.d.replace(/^\d+\s/, '').toLowerCase();
+      const hit = DMG_WORDS.find(([w]) => word.startsWith(w.toLowerCase()));
+      const c = hit ? dmgColor(hit[1]) : null;
+      out.push(c ? html`<b style=${{ color: c }}>${m[0]}</b>` : m[0]);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return html`<span>${out}</span>`;
 }
 
 // Text einer Zeile aus dem Ereignis
@@ -57,8 +89,15 @@ function Line({ l, sideOf }) {
       if (e.r === 'auto') return html`<span>${N(e.o)} scheitert automatisch am ${ab}-Rettungswurf${vs}.</span>`;
       return html`<span>${N(e.o)} ${e.r === 'ok' ? 'schafft' : 'scheitert an'} ${e.r === 'ok' ? 'einen' : 'einem'} ${ab}-Rettungswurf${vs}.</span>`;
     }
-    case 'dmg': return e.n > 0
-      ? html`<span>${N(e.o)} erleidet <${Dmg} n=${e.n} t=${e.dt} />${e.r === 'crit' ? ' (kritisch)' : ''}.</span>`
+    case 'dmg': {
+      // mehrere Schadensarten: Summe plus farbige Teile (vor Resistenzen)
+      const mixed = !e.dt ? (l.tip?.dmg || []).filter((p) => p.t && p.n) : [];
+      if (e.n > 0 && mixed.length > 1) {
+        return html`<span>${N(e.o)} erleidet <b class="cl-num">${e.n} Schaden</b> (${mixed.map((p, i) => html`${i ? ', ' : ''}<b style=${{ color: dmgColor(p.t) }}>${p.n} ${DAMAGE_ART[p.t]?.name || ''}</b>`)})${e.r === 'crit' ? ' – kritisch' : ''}.</span>`;
+      }
+    }
+    return e.n > 0
+      ? html`<span>${N(e.o)} erleidet <${Dmg} n=${e.n} t=${e.dt || (l.tip?.dmg || []).find((p) => p.t)?.t} />${e.r === 'crit' ? ' (kritisch)' : ''}.</span>`
       : html`<span>${N(e.o)} erleidet keinen Schaden.</span>`;
     case 'heal': return html`<span>${N(e.o)} erhält <b class="cl-heal">${e.n} TP</b> zurück${e.w ? html` (${W(e.w)})` : null}.</span>`;
     case 'temp': return html`<span>${N(e.o)} erhält <b class="cl-heal">${e.n} temporäre TP</b>${e.w ? html` (${W(e.w)})` : null}.</span>`;
@@ -90,14 +129,14 @@ function DmgRoll({ list, heal }) {
   const parts = (list || []).filter((p) => p);
   if (!parts.length) return null;
   const total = parts.reduce((s, p) => s + (Number(p.n) || 0), 0);
-  return html`<div class="cl-roll"><span class="cl-lbl">${heal ? 'Heilwurf' : 'Schadenswurf'}:</span> ${parts.map((p, i) => html`${i ? ' + ' : ''}<b class="cl-num" style=${DAMAGE_ART[p.t] ? { color: DAMAGE_ART[p.t].color } : null}>${p.n}</b> <span class="cl-lbl">(${[p.x ? dText(p.x) : '', DAMAGE_ART[p.t]?.name || '', p.l || ''].filter(Boolean).join(' · ')}${p.d?.length ? html`: ${p.d.map((v, k) => html`${k ? ', ' : ''}${/^~.*~$/.test(v) ? html`<s>${v.slice(1, -1)}</s>` : v}`)}` : null})</span>`)}${parts.length > 1 ? html` = <b class="cl-sum">${total}</b>` : null}</div>`;
+  return html`<div class="cl-roll"><span class="cl-lbl">${heal ? 'Heilwurf' : 'Schadenswurf'}:</span> ${parts.map((p, i) => html`${i ? ' + ' : ''}<b class="cl-num" style=${dmgColor(p.t) ? { color: dmgColor(p.t) } : null}>${p.n}</b> <span class="cl-lbl">(${[p.x ? dText(p.x) : '', p.l || ''].filter(Boolean).join(' · ')}${DAMAGE_ART[p.t] ? html` · <b style=${{ color: dmgColor(p.t) }}>${DAMAGE_ART[p.t].name}</b>` : null}${p.d?.length ? html`: ${p.d.map((v, k) => html`${k ? ', ' : ''}${/^~.*~$/.test(v) ? html`<s>${v.slice(1, -1)}</s>` : v}`)}` : null})</span>`)}${parts.length > 1 ? html` = <b class="cl-sum">${total}</b>` : null}</div>`;
 }
 function hasTip(l, gm) {
   if (!l.e) return false;
   if (l.tip || (gm && l.gtip)) return true;
   return (l.e.t === 'cond' || l.e.t === 'end') && !!condText(l.e.w);
 }
-export function LogTip({ l, gm, sideOf, fix, onClose, style }) {
+export function LogTip({ l, gm, sideOf, fix, onClose, style, names = new Map() }) {
   const e = l.e || {};
   const t = { ...(l.tip || {}), ...(gm ? l.gtip || {} : {}) };
   const rule = (e.t === 'cond' || e.t === 'end') ? condText(e.w) : '';
@@ -108,7 +147,7 @@ export function LogTip({ l, gm, sideOf, fix, onClose, style }) {
     ${t.dc != null ? html`<div class="cl-head"><${Icon} name="target" size=${14} /> Schwierigkeitsgrad: <b class="cl-num">${t.dc}</b></div>` : null}
     ${(t.rolls || []).map((r, i) => html`<${Roll} key=${i} r=${r} />`)}
     ${t.dmg ? html`<${DmgRoll} list=${t.dmg} heal=${e.t === 'heal'} />` : null}
-    ${lines.length ? html`<div class="cl-notes">${lines.map((x, i) => html`<div key=${i}>${x}</div>`)}</div>` : null}
+    ${lines.length ? html`<div class="cl-notes">${lines.map((x, i) => html`<div key=${i}><${Colored} text=${x} names=${names} /></div>`)}</div>` : null}
     ${t.hp ? html`<div class="cl-hp"><${Icon} name="heart" size=${13} /> danach ${t.hp}</div>` : null}
     ${rule ? html`<div class="cl-rule"><b>${e.w}:</b> ${rule}</div>` : null}
     ${fix ? null : html`<div class="cl-hint">Taste <b>T</b> hält den Rechenweg fest.</div>`}
@@ -155,13 +194,16 @@ export function useTip(render) {
 
 // lines: Protokolleinträge · gm: SL-Sicht (gm-Zeilen, gtip) · sideOf(id) → 'pc'|'npc'|'a'|'b'|'c'
 export function CombatLogList({ lines, gm = false, sideOf = null, empty = 'Noch keine Einträge.', reverse = false, time = null }) {
-  const t = useTip((l, fix, close, style) => html`<${LogTip} l=${l} gm=${gm} sideOf=${sideOf} fix=${fix} onClose=${close} style=${style} />`);
+  // Namen aller Beteiligten – damit auch einfache Zeilen und Hinweise sie farbig zeigen
+  const names = new Map();
+  for (const l of lines) for (const v of [l.e?.a, l.e?.o]) if (v?.[1] && !names.has(v[1])) names.set(v[1], sideOf?.(v[0]) || '');
+  const t = useTip((l, fix, close, style) => html`<${LogTip} l=${l} gm=${gm} sideOf=${sideOf} fix=${fix} onClose=${close} style=${style} names=${names} />`);
   const list = reverse ? [...lines].reverse() : lines;
   if (!list.length) return html`<div class="tiny faint">${empty}</div>`;
   const stamp = (l) => (time ? html`<span class="cl-time">${time(l.ts)}</span>` : null);
   return html`<div class="cl">
     ${list.map((l, i) => {
-      if (!l.e) return html`<div key=${i} class=${`cl-l plain ${l.kind || ''}`}>${stamp(l)}${gm ? l.gm || l.text : l.text}</div>`;
+      if (!l.e) return html`<div key=${i} class=${`cl-l plain ${l.kind || ''}`}>${stamp(l)}<${Colored} text=${gm ? l.gm || l.text : l.text} names=${names} /></div>`;
       if (l.e.t === 'round') return html`<div key=${i} class="cl-round">${stamp(l)}<${Line} l=${l} sideOf=${sideOf} /></div>`;
       const tipOk = hasTip(l, gm);
       return html`<div key=${i} class=${`cl-l ${SUB.has(l.e.t) ? 'sub' : ''} ${l.e.t === 'turn' ? 'turn' : ''} ${tipOk ? 'has-tip' : ''} ${t.active === i ? 'on' : ''}`} ...${tipOk ? t.bind(i, l) : {}}>

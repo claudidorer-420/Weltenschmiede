@@ -160,7 +160,7 @@ function KeyVaultCard({ gm }) {
       ? `Ende-zu-Ende verschlüsselt mit deinem Geheimwort: In der Cloud liegt nur unlesbarer Geheimtext – weder ${who}, verbundene KI-Werkzeuge (MCP) noch der Betreiber der Datenbank können die Schlüssel lesen. Anfragen gehen direkt von diesem Gerät an den Anbieter. Beim Abmelden werden sie von diesem Gerät entfernt.`
       : 'Die Schlüssel liegen gerade nur auf diesem Gerät. Gib einmal dein Geheimwort ein, um sie verschlüsselt mit deinen anderen Geräten abzugleichen.';
   return html`<div class="card stack">
-    <div class="row nowrap" style="gap:12px;align-items:flex-start">
+    <div class="kv-head">
       <${Icon} name=${st.status === 'synced' && sync ? 'lock' : 'key'} size=${20} class="accent-text" />
       <div class="grow stack sm">
         <b class="small">${!sync ? 'Nur auf diesem Gerät' : st.status === 'synced' ? 'Verschlüsselt synchronisiert' : 'Tresor gesperrt'}</b>
@@ -168,7 +168,7 @@ function KeyVaultCard({ gm }) {
         ${st.error ? html`<div class="small danger-text">${st.error}</div>` : null}
       </div>
     </div>
-    ${sync && st.status !== 'synced' ? html`<form class="row nowrap" onSubmit=${unlock}>
+    ${sync && st.status !== 'synced' ? html`<form class="kv-form" onSubmit=${unlock}>
       <input class="input grow" type="password" placeholder="Dein Geheimwort" autocomplete="current-password" value=${pw} onInput=${(e) => setPw(e.target.value)} />
       <${Btn} type="submit" kind="primary" icon="unlock" loading=${busy}>Entsperren<//>
     </form>` : null}
@@ -283,11 +283,11 @@ function LookSection() {
 // Regelwerk wechseln (nur SL) – wirkt sofort für alle Mitglieder der Kampagne
 async function changeEdition(v, camp, ed) {
   if (v === ed) return;
-  const ok = await confirmDialog(`Regelwerk von „${camp.name}“ auf D&D 5e (${v}) umstellen? Das gilt für alle Mitspieler – Charakterbögen bleiben erhalten, Zauberlisten und Klassenmerkmale richten sich danach.`, { ok: 'Umstellen' });
+  const ok = await confirmDialog(`Regelstand von „${camp.name}“ auf Regeln ${v} umstellen? Das gilt für alle Mitspieler – Charakterbögen bleiben erhalten, Zauberlisten und Klassenmerkmale richten sich danach.`, { ok: 'Umstellen' });
   if (!ok) return;
   try {
     await updateCampaign({ settings: { ...(camp.settings || {}), rulesVersion: v } });
-    toast(`Regelwerk auf D&D 5e (${v}) umgestellt`, 'success');
+    toast(`Regelstand auf Regeln ${v} umgestellt`, 'success');
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -387,7 +387,7 @@ function GameSection() {
   const ed = camp?.settings?.rulesVersion === '2024' ? '2024' : '2014';
   return html`<div class="stack lg">
     ${role === 'gm' && camp ? html`<${Field} label="Regelwerk dieser Kampagne" hint="Gilt für alle Mitglieder: Charaktere, Zauber, Würfel, Encounter und KI. Bestehende Bögen bleiben erhalten – prüfe nach dem Wechsel Zauber und Klassenmerkmale.">
-      <${Segmented} value=${ed} onChange=${(v) => changeEdition(v, camp, ed)} options=${[{ value: '2014', label: 'D&D 5e (2014)' }, { value: '2024', label: 'D&D 5e (2024)' }]} /><//>` : null}
+      <${Segmented} value=${ed} onChange=${(v) => changeEdition(v, camp, ed)} options=${[{ value: '2014', label: 'Regeln 2014' }, { value: '2024', label: 'Regeln 2024' }]} /><//>` : null}
     <${Field} label="Entfernungen"><${Segmented} value=${s.units} onChange=${(v) => updateSettings({ units: v })} options=${[{ value: 'm', label: 'Meter (dt. Regelwerk)' }, { value: 'ft', label: 'Fuß' }]} /><//>
     <${Toggle} checked=${s.diceAnim !== false} onChange=${(v) => updateSettings({ diceAnim: v })} label="Würfel-Animation (Würfel rollen über den Tisch)" />
     <${Field} label="Würfel-Aussehen" hint="Gilt überall: in der Würfel-Ansicht, im Kampf und bei den fliegenden Würfeln über der App.">
@@ -436,7 +436,7 @@ function DataSection() {
 function AboutSection() {
   const keys = [['Strg + O', 'Schnellwechsler (Notiz öffnen/anlegen)'], ['Strg + P', 'Befehlspalette'], ['Strg + N', 'Neue Notiz'], ['Strg + E', 'Lesen ↔ Bearbeiten'], ['Strg + G', 'Graph'], ['Strg + ⇧ + F', 'Volltextsuche'], ['Alt + ← / →', 'Zurück / Vor'], ['[[', 'Notiz verlinken (Autovervollständigung)']];
   return html`<div class="stack lg">
-    <div class="row"><img src="icons/icon.svg" width="56" height="56" alt="" /><div><b style="font-size:18px">Weltenschmiede</b><div class="small muted">D&D-5e-Kampagnen-Werkstatt · Version 1.2 (2026-09)</div></div></div>
+    <div class="row"><img src="icons/icon.svg" width="56" height="56" alt="" /><div><b style="font-size:18px">Weltenschmiede</b><div class="small muted">Kampagnen-Werkstatt, 5E-kompatibel · Version 1.3 (2026-09)</div></div></div>
     <div class="card"><div class="card-head"><h3><${Icon} name="command" size=${18} />Tastenkürzel</h3></div><table class="xp-table">${keys.map(([k, d]) => html`<tr><td><span class="kbd">${k}</span></td><td>${d}</td></tr>`)}</table></div>
     <div class="card stack sm small" style="line-height:1.6">
       <b>Quellen & Lizenzen</b>
@@ -445,7 +445,7 @@ function AboutSection() {
       <div class="faint">Maschinenlesbare Aufbereitung des SRD 5.1: openrpg.de; ergänzende Metadaten (Klassen, Schaden, Flächen): dnd5eapi.co.</div>
       <div>Symbole für Zauber, Gegenstände und Monster: <a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> (Lorc, Delapouite und weitere), lizenziert unter <a href="https://creativecommons.org/licenses/by/3.0/deed.de" target="_blank" rel="noopener">CC BY 3.0</a>; für die App verkleinert und eingefärbt.</div>
       <div>Texturen und 3D-Modelle der Kartenbausteine: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0). Monsterporträts und weitere Bausteine: eigene Erzeugnisse (Stable Diffusion XL).</div>
-      <div class="faint">Gebaut mit Preact + htm (ohne Build-Schritt), Firebase für Konten & Sync. Regelzusammenfassungen in eigenen Worten. „Dungeons & Dragons“ ist eine Marke von Wizards of the Coast – dies ist ein privates Fan-Werkzeug.</div>
+      <div class="faint">Gebaut mit Preact + htm (ohne Build-Schritt), Firebase für Konten & Sync. Regelzusammenfassungen in eigenen Worten. Eigene Regelpakete, Kreaturen und Namenslisten stammen von den Spielleitungen selbst.</div>
     </div>
   </div>`;
 }
