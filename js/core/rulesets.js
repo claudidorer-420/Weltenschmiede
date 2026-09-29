@@ -12,6 +12,7 @@ import { db } from './db.js';
 import * as CG from '../data/chargen.js';
 import { SPELL_OVERLAY } from '../data/spells.js';
 import { WEAPON_RANGE } from '../data/items.js';
+import { CUSTOM_STATUS } from './effects.js';
 import { uid, now, slugify, sortBy, download } from '../lib/util.js';
 
 export const PACK_FORMAT = 'weltenschmiede-regeln';
@@ -26,6 +27,8 @@ export const CATEGORIES = [
   { key: 'spells', label: 'Zauber', one: 'Zauber' },
   { key: 'weapons', label: 'Waffen', one: 'Waffe' },
   { key: 'armor', label: 'Rüstungen', one: 'Rüstung' },
+  { key: 'items', label: 'Gegenstände', one: 'Gegenstand' },
+  { key: 'conditions', label: 'Zustände', one: 'Zustand' },
 ];
 export const EDITIONS = [{ value: '2024', label: 'Regeln 2024' }, { value: '2014', label: 'Regeln 2014' }, { value: 'beide', label: 'Beide Regelstände' }];
 
@@ -159,7 +162,27 @@ export const NORM = {
     if (!o.en) o.en = `custom:${o.id}`; // eigener Schlüssel: kollidiert nie mit der eingebauten Kampfwirkung
     return o;
   },
-  weapons(w) { return { ...w, key: keyOf(w), name: str(w.name || w.key), cat: w.cat === 'martial' ? 'martial' : 'simple', dmg: str(w.dmg, '1d6'), type: str(w.type, 'Hieb'), p: str(w.p), m: str(w.m) }; },
+  weapons(w) { return { ...w, key: keyOf(w), name: str(w.name || w.key), cat: w.cat === 'martial' ? 'martial' : 'simple', dmg: str(w.dmg, '1d6'), type: str(w.type, 'Hieb'), p: str(w.p), m: str(w.m), ...(arr(w.fx).length ? { fx: arr(w.fx) } : {}) }; },
+  // Gegenstände: Amulette, Ringe, Umhänge, Stiefel, Tränke … mit Wirkungen, Ladungen und Einstimmung
+  items(it) {
+    const o = { ...it, key: keyOf(it), name: str(it.name || it.key), slot: str(it.slot, 'wondrous'), rarity: str(it.rarity, 'ungewöhnlich'), desc: str(it.desc), fx: arr(it.fx) };
+    o.attune = !!it.attune;
+    o.consumable = !!it.consumable || o.slot === 'potion';
+    if (it.charges && num(it.charges.max) > 0) o.charges = { max: num(it.charges.max), rest: ['short', 'long', 'dawn', 'never'].includes(it.charges.rest) ? it.charges.rest : 'dawn', regain: str(it.charges.regain) };
+    else delete o.charges;
+    return o;
+  },
+  // Eigene Zustände (z. B. „Brennend“, „Blutend“, „Nass“): Wirkungen auf den Träger, Schaden pro Zug, Stapel
+  conditions(s) {
+    const o = { ...s, key: keyOf(s), name: str(s.name || s.key), desc: str(s.desc), fx: arr(s.fx), base: arr(s.base).map(str) };
+    if (s.dot && str(s.dot.dice)) o.dot = { dice: str(s.dot.dice), type: str(s.dot.type, 'fire'), at: s.dot.at === 'end' ? 'end' : 'start' };
+    else delete o.dot;
+    o.stack = Math.max(0, Math.min(20, num(s.stack)));
+    o.rounds = num(s.rounds);
+    if (s.save && AB.includes(s.save.ab)) o.save = { ab: s.save.ab, dc: num(s.save.dc) || 0, at: s.save.at === 'start' ? 'start' : 'end' };
+    else delete o.save;
+    return o;
+  },
   armor(a) {
     const type = ['light', 'medium', 'heavy', 'clothing', 'shield'].includes(a.type) ? a.type : 'light';
     return { ...a, key: keyOf(a), name: str(a.name || a.key), type, ac: num(a.ac, type === 'shield' ? 2 : type === 'clothing' ? 0 : 11), ...(a.str ? { str: num(a.str) } : {}), ...(a.stealth ? { stealth: true } : {}) };
@@ -308,12 +331,14 @@ export function applyPacks(packs) {
     });
     for (const [name, desc] of Object.entries(p.features || {})) tryDo(p, `Merkmal ${name}`, () => { setKey(CG.FEATURE_INFO, name, str(desc)); setKey(CG.FEATURE_SRC, name, p.name); });
     for (const raw of c.weapons || []) tryDo(p, `Waffe ${raw?.name}`, () => {
-      const w = NORM.weapons(raw);
+      const w = { ...NORM.weapons(raw), _pack: p.name };
       put(CG.WEAPONS, w);
       // Reichweite (normal/weit in Metern) für Fernkampf- und Wurfwaffen
       if (Array.isArray(w.range) && Number(w.range[0]) > 0) setKey(WEAPON_RANGE, w.key, [Number(w.range[0]), Number(w.range[1]) || Number(w.range[0]) * 4]);
     });
-    for (const raw of c.armor || []) tryDo(p, `Rüstung ${raw?.name}`, () => put(CG.ARMOR, NORM.armor(raw)));
+    for (const raw of c.armor || []) tryDo(p, `Rüstung ${raw?.name}`, () => put(CG.ARMOR, { ...NORM.armor(raw), _pack: p.name }));
+    for (const raw of c.items || []) tryDo(p, `Gegenstand ${raw?.name}`, () => put(CG.ITEMS, { ...NORM.items(raw), _pack: p.name }));
+    for (const raw of c.conditions || []) tryDo(p, `Zustand ${raw?.name}`, () => { const s = NORM.conditions(raw); setKey(CUSTOM_STATUS, s.key, s); });
     for (const raw of c.spells || []) tryDo(p, `Zauber ${raw?.name}`, () => {
       const sp = NORM.spells(raw);
       for (const ed of edsOf(sp, p)) {
@@ -330,6 +355,8 @@ export function applyPacks(packs) {
     for (const k of arr(r.backgrounds)) tryDo(p, `Hintergrund ausblenden ${k}`, () => { for (const ed of edsOf({}, p)) drop(CG.BACKGROUNDS[ed], k); });
     for (const k of arr(r.feats)) tryDo(p, `Talent ausblenden ${k}`, () => drop(CG.FEATS, k));
     for (const k of arr(r.classes)) tryDo(p, `Klasse ausblenden ${k}`, () => drop(CG.CLASSES, k));
+    for (const k of arr(r.weapons)) tryDo(p, `Waffe ausblenden ${k}`, () => drop(CG.WEAPONS, k));
+    for (const k of arr(r.armor)) tryDo(p, `Rüstung ausblenden ${k}`, () => drop(CG.ARMOR, k));
     for (const x of arr(r.subclasses)) tryDo(p, `Unterklasse ausblenden ${x}`, () => {
       const [ck, name] = String(x).split('|');
       const cls = CG.CLASSES.find((y) => y.key === ck);

@@ -3,7 +3,8 @@
 // Alles darüber hinaus kommt aus Regelpaketen der Kampagne (core/rulesets.js) – nie hier eintragen.
 // Beschreibungen sind kurze Zusammenfassungen in eigenen Worten.
 import { SKILLS } from './rules5e.js';
-import { parseFx, fxSummary } from '../core/effects.js';
+import { parseFx, fxSummary, fxVal } from '../core/effects.js';
+import { MAGIC_FX, WEAPON_BASES } from './magicfx.js';
 import { DICE_RULES } from '../lib/dice.js';
 
 export const AB = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -23,13 +24,15 @@ export const ALL_SKILLS = SKILLS.map((s) => s.key);
 const BASE_RULES = {
   standardArray: [15, 14, 13, 12, 10, 8], pointCost: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }, pointBudget: 27, abilityMax: 20,
   maxLevel: 20, profTable: null, hpFirst: 'max', hpLevel: 'avg', feats: true, multiclass: true, rollMethod: '4d6kh3', abilityNames: null, trackers: [], critRule: 'dice', asiAmount: 2,
+  attuneMax: 3, skills: null,
 };
+const SKILLS0 = SKILLS.map((s) => ({ ...s }));
 export let STANDARD_ARRAY = BASE_RULES.standardArray;
 export let POINT_COST = BASE_RULES.pointCost;
 export let POINT_BUDGET = BASE_RULES.pointBudget;
 export let ABILITY_MAX = BASE_RULES.abilityMax;
 // Weitere Grundregeln (live): höchste Stufe, Übungsbonus je Stufe, Trefferpunkte, Talente, Mehrklassen, Würfelmethode, Zähler …
-export const RULES = { maxLevel: 20, profTable: null, hpFirst: 'max', hpLevel: 'avg', feats: true, multiclass: true, rollMethod: '4d6kh3', trackers: [], critRule: 'dice', asiAmount: 2 };
+export const RULES = { maxLevel: 20, profTable: null, hpFirst: 'max', hpLevel: 'avg', feats: true, multiclass: true, rollMethod: '4d6kh3', trackers: [], critRule: 'dice', asiAmount: 2, attuneMax: 3 };
 // Würfelmethoden für Attributswerte (Wert → Würfelausdruck)
 export const ROLL_METHODS = [
   { value: '4d6kh3', label: '4W6, niedrigsten streichen', dice: '4d6dl1' },
@@ -63,6 +66,11 @@ export function setBaseRules(r) {
   RULES.critRule = ['dice', 'max'].includes(x.critRule) ? x.critRule : 'dice';
   DICE_RULES.crit = RULES.critRule;
   RULES.asiAmount = [1, 2, 3].includes(Number(x.asiAmount)) ? Number(x.asiAmount) : 2;
+  RULES.attuneMax = x.attuneMax === 0 || x.attuneMax === '0' ? 0 : Math.max(0, Math.min(12, Number(x.attuneMax) || 3));
+  // Fertigkeiten: umbenennen, anderes Attribut, eigene dazu, entfernen – die Listen werden an Ort und Stelle ersetzt
+  const sk = Array.isArray(x.skills) && x.skills.length ? x.skills.filter((s) => s && s.key && s.name).map((s) => ({ key: String(s.key), name: String(s.name), ability: AB.includes(s.ability) ? s.ability : 'int' })) : SKILLS0;
+  SKILLS.splice(0, SKILLS.length, ...sk.map((s) => ({ ...s })));
+  ALL_SKILLS.splice(0, ALL_SKILLS.length, ...SKILLS.map((s) => s.key));
   // Eigene Namen für die sechs Attribute (nur Anzeige – z. B. „Finesse“, „Instinkt“)
   const names = x.abilityNames && typeof x.abilityNames === 'object' ? x.abilityNames : {};
   for (const k of AB) {
@@ -301,6 +309,84 @@ export const WEAPONS = [
 export const PROP_NAMES = { f: 'Finesse', l: 'leicht', h: 'schwer', 2: 'zweihändig', t: 'Wurfwaffe', r: 'Reichweite', v: 'vielseitig', a: 'Fernkampf', o: 'Laden', A: 'Fernkampf' };
 export const findWeapon = (k) => WEAPONS.find((w) => w.key === k);
 export const findArmor = (k) => ARMOR.find((a) => a.key === k);
+
+// ───────────────────────── Gegenstände (Regelpakete, SRD-Magie, Inventar) ─────────────────────────
+// Eigene Gegenstände aus dem Regelwerk: { key, name, slot, rarity, attune, reqArmor, weight, cost, desc, fx, charges, consumable, light }
+export const ITEMS = [];
+export const findItem = (k) => ITEMS.find((x) => x.key === k) || null;
+export const ITEM_SLOTS = { amulet: 'Amulett', ring: 'Ring', cloak: 'Umhang', clothing: 'Kleidung', boots: 'Schuhe', gloves: 'Handschuhe', bracers: 'Armschienen', head: 'Kopf', belt: 'Gürtel', focus: 'Zauberfokus', instrument: 'Instrument', wondrous: 'Wundersamer Gegenstand', potion: 'Trank', ammo: 'Munition', other: 'Sonstiges' };
+export const RARITIES = ['gewöhnlich', 'ungewöhnlich', 'selten', 'sehr selten', 'legendär', 'Artefakt'];
+// Welche Grundwaffen/-rüstungen passen zu „beliebiges Schwert“, „mittelschwer oder schwer“ …
+export function baseOptions(kind, base) {
+  const b = String(base || 'any');
+  if (kind === 'weapon') {
+    if (b === 'any') return WEAPONS;
+    const keys = b.split('|').flatMap((x) => WEAPON_BASES[x] || [x]);
+    return WEAPONS.filter((w) => keys.includes(w.key));
+  }
+  if (kind === 'armor') {
+    if (b === 'any') return ARMOR.filter((a) => a.type !== 'shield' && a.type !== 'clothing');
+    const parts = b.split('|');
+    return ARMOR.filter((a) => a.type !== 'shield' && (parts.includes(a.type) || parts.includes(a.key)));
+  }
+  if (kind === 'shield') return ARMOR.filter((a) => a.type === 'shield');
+  return [];
+}
+// Was steckt hinter einem Inventar-Eintrag? { kind, def, fx, plus, attune, charges, consumable, base, name, variants }
+export function itemInfo(it) {
+  if (!it) return null;
+  if (it.pack) {
+    const [cat, key] = String(it.pack).split(':');
+    const def = cat === 'items' ? findItem(key) : cat === 'weapons' ? findWeapon(key) : cat === 'armor' ? findArmor(key) : null;
+    if (!def) return null;
+    const kind = cat === 'items' ? (def.slot === 'potion' || def.consumable ? 'potion' : 'item') : cat === 'weapons' ? 'weapon' : def.type === 'shield' ? 'shield' : 'armor';
+    return { kind, def, fx: def.fx || [], plus: Number(def.magic) || 0, attune: !!def.attune, charges: def.charges || null, consumable: !!def.consumable, base: null, own: true };
+  }
+  if (it.mref && MAGIC_FX[it.mref]) {
+    const m = MAGIC_FX[it.mref];
+    const v = m.variants ? m.variants.find((x) => x.key === it.variant) || null : null;
+    return { kind: m.kind || 'item', def: m, fx: [...(m.fx || []), ...(v?.fx || [])], plus: Number(v?.plus ?? m.plus) || 0, attune: !!it.attune, charges: v?.charges || m.charges || null, consumable: !!m.consumable, base: m.base || null, variants: m.variants || null, variant: v };
+  }
+  return null;
+}
+// Wirkt der Gegenstand gerade? Ausgerüstet und – falls nötig – eingestimmt
+export const itemAttuned = (it, info) => !info?.attune || !!it.attuned;
+// Waffe aus dem Bogen: Schlüssel des Katalogs (auch Regelpaket) oder 'i:<Inventar-Id>' für magische Einzelstücke
+export function charWeapon(c, k) {
+  if (typeof k === 'string' && k.startsWith('i:')) {
+    const it = (c.inventory || []).find((x) => x.id === k.slice(2));
+    const info = itemInfo(it);
+    const base = findWeapon(it?.base) || (info?.kind === 'weapon' && info.own ? info.def : null);
+    if (!it || !base) return null;
+    const m = info?.def || {};
+    return {
+      ...base, key: k, baseKey: base.key, name: it.name || base.name, itemId: it.id,
+      magic: (Number(base.magic) || 0) + (info && !info.own ? info.plus : 0), type: m.dmgType || base.type, p: `${base.p}${m.addProps || ''}`,
+      alwaysProf: !!(base.alwaysProf || m.alwaysProf), fx: info && itemAttuned(it, info) ? [...(info.own ? [] : base.fx || []), ...info.fx] : base.fx || [], attuneMissing: !!info && !itemAttuned(it, info),
+    };
+  }
+  return findWeapon(k);
+}
+export const charWeapons = (c) => (c?.weapons || []).map((k) => charWeapon(c, k)).filter(Boolean);
+// Rüstung/Schild aus dem Bogen (Katalog oder 'i:<Inventar-Id>')
+export function armorOf(c, k) {
+  if (typeof k === 'string' && k.startsWith('i:')) {
+    const it = (c.inventory || []).find((x) => x.id === k.slice(2));
+    const info = itemInfo(it);
+    const base = findArmor(it?.base) || (info?.own ? info.def : null);
+    if (!it || !base) return null;
+    const m = info?.def || {};
+    const ok = !info || itemAttuned(it, info);
+    return {
+      ...base, key: k, baseKey: base.key, name: it.name || base.name, itemId: it.id,
+      bonus: (Number(base.bonus) || 0) + (info && !info.own && ok ? info.plus : 0), stealth: m.mithral ? false : base.stealth, str: m.mithral ? 0 : base.str,
+      alwaysProf: !!(base.alwaysProf || m.alwaysProf), fx: ok ? [...(info?.own ? [] : base.fx || []), ...(info?.fx || [])] : base.fx || [], attuneMissing: !ok,
+    };
+  }
+  return findArmor(k);
+}
+export const charArmor = (c) => armorOf(c, c?.armor?.body);
+export const charShield = (c) => (c?.armor?.shieldKey ? armorOf(c, c.armor.shieldKey) : null);
 
 // ───────────────────────── Klassen ─────────────────────────
 // Merkmale je Stufe: '@asi' = Attributswerterhöhung/Talent, '@sub' = Unterklassenmerkmal, '@boon' = Epische Gabe
@@ -611,6 +697,7 @@ export function spellSlots(c) {
   }
   const slots = {};
   if (casterLevel > 0) (FULL[Math.min(20, casterLevel) - 1] || []).forEach((n, i) => { slots[i + 1] = n; });
+  for (const [l, n] of Object.entries(charFx(c).slots || {})) slots[l] = (slots[l] || 0) + n;
   return { slots, pact: pactSlots(pactLvl) };
 }
 
@@ -665,16 +752,16 @@ export function hpBonusPerLevel(c) {
 // Rüstungsklasse aus getragener Rüstung (oder Kleidung), Schild, ungerüsteter Verteidigung, Kampfstil und Wirkungen
 export function computeAC(c, mods, fx = null) {
   const ed = edOf(c);
-  const armor = findArmor(c.armor?.body);
+  const armor = charArmor(c);
   const clothing = armor?.type === 'clothing' ? armor : null;
   const body = armor && !clothing && armor.type !== 'shield' ? armor : null;
-  const shieldItem = c.armor?.shieldKey ? findArmor(c.armor.shieldKey) : null;
+  const shieldItem = charShield(c);
   const shield = !!c.armor?.shield || !!shieldItem;
   const dex = mods.dex;
   const parts = [];
   let ac;
   if (body) {
-    const cap = body.dexCap != null && body.dexCap !== '' ? Number(body.dexCap) : body.type === 'light' ? 99 : body.type === 'medium' ? 2 : 0;
+    const cap = (body.dexCap != null && body.dexCap !== '' ? Number(body.dexCap) : body.type === 'light' ? 99 : body.type === 'medium' ? 2 : 0) + (body.type === 'medium' && fx?.dexCap ? fx.dexCap : 0);
     const d = Math.min(cap, dex);
     ac = body.ac + d + (Number(body.bonus) || 0);
     parts.push(`${body.name} ${body.ac}${cap > 0 ? ` + GES ${d}` : ''}${body.bonus ? ` + ${body.bonus}` : ''}`);
@@ -709,41 +796,51 @@ export function computeAC(c, mods, fx = null) {
     ac += b;
     parts.push(`${shieldItem?.name || 'Schild'} +${b}`);
   }
-  if (body && (c.feats || []).some((f) => f.key === 'style-defense')) { ac += 1; parts.push('Verteidigung +1'); }
-  if (fx?.ac) { ac += fx.ac; parts.push(`Merkmale ${fx.ac > 0 ? '+' : ''}${fx.ac}`); }
+  if (body && ((c.feats || []).some((f) => f.key === 'style-defense') || fx?.styles?.has('defense'))) { ac += 1; parts.push('Verteidigung +1'); }
+  if (fx?.ac) { ac += fx.ac; parts.push(`Merkmale & Gegenstände ${fx.ac > 0 ? '+' : ''}${fx.ac}`); }
   const bonus = Number(c.acBonus) || 0;
   if (bonus) { ac += bonus; parts.push(`Magie/Sonstiges ${bonus > 0 ? '+' : ''}${bonus}`); }
-  return { ac, parts, stealthDis: !!body?.stealth || !!clothing?.stealth, heavyStrShort: body?.str && (c.abilities?.str || 10) < body.str };
+  if (fx?.acMin && ac < fx.acMin) { ac = fx.acMin; parts.push(`mindestens ${fx.acMin}`); }
+  return { ac, parts, stealthDis: (!!body?.stealth || !!clothing?.stealth) && !fx?.stealthOk, heavyStrShort: body?.str && (c.abilities?.str || 10) < body.str };
 }
 
 export function weaponProficient(c, w) {
   const ed = edOf(c);
+  if (w.alwaysProf) return true;
+  const key = w.baseKey || w.key;
   for (const x of c.classes || []) {
     const cls = findClass(x.cls);
     const list = perEd(cls?.weapons, ed) || [];
-    if (list.includes(w.cat) || list.includes(w.key)) return true;
+    if (list.includes(w.cat) || list.includes(key)) return true;
     if (list.includes('martial-light') && w.cat === 'martial' && w.p.includes('l')) return true;
     if (list.includes('martial-finesse') && w.cat === 'martial' && (w.p.includes('f') || w.p.includes('l'))) return true;
   }
   const fw = charFx(c).weapons;
-  if (fw.has(w.key) || fw.has(w.cat)) return true;
-  return (c.extraWeapons || []).includes(w.key);
+  if (fw.has(key) || fw.has(w.cat)) return true;
+  return (c.extraWeapons || []).includes(key);
 }
 
 export function weaponAttack(c, w, mods, pbv) {
   const ranged = w.p.includes('a') || w.p.includes('A');
   const finesse = w.p.includes('f');
-  const ab = w.ability && mods[w.ability] != null ? w.ability : finesse ? (mods.dex >= mods.str ? 'dex' : 'str') : ranged ? 'dex' : 'str';
+  // „spell“: Zauberattribut statt STÄ/GES (z. B. Waffe eines Hexenmeisters)
+  const spellAb = w.ability === 'spell' ? spellAbilityOf(c, mods) : null;
+  const ab = spellAb && mods[spellAb] > (finesse ? Math.max(mods.dex, mods.str) : ranged ? mods.dex : mods.str) ? spellAb
+    : w.ability && mods[w.ability] != null ? w.ability : finesse ? (mods.dex >= mods.str ? 'dex' : 'str') : ranged ? 'dex' : 'str';
   const monk = classLevel(c, 'moench') && w.cat === 'simple' && !w.p.includes('h') ? (mods.dex > mods[ab] ? 'dex' : ab) : ab;
   const m = mods[monk];
   const prof = weaponProficient(c, w);
   const feats = new Set((c.feats || []).map((f) => f.key));
   const fx = charFx(c);
   const magic = Number(w.magic) || 0;
-  const bonus = m + (prof ? pbv : 0) + (ranged && feats.has('style-archery') ? 2 : 0) + fx.atk.all + (ranged ? fx.atk.ranged : fx.atk.melee) + magic;
-  const dmgMod = m + (!ranged && feats.has('style-dueling') && !w.p.includes('2') ? 2 : 0) + fx.dmg.all + (ranged ? fx.dmg.ranged : fx.dmg.melee) + magic;
+  // Wirkungen, die nur für genau diese Waffe gelten (Waffen und magische Einzelstücke)
+  const own = fx.byItem[w.key]?.length ? fxSummary(fx.byItem[w.key], { level: totalLevel(c), pb: pbv, mods }) : null;
+  const archery = feats.has('style-archery') || fx.styles.has('archery');
+  const dueling = feats.has('style-dueling') || fx.styles.has('dueling');
+  const bonus = m + (prof ? pbv : 0) + (ranged && archery ? 2 : 0) + fx.atk.all + fx.atk.weapon + (ranged ? fx.atk.ranged : fx.atk.melee) + magic + (own ? own.atk.all + own.atk.weapon + (ranged ? own.atk.ranged : own.atk.melee) : 0);
+  const dmgMod = m + (!ranged && dueling && !w.p.includes('2') ? 2 : 0) + fx.dmg.all + fx.dmg.weapon + (ranged ? fx.dmg.ranged : fx.dmg.melee) + magic + (own ? own.dmg.all + own.dmg.weapon + (ranged ? own.dmg.ranged : own.dmg.melee) : 0);
   return {
-    key: w.key, name: w.name, ability: monk, prof, bonus, other: bonus - m - (prof ? pbv : 0),
+    key: w.key, name: w.name, ability: monk, prof, bonus, other: bonus - m - (prof ? pbv : 0), own,
     damage: `${w.dmg}${dmgMod ? (dmgMod > 0 ? `+${dmgMod}` : dmgMod) : ''}`,
     versatile: w.vers ? `${w.vers}${dmgMod ? (dmgMod > 0 ? `+${dmgMod}` : dmgMod) : ''}` : null,
     extraDmg: w.extraDmg || '', extraType: w.extraType || '',
@@ -757,32 +854,34 @@ export function charMods(c) {
   const level = totalLevel(c);
   const pbv = profBonus(level);
   const fx = charFx(c);
-  // Attributswerte samt fester Boni aus Merkmalen (z. B. „+1 Weisheit“ in einem Talent eines Regelpakets)
-  const scores = Object.fromEntries(AB.map((k) => [k, Math.min(30, (Number(c.abilities?.[k]) || 10) + (fx.abil[k] || 0))]));
+  // Attributswerte samt Boni, Obergrenzen und festgesetzter Werte aus Merkmalen und Gegenständen
+  const scores = fx.scores || scoresOf(c, fx);
   const mods = Object.fromEntries(AB.map((k) => [k, abMod(scores[k])]));
-  const jack = classLevel(c, 'barde') >= 2 ? Math.floor(pbv / 2) : 0;
+  const jack = classLevel(c, 'barde') >= 2 || fx.jack ? Math.floor(pbv / 2) : 0;
+  const cb = fx.checkBonus || {};
   const saves = Object.fromEntries(AB.map((k) => {
     const prof = (c.saves || []).includes(k) || fx.saveProf.has(k);
-    return [k, { prof, bonus: mods[k] + (prof ? pbv : 0) + fx.saveBonus }];
+    return [k, { prof, bonus: mods[k] + (prof ? pbv : 0) + fx.saveBonus + (fx.saveBonusAb[k] || 0), adv: fx.saveAdv.some((a) => !a.dis && !a.vs && (!a.k.length || a.k.includes(k))), dis: fx.saveAdv.some((a) => a.dis && !a.vs && (!a.k.length || a.k.includes(k))) }];
   }));
   const skills = Object.fromEntries(ALL_SKILLS.map((k) => {
     let p = Number(c.skills?.[k]) || 0;
     if (fx.skill.has(k)) p = Math.max(p, 1);
     if (fx.exp.has(k) && p >= 1) p = 2;
-    const bonus = mods[skillAbility(k)] + (p === 2 ? pbv * 2 : p === 1 ? pbv : jack);
-    return [k, { prof: p, bonus }];
+    const ab = skillAbility(k);
+    const bonus = mods[ab] + (p === 2 ? pbv * 2 : p === 1 ? pbv : jack) + (cb[k] || 0) + (cb[ab] || 0) + (cb.all || 0);
+    return [k, { prof: p, bonus, adv: fx.checkAdv.has(k) || fx.checkAdv.has(ab) || fx.checkAdv.has('all'), dis: fx.checkDis.has(k) || fx.checkDis.has(ab) }];
   }));
   const feats = new Set((c.feats || []).map((f) => f.key));
-  const init = mods.dex + (feats.has('alert') ? (ed === '2024' ? pbv : 5) : 0) + (jack && !feats.has('alert') ? jack : 0) + (Number(c.initAdj) || 0) + fx.init; // initBonus ist abgeleitet (derive) – nicht wieder einrechnen
+  const init = mods.dex + (feats.has('alert') ? (ed === '2024' ? pbv : 5) : 0) + (jack && !feats.has('alert') ? jack : 0) + (Number(c.initAdj) || 0) + fx.init + (cb.init || 0) + (cb.dex || 0) + (cb.all || 0); // initBonus ist abgeleitet (derive) – nicht wieder einrechnen
   const passive = {
     perception: 10 + skills.perception.bonus + (feats.has('observant') && ed === '2014' ? 5 : 0),
     insight: 10 + skills.insight.bonus,
     investigation: 10 + skills.investigation.bonus + (feats.has('observant') && ed === '2014' ? 5 : 0),
   };
   const casting = (c.classes || []).map((x) => ({ cls: x.cls, ...spellcasting(x, ed, mods) })).filter((x) => x.ability);
-  const spell = casting.map((x) => ({ ...x, dc: 8 + pbv + mods[x.ability], attack: pbv + mods[x.ability] + fx.atk.spell }));
+  const spell = casting.map((x) => ({ ...x, dc: 8 + pbv + mods[x.ability] + (fx.spellDc || 0), attack: pbv + mods[x.ability] + fx.atk.spell }));
   const ac = computeAC(c, mods, fx);
-  return { ed, level, pb: pbv, mods, scores, saves, skills, init, passive, spell, ac, jack, fx };
+  return { ed, level, pb: pbv, mods, scores, saves, skills, init, initAdv: fx.checkAdv.has('init'), passive, spell, ac, jack, fx };
 }
 
 // Standard-Effekte für die Würfel aus Volk, Talenten, Klassen und Zustand
@@ -792,16 +891,17 @@ export function rollTraits(c) {
   const sp = findSpecies(ed, c.speciesKey);
   const feats = new Set((c.feats || []).map((f) => f.key));
   const rogue = classLevel(c, 'schurke');
+  const d = charFx(c).diceFx;
   return {
-    halfling: !!sp?.luck,
-    elven: feats.has('elven-accuracy'),
+    halfling: !!sp?.luck || d.has('lucky'),
+    elven: feats.has('elven-accuracy') || d.has('elven'),
     lucky: false,
     luckyAvailable: feats.has('lucky'),
-    reliable: rogue >= (ed === '2024' ? 7 : 11),
-    gwf: feats.has('style-gwf'),
-    elemental: feats.has('elemental-adept'),
+    reliable: rogue >= (ed === '2024' ? 7 : 11) || d.has('reliable'),
+    gwf: feats.has('style-gwf') || d.has('gwf') || charFx(c).styles.has('gwf'),
+    elemental: feats.has('elemental-adept') || d.has('elemental'),
     savage: false,
-    savageAvailable: feats.has('savage-attacker'),
+    savageAvailable: feats.has('savage-attacker') || d.has('savage'),
     exhaustion: Number(c.exhaustion) || 0,
   };
 }
@@ -877,9 +977,24 @@ export function resourcesFor(c) {
     }
   }
   for (const r of charFx(c).res) push({ key: `fx:${slug(r.name)}`, name: r.name, max: resMax(r.v, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: r.rest || 'long', info: r.info || `Aus „${r.src || r.name}“.` });
+  // Zauber aus Merkmalen mit begrenzter Nutzung (ohne Zauberplatz)
+  for (const s of charFx(c).spells) if (s.uses && !['will', 'always', 'charges', 'item'].includes(s.uses)) push({ key: `fs:${slug(s.name)}`, name: s.name, max: resMax(s.uses === 'pb' || String(s.uses).startsWith('mod:') ? s.uses : Number(s.uses) || 1, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: s.rest === 'short' ? 'short' : 'long', info: `Zauber aus „${s.src || s.name}“ – ohne Zauberplatz.` });
   // Eigene Aktionen mit begrenzter Nutzung
   for (const a of charFx(c).actions) if (a.uses && a.uses !== 'will') push({ key: `act:${slug(a.k)}`, name: a.k, max: resMax(a.uses === 'pb' || String(a.uses).startsWith('mod:') ? a.uses : Number(a.uses) || 1, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: a.rest || 'long', info: a.desc || `Aus „${a.src || a.k}“.` });
   for (const t of RULES.trackers || []) push({ key: `r:${slug(t.name)}`, name: t.name, max: resMax(t.max, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: t.reset === 'none' ? 'never' : t.reset, info: t.info || '' });
+  // Ladungen magischer Gegenstände (Zauberstäbe, Stäbe, Ringe …) – solange sie ausgerüstet und eingestimmt sind
+  for (const it of c.inventory || []) {
+    const info = itemInfo(it);
+    const ch = info?.charges;
+    if (!ch || !(Number(ch.max) > 0) || !itemReady(c, it, info)) continue;
+    out.push({ key: `it:${it.id}`, name: `${it.name} (Ladungen)`, max: Number(ch.max), reset: ch.rest === 'short' ? 'short' : ch.rest === 'never' ? 'never' : 'long', regain: ch.regain || '', itemId: it.id, info: ch.regain ? `Im Morgengrauen ${String(ch.regain).replace(/d/g, 'W')} Ladungen zurück.` : ch.rest === 'never' ? 'Verbrauchte Ladungen kommen nicht zurück.' : '' });
+  }
+  // „Eine zusätzliche Nutzung von …“
+  for (const r of charFx(c).resMax || []) {
+    const k = String(r.k || '').toLowerCase();
+    const hit = out.find((x) => x.key === r.k || x.name.toLowerCase().startsWith(k));
+    if (hit && k) hit.max += Number(r.v) || 1;
+  }
   return out;
 }
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-').slice(0, 40);
@@ -952,13 +1067,23 @@ export const fxText = (text, opts = {}) => parseFx(text, fxVocab(), opts);
 export function charFxList(c) {
   const ed = edOf(c);
   const out = [];
-  const add = (list, src, { classLevel: cl = null, skip = null } = {}) => {
-    for (const f of list || []) {
-      if (!f || !f.t || (skip && skip.has(f.t))) continue;
+  const picks = [];
+  // pk = Schlüssel der Quelle für Auswahlen (c.picks['<pk>#<Nummer>']), item = Waffe, an der die Wirkung hängt
+  const add = (list, src, { classLevel: cl = null, skip = null, pk = null, item = null, itemId = null } = {}) => {
+    (list || []).forEach((f, i) => {
+      if (!f || !f.t || (skip && skip.has(f.t))) return;
       // Stufenangaben bei Klassenmerkmalen beziehen sich auf die Klassenstufe
-      if (cl != null && f.lvl && f.lvl > cl) continue;
-      out.push({ ...f, active: f.active !== false, lvl: cl != null ? 0 : f.lvl, src: f.src || src });
-    }
+      if (cl != null && f.lvl && f.lvl > cl) return;
+      const base = { ...f, active: f.active !== false, lvl: cl != null ? 0 : f.lvl, src: f.src || src, ...(item ? { item } : {}), ...(itemId ? { itemId } : {}) };
+      if (f.t === 'pick') {
+        const key = `${pk || slug(src)}#${i}`;
+        const chosen = Array.isArray(c.picks?.[key]) ? c.picks[key] : [];
+        picks.push({ key, f: base, src: base.src, chosen });
+        out.push(...expandPick(base, chosen));
+        return;
+      }
+      out.push(base);
+    });
   };
   const texts = (e, src, pack, opts = {}) => {
     if (!e || !pack) return;
@@ -983,29 +1108,30 @@ export function charFxList(c) {
   if (sp) {
     const noAbil = new Set(['abil']);
     fields(sp, sp.name);
-    add(sp.fx, sp.name);
+    add(sp.fx, sp.name, { pk: `sp:${sp.key}` });
     texts(sp, sp.name, sp._pack, { skip: sp.asi || sp.asiChoice ? noAbil : null });
     const sub = sp.subs?.find((s) => s.key === c.subspeciesKey);
-    if (sub) { fields(sub, sub.name); add(sub.fx, sub.name); texts(sub, sub.name, sp._pack || sub._pack, { skip: sub.asi ? noAbil : null }); }
+    if (sub) { fields(sub, sub.name); add(sub.fx, sub.name, { pk: `sub:${sub.key}` }); texts(sub, sub.name, sp._pack || sub._pack, { skip: sub.asi ? noAbil : null }); }
     const opt = sp.option?.list?.find((o) => o.key === c.speciesOption);
-    if (opt) { add(opt.fx, opt.name); texts(opt, opt.name, sp._pack); }
+    if (opt) { add(opt.fx, opt.name, { pk: `opt:${opt.key}` }); texts(opt, opt.name, sp._pack); }
   }
   const bg = findBackground(ed, c.backgroundKey);
-  if (bg) { fields(bg, bg.name); add(bg.fx, bg.name); texts(bg, bg.name, bg._pack); }
-  for (const pick of c.feats || []) {
+  if (bg) { fields(bg, bg.name); add(bg.fx, bg.name, { pk: `bg:${bg.key}` }); texts(bg, bg.name, bg._pack); }
+  (c.feats || []).forEach((pick, n) => {
     const f = findFeat(pick.key);
-    if (!f) continue;
-    add(f.fx, f.name);
+    if (!f) return;
+    add(f.fx, f.name, { pk: `feat:${f.key}${f.repeatable ? `:${n}` : ''}` });
     texts(f, f.name, f._pack, { skip: f.a14 || f.a24 ? new Set(['abil']) : null });
-  }
+  });
   for (const x of c.classes || []) {
     const cls = findClass(x.cls);
     if (!cls) continue;
-    add(cls.fx, cls.name, { classLevel: x.level });
+    add(cls.fx, cls.name, { classLevel: x.level, pk: `cls:${cls.key}` });
     for (const ft of classFeatures(x.cls, ed, x.level, 1, x.subclass)) {
       if (ft.kind === 'feature' && FEATURE_SRC[ft.name]) add(fxText(ft.desc, { name: ft.name }), `${cls.name}: ${ft.name}`, { classLevel: x.level });
+      if (ft.kind === 'feature' && ft.fx?.length) add(ft.fx, `${cls.name}: ${ft.name}`, { classLevel: x.level, pk: `cf:${cls.key}:${slug(ft.name)}` });
       if (ft.kind === 'subfeature') {
-        add(ft.fx, `${x.subclass}: ${ft.name}`, { classLevel: x.level });
+        add(ft.fx, `${x.subclass}: ${ft.name}`, { classLevel: x.level, pk: `sf:${cls.key}:${slug(ft.name)}` });
         add(fxText(ft.desc, { name: ft.name }), `${x.subclass}: ${ft.name}`, { classLevel: x.level });
       }
     }
@@ -1014,21 +1140,114 @@ export function charFxList(c) {
       for (const n of names) out.push({ t: 'spell', k: n, lv: 1, active: true, uses: 'always', src: `${x.subclass}` });
     }
   }
+  // Mechanik des Grundbestands, die über Wirkungen läuft (Champion, Entrinnen, Aura des Schutzes, Brutaler kritischer Treffer, Wilde Angriffe)
+  for (const x of c.classes || []) {
+    const src = findClass(x.cls)?.name || x.cls;
+    if (x.cls === 'kaempfer' && x.subclass === 'Champion' && x.level >= 3) out.push({ t: 'crit', v: x.level >= 15 ? 2 : 1, on: 'weapon', active: true, src: 'Verbesserter kritischer Treffer' });
+    if ((x.cls === 'schurke' || x.cls === 'moench') && x.level >= 7) out.push({ t: 'evasion', active: true, src: `${src}: Entrinnen` });
+    if (x.cls === 'paladin' && x.level >= 6) out.push({ t: 'aura', k: 'save', v: 'mod:cha', min: 1, r: x.level >= 18 ? 30 : 10, active: true, src: 'Aura des Schutzes' });
+    if (x.cls === 'barbar' && ed === '2014' && x.level >= 9) out.push({ t: 'dmgExtra', dice: 'weapon', n: x.level >= 17 ? 3 : x.level >= 13 ? 2 : 1, crit: true, on: 'melee', active: true, src: 'Brutaler kritischer Treffer' });
+  }
+  if (ed === '2014' && (c.speciesKey === 'halforc' || /halbork/i.test(c.species || ''))) out.push({ t: 'dmgExtra', dice: 'weapon', n: 1, crit: true, on: 'melee', active: true, src: 'Wilde Angriffe' });
+  if (['halforc', 'orc'].includes(c.speciesKey)) out.push({ t: 'endure', uses: '1', rest: 'long', active: true, src: 'Unerbittliche Ausdauer' });
+  // Gegenstände: Waffen (Wirkungen gelten für Angriffe mit genau dieser Waffe), Rüstung, Schild, getragene Gegenstände
+  // Beschreibungstexte eigener Gegenstände aus Regelwerken wirken ebenfalls („+1 RK“, „zusätzlich 1W4 Feuerschaden“)
+  const itemText = (def, name, opts) => {
+    if (!def?._pack) return;
+    const t = [def.desc, def.special].filter(Boolean).join('\n');
+    if (t) add(fxText(t, { name, money: false }), name, opts);
+  };
+  for (const w of charWeapons(c)) {
+    if (w.fx?.length) add(w.fx, w.name, { item: w.key, itemId: w.itemId, pk: `w:${w.key}` });
+    if (!w.attuneMissing) itemText(w.baseKey ? findWeapon(w.baseKey) : w, w.name, { item: w.key, itemId: w.itemId });
+  }
+  for (const a of [charArmor(c), charShield(c)]) {
+    if (a?.fx?.length) add(a.fx, a.name, { itemId: a.itemId, pk: `a:${a.key}` });
+    if (a && !a.attuneMissing) itemText(a.baseKey ? findArmor(a.baseKey) : a, a.name, { itemId: a.itemId });
+  }
+  for (const it of c.inventory || []) {
+    const info = itemInfo(it);
+    if (!info || info.kind === 'weapon' || info.kind === 'armor' || info.kind === 'shield' || (!info.fx.length && !(info.own && info.def?.desc))) continue;
+    // Tränke wirken über ihre Aktion (verbraucht), getragene Gegenstände solange ausgerüstet und eingestimmt
+    if (info.kind === 'potion' || info.consumable) { add(info.fx.filter((f) => f.t === 'action' || f.t === 'spell'), it.name, { itemId: it.id }); continue; }
+    if (!itemReady(c, it, info)) continue;
+    add(info.fx, it.name, { itemId: it.id, pk: `it:${it.id}` });
+    if (info.own) itemText(info.def, it.name, { itemId: it.id });
+  }
+  out.picks = picks;
   return out;
 }
+// Auswahl-Wirkung in echte Wirkungen umsetzen: { t:'pick', k:'skill'|'ability'|…, n, into, v, max, lv }
+const PICK_INTO = { skill: 'skill', expertise: 'expertise', ability: 'abil', save: 'saveProf', weapon: 'weapon', armor: 'armor', tool: 'tool', lang: 'lang', dmg: 'resist', spell: 'spell', cantrip: 'spell', style: 'style', feat: 'feat' };
+function expandPick(f, chosen) {
+  if (!chosen.length) return [];
+  const into = [].concat(f.into || PICK_INTO[f.k] || f.k);
+  const base = { active: true, lvl: f.lvl, src: f.src, cond: f.cond, item: f.item };
+  const out = [];
+  for (const t of into) {
+    if (t === 'abil') for (const k of chosen) out.push({ ...base, t: 'abil', k, v: Number(f.v) || 1, ...(f.max ? { max: Number(f.max) } : {}) });
+    else if (t === 'spell') for (const k of chosen) out.push({ ...base, t: 'spell', k, lv: f.k === 'cantrip' ? 0 : Number(f.lv) || 1, uses: f.k === 'cantrip' ? 'will' : f.uses || '1', rest: f.rest || 'long' });
+    else if (t === 'tool') for (const k of chosen) out.push({ ...base, t: 'tool', k });
+    else if (t === 'feat') continue; // Talente wählt der Assistent
+    else out.push({ ...base, t, k: [...chosen] });
+  }
+  return out;
+}
+// Alle offenen und getroffenen Auswahlen eines Charakters (für Assistent und Bogen)
+export const charPicks = (c) => (c ? charFxList(c).picks || [] : []);
+// Ausgerüstet (Waffe/Rüstung zählen über den Bogen) und – falls nötig – eingestimmt
+export function itemReady(c, it, info = itemInfo(it)) {
+  if (!info) return false;
+  const k = `i:${it.id}`;
+  const worn = info.kind === 'weapon' ? (c.weapons || []).includes(k) || (info.own && (c.weapons || []).includes(info.def.key))
+    : info.kind === 'armor' ? c.armor?.body === k || (info.own && c.armor?.body === info.def.key)
+      : info.kind === 'shield' ? c.armor?.shieldKey === k || (info.own && c.armor?.shieldKey === info.def.key) : !!it.equipped;
+  return worn && itemAttuned(it, info);
+}
+// Zauberattribut (für „Zauberattribut-Modifikator“ bei Waffen und Wirkungen)
+export function spellAbilityOf(c, mods) {
+  const ed = edOf(c);
+  let best = null;
+  for (const x of c.classes || []) {
+    const ab = spellcasting(x, ed, mods || {})?.ability;
+    if (ab && (!best || (mods?.[ab] || 0) > (mods?.[best] || 0))) best = ab;
+  }
+  return best;
+}
+// Attributswerte: Grundwert + Boni, Obergrenzen („höchstens 22“) und festgesetzte Werte (Gürtel der Riesenstärke)
+export function scoresOf(c, fx) {
+  return Object.fromEntries(AB.map((k) => {
+    let v = (Number(c.abilities?.[k]) || 10) + (fx.abil?.[k] || 0);
+    for (const a of fx.abilCapped || []) if (a.k === k) v = a.v >= 0 ? Math.max(v, Math.min(v + a.v, a.max)) : v + a.v;
+    if (fx.abilSet?.[k]) v = Math.max(v, fx.abilSet[k]);
+    return [k, Math.min(30, v)];
+  }));
+}
 const armorKind = (c) => {
-  const a = findArmor(c?.armor?.body);
+  const a = charArmor(c);
   return a && a.type !== 'shield' ? a.type : 'none';
 };
-// Zusammenfassung (zwischengespeichert je Charakterstand und Paketstand)
-export function charFx(c) {
+// Zusammenfassung (zwischengespeichert je Charakterstand und Paketstand).
+// dyn = Kampfbedingungen { conc, bloodied, raging } – ohne dyn bleiben solche Wirkungen außen vor (s.dynamic).
+export function charFx(c, dyn = null) {
   if (!c) return fxSummary([]);
-  const key = `${FX_REV}|${edOf(c)}|${c.speciesKey}|${c.subspeciesKey}|${c.speciesOption}|${c.backgroundKey}|${(c.feats || []).map((f) => f.key).join(',')}|${(c.classes || []).map((x) => `${x.cls}:${x.level}:${x.subclass || ''}`).join(',')}|${c.armor?.body || ''}|${c.armor?.shield ? 1 : 0}|${c.armor?.shieldKey || ''}`;
+  const inv = (c.inventory || []).map((it) => (it.mref || it.pack ? `${it.id}:${it.equipped ? 1 : 0}${it.attuned ? 1 : 0}:${it.variant || ''}:${it.base || ''}` : '')).filter(Boolean).join(',');
+  const key = `${FX_REV}|${edOf(c)}|${c.speciesKey}|${c.subspeciesKey}|${c.speciesOption}|${c.backgroundKey}|${(c.feats || []).map((f) => f.key).join(',')}|${(c.classes || []).map((x) => `${x.cls}:${x.level}:${x.subclass || ''}`).join(',')}|${c.armor?.body || ''}|${c.armor?.shield ? 1 : 0}|${c.armor?.shieldKey || ''}|${(c.weapons || []).join(',')}|${inv}|${AB.map((k) => c.abilities?.[k] || 10).join(',')}|${JSON.stringify(c.picks || {})}|${dyn ? JSON.stringify(dyn) : ''}`;
   const hit = fxCache.get(key);
   if (hit) return hit;
   const level = totalLevel(c);
-  const s = fxSummary(charFxList(c), { level, armor: armorKind(c), shield: !!c.armor?.shield || !!c.armor?.shieldKey, pb: profBonus(level) });
-  if (fxCache.size > 200) fxCache.clear();
+  const list = charFxList(c);
+  const ctx = { level, armor: armorKind(c), shield: !!c.armor?.shield || !!c.armor?.shieldKey, pb: profBonus(level), species: c.speciesKey || '', classes: (c.classes || []).map((x) => x.cls), dyn };
+  // Zwei Durchgänge: erst die Attributswerte, dann alles, was Modifikatoren braucht („+ STÄ-Modifikator“)
+  const pre = fxSummary(list, ctx);
+  const scores = scoresOf(c, pre);
+  const mods = Object.fromEntries(AB.map((k) => [k, abMod(scores[k])]));
+  const sab = spellAbilityOf(c, mods);
+  const s = fxSummary(list, { ...ctx, mods, spellMod: sab ? mods[sab] : 0 });
+  s.scores = scores;
+  s.mods = mods;
+  s.picks = list.picks || [];
+  if (fxCache.size > 300) fxCache.clear();
   fxCache.set(key, s);
   return s;
 }
@@ -1059,7 +1278,7 @@ export const fxSlug = (s) => slug(s);
 export function actionDice(a, level) {
   const up = a.up || {};
   let d = a.dice || '1d6';
-  for (const l of [5, 11, 17]) if (level >= l && up[l]) d = up[l];
+  for (const l of Object.keys(up).map(Number).sort((p, q) => p - q)) if (level >= l && up[l]) d = up[l];
   return d;
 }
 

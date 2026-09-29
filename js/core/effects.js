@@ -40,35 +40,91 @@ export const FX_TYPES = [
   { t: 'speedSet', label: 'Bewegungsrate (fester Wert)', group: 'Bewegung & Sinne', ex: 'Bewegungsrate 10,5 m', v: 'm' },
   { t: 'move', label: 'Weitere Bewegungsart', group: 'Bewegung & Sinne', ex: 'Flugbewegung 9 m · Schwimmbewegung gleich deiner Bewegungsrate', k: ['fly', 'swim', 'climb', 'burrow'], v: 'm' },
   { t: 'sense', label: 'Sinn', group: 'Bewegung & Sinne', ex: 'Dunkelsicht 18 m · Blindsicht 3 m · Erschütterungssinn 9 m · Wahrer Blick 18 m', k: ['dark', 'blind', 'tremor', 'true'], v: 'm' },
+  { t: 'speedMul', label: 'Bewegungsrate vervielfachen', group: 'Bewegung & Sinne', ex: 'Bewegungsrate verdoppelt (Stiefel der Geschwindigkeit)', v: 'n' },
+  { t: 'reach', label: 'Nahkampfreichweite (+)', group: 'Bewegung & Sinne', ex: 'Reichweite +1,5 m (lange Gliedmaßen)', v: 'm' },
   { t: 'ac', label: 'Rüstungsklasse (+/−)', group: 'Verteidigung', ex: '+1 RK · +1 auf die Rüstungsklasse, solange du eine Rüstung trägst', v: 'n' },
-  { t: 'acFormula', label: 'Rüstungsklasse ohne Rüstung (Formel)', group: 'Verteidigung', ex: 'RK = 13 + GES · RK = 10 + GES + KON', v: 'n', k: 'ab' },
+  { t: 'acFormula', label: 'Rüstungsklasse ohne Rüstung (Formel)', group: 'Verteidigung', ex: 'RK = 13 + GES · RK = 10 + GES + KON · RK 17 (Panzer, ohne GES)', v: 'n', k: 'ab' },
+  { t: 'acMin', label: 'Rüstungsklasse mindestens', group: 'Verteidigung', ex: 'RK mindestens 16 (wie Rindenhaut)', v: 'n' },
+  { t: 'dexCap', label: 'Mittelschwere Rüstung: GES-Grenze höher', group: 'Verteidigung', ex: 'In mittelschwerer Rüstung zählt GES bis +3 statt +2', v: 'n' },
+  { t: 'stealthOk', label: 'Kein Nachteil auf Heimlichkeit durch Rüstung', group: 'Verteidigung', ex: 'Rüstung behindert Heimlichkeit nicht' },
   { t: 'resist', label: 'Resistenz', group: 'Verteidigung', ex: 'Resistenz gegen Feuerschaden · Resistenz gegen Hieb-, Stich- und Wuchtschaden', k: 'dmg' },
   { t: 'immune', label: 'Immunität (Schaden)', group: 'Verteidigung', ex: 'Immunität gegen Giftschaden', k: 'dmg' },
   { t: 'vuln', label: 'Anfälligkeit', group: 'Verteidigung', ex: 'Anfälligkeit gegen Gleißend-Schaden', k: 'dmg' },
   { t: 'condImm', label: 'Immun gegen Zustand', group: 'Verteidigung', ex: 'Immun gegen den Zustand Vergiftet · kann nicht bezaubert werden', k: 'cond' },
-  { t: 'hpLevel', label: 'Trefferpunkte pro Stufe', group: 'Trefferpunkte', ex: '+1 TP pro Stufe · TP-Maximum +2 je Stufe', v: 'n' },
-  { t: 'hp', label: 'Trefferpunkte (einmalig)', group: 'Trefferpunkte', ex: '+5 TP-Maximum', v: 'n' },
-  { t: 'abil', label: 'Attributswert (+/−)', group: 'Attribute & Würfe', ex: '+1 Weisheit · STÄ +2', k: 'ab', v: 'n' },
+  { t: 'dmgReduce', label: 'Schaden verringern', group: 'Verteidigung', ex: 'Du erleidest 1 weniger Hiebschaden · Schaden aus nichtmagischen Angriffen um 3 verringert', v: 'n', k: 'dmg' },
+  { t: 'critImmune', label: 'Keine kritischen Treffer gegen dich', group: 'Verteidigung', ex: 'Kritische Treffer gegen dich werden zu normalen Treffern (Adamant)' },
+  { t: 'disAttackers', label: 'Angriffe gegen dich im Nachteil/Vorteil', group: 'Verteidigung', ex: 'Fernkampfangriffe gegen dich sind im Nachteil · Untote greifen dich mit Nachteil an' },
+  { t: 'retaliate', label: 'Vergeltung (Angreifer erleidet Schaden)', group: 'Verteidigung', ex: 'Wer dich im Nahkampf trifft, erleidet 1W4 Säureschaden' },
+  { t: 'evasion', label: 'Entrinnen (GES-Rettungswürfe)', group: 'Verteidigung', ex: 'Bei GES-Rettungswürfen für halben Schaden: kein Schaden bei Erfolg, halber bei Misserfolg' },
+  { t: 'endure', label: 'Nicht kleinzukriegen (0 TP abwenden)', group: 'Verteidigung', ex: '1× pro langer Rast bei 0 TP stattdessen auf 1 TP bleiben · oder 2W6 TP zurückerhalten' },
+  { t: 'aura', label: 'Aura für Verbündete', group: 'Verteidigung', ex: 'Verbündete in 3 m addieren deinen CHA-Modifikator auf Rettungswürfe' },
+  { t: 'hpLevel', label: 'Trefferpunkte pro Stufe', group: 'Trefferpunkte & Heilung', ex: '+1 TP pro Stufe · TP-Maximum +2 je Stufe', v: 'n' },
+  { t: 'hp', label: 'Trefferpunkte (einmalig)', group: 'Trefferpunkte & Heilung', ex: '+5 TP-Maximum', v: 'n' },
+  { t: 'regen', label: 'Regeneration zu Zugbeginn', group: 'Trefferpunkte & Heilung', ex: 'Zu Beginn deines Zuges erhältst du 1W4 TP zurück', v: 'n' },
+  { t: 'tempStart', label: 'Temporäre TP zu Zugbeginn', group: 'Trefferpunkte & Heilung', ex: 'Zu Beginn deines Zuges temporäre TP in Höhe deines CHA-Modifikators', v: 'n' },
+  { t: 'healBonus', label: 'Heilung verstärken', group: 'Trefferpunkte & Heilung', ex: 'Deine Heilzauber heilen 2 TP mehr · Heilung wird immer maximal gewürfelt', v: 'n' },
+  { t: 'abil', label: 'Attributswert (+/−)', group: 'Attribute & Würfe', ex: '+1 Weisheit · STÄ +2 · Charisma +2 (höchstens 22)', k: 'ab', v: 'n' },
+  { t: 'abilSet', label: 'Attributswert festsetzen', group: 'Attribute & Würfe', ex: 'Stärke wird auf 19 gesetzt (wirkt nur, wenn der Wert niedriger ist)', k: 'ab', v: 'n' },
   { t: 'init', label: 'Initiative', group: 'Attribute & Würfe', ex: '+5 Initiative · Übungsbonus auf die Initiative', v: 'n' },
   { t: 'saveProf', label: 'Übung in Rettungswürfen', group: 'Attribute & Würfe', ex: 'Übung in Weisheits-Rettungswürfen', k: 'ab' },
-  { t: 'saveBonus', label: 'Bonus auf alle Rettungswürfe', group: 'Attribute & Würfe', ex: '+1 auf alle Rettungswürfe', v: 'n' },
-  { t: 'skill', label: 'Fertigkeit (Übung)', group: 'Übungen', ex: 'Übung in Heimlichkeit und Wahrnehmung', k: 'skill' },
-  { t: 'expertise', label: 'Expertise', group: 'Übungen', ex: 'Expertise in Athletik · doppelter Übungsbonus auf Geschichte', k: 'skill' },
-  { t: 'weapon', label: 'Waffenübung', group: 'Übungen', ex: 'Übung mit Kriegswaffen · Übung mit Langschwert und Langbogen', k: 'weapon' },
-  { t: 'armor', label: 'Rüstungsübung', group: 'Übungen', ex: 'Übung mit leichter und mittelschwerer Rüstung sowie Schilden', k: 'armor' },
-  { t: 'tool', label: 'Werkzeug', group: 'Übungen', ex: 'Übung mit Diebeswerkzeug', k: 'text' },
-  { t: 'lang', label: 'Sprache', group: 'Übungen', ex: 'Du sprichst Elfisch und Zwergisch · eine weitere Sprache deiner Wahl', k: 'lang' },
-  { t: 'attack', label: 'Angriffsbonus', group: 'Angriff', ex: '+2 auf Angriffswürfe mit Fernkampfwaffen', v: 'n', k: ['all', 'melee', 'ranged', 'spell'] },
-  { t: 'damage', label: 'Schadensbonus', group: 'Angriff', ex: '+2 Schaden mit Nahkampfwaffen', v: 'n', k: ['all', 'melee', 'ranged'] },
+  { t: 'saveBonus', label: 'Bonus auf Rettungswürfe', group: 'Attribute & Würfe', ex: '+1 auf alle Rettungswürfe · +1 auf GES-Rettungswürfe · +2 auf Rettungswürfe gegen Zauber', v: 'n' },
+  { t: 'saveAdv', label: 'Vorteil/Nachteil bei Rettungswürfen', group: 'Attribute & Würfe', ex: 'Vorteil bei Rettungswürfen gegen Zauber · Vorteil auf KON-Rettungswürfe · gegen Vergiftet' },
+  { t: 'checkBonus', label: 'Bonus auf Fertigkeiten/Attributswürfe', group: 'Attribute & Würfe', ex: 'Heimlichkeit +1 · +1 auf GES-Würfe · Überzeugen + INT-Modifikator', v: 'n' },
+  { t: 'checkAdv', label: 'Vorteil/Nachteil bei Fertigkeiten', group: 'Attribute & Würfe', ex: 'Vorteil auf Wahrnehmung · Vorteil auf Initiative' },
+  { t: 'jack', label: 'Halber Übungsbonus auf ungeübte Würfe', group: 'Attribute & Würfe', ex: 'Alleskönner: halber Übungsbonus auf alle Attributswürfe ohne Übung' },
+  { t: 'dice', label: 'Würfelglück', group: 'Attribute & Würfe', ex: 'Eine gewürfelte 1 beim W20 neu würfeln · Schadenswürfel 1–2 neu würfeln · Fertigkeitswurf mindestens 10' },
+  { t: 'skill', label: 'Fertigkeit (Übung)', group: 'Übungen & Auswahl', ex: 'Übung in Heimlichkeit und Wahrnehmung', k: 'skill' },
+  { t: 'expertise', label: 'Expertise', group: 'Übungen & Auswahl', ex: 'Expertise in Athletik · doppelter Übungsbonus auf Geschichte', k: 'skill' },
+  { t: 'weapon', label: 'Waffenübung', group: 'Übungen & Auswahl', ex: 'Übung mit Kriegswaffen · Übung mit Langschwert und Langbogen', k: 'weapon' },
+  { t: 'armor', label: 'Rüstungsübung', group: 'Übungen & Auswahl', ex: 'Übung mit leichter und mittelschwerer Rüstung sowie Schilden', k: 'armor' },
+  { t: 'tool', label: 'Werkzeug', group: 'Übungen & Auswahl', ex: 'Übung mit Diebeswerkzeug', k: 'text' },
+  { t: 'lang', label: 'Sprache', group: 'Übungen & Auswahl', ex: 'Du sprichst Elfisch und Zwergisch · eine weitere Sprache deiner Wahl', k: 'lang' },
+  { t: 'pick', label: 'Auswahl für Spieler (Fertigkeit, Attribut, Zauber …)', group: 'Übungen & Auswahl', ex: '3 Fertigkeiten nach Wahl · +1 auf ein Attribut und Übung in dessen Rettungswurf · 2 Zaubertricks der Magierliste' },
+  { t: 'attack', label: 'Angriffsbonus', group: 'Angriff', ex: '+2 auf Angriffswürfe mit Fernkampfwaffen · +1W4 gegen Untote', v: 'n', k: ['all', 'melee', 'ranged', 'spell', 'weapon', 'unarmed', 'thrown'] },
+  { t: 'damage', label: 'Schadensbonus (fest)', group: 'Angriff', ex: '+2 Schaden mit Nahkampfwaffen · + STÄ-Modifikator zusätzlich', v: 'n', k: ['all', 'melee', 'ranged', 'weapon', 'unarmed', 'thrown'] },
+  { t: 'dmgExtra', label: 'Zusatzschaden (Würfel)', group: 'Angriff', ex: 'Zusätzlich 1W6 Feuerschaden · 1W8 gegen Untote · 2W6 bei kritischen Treffern · einmal pro Zug', v: 'n' },
+  { t: 'crit', label: 'Kritischer Treffer schon ab 19 (18 …)', group: 'Angriff', ex: 'Kritischer Treffer bei 19 oder 20', v: 'n' },
+  { t: 'advAttack', label: 'Vorteil/Nachteil bei Angriffen', group: 'Angriff', ex: 'Vorteil auf Angriffe gegen Monstrositäten · gegen verängstigte Ziele' },
+  { t: 'onHit', label: 'Bei Treffer: Zustand, Heilung …', group: 'Angriff', ex: 'Bei einem Treffer KON-Rettungswurf (SG 12) oder Vergiftet für 2 Runden · du heilst 1W6 TP' },
+  { t: 'ignoreResist', label: 'Resistenz ignorieren', group: 'Angriff', ex: 'Deine Angriffe ignorieren Resistenz gegen Hiebschaden', k: 'dmg' },
   { t: 'attacks', label: 'Angriffe pro Angriffsaktion', group: 'Angriff', ex: 'greifst du zweimal an', v: 'n' },
-  { t: 'spell', label: 'Zauber (angeboren)', group: 'Zauber & Ressourcen', ex: 'Du kennst den Zaubertrick Thaumaturgie · St. 3 Höllischer Tadel', k: 'text' },
-  { t: 'res', label: 'Begrenzte Nutzung (Ressource)', group: 'Zauber & Ressourcen', ex: '1× pro langer Rast · Übungsbonus-mal pro kurzer Rast', v: 'n' },
-  { t: 'action', label: 'Eigene Aktion (Angriff, Odem, Heilung …)', group: 'Aktionen', ex: 'Odemwaffe: Kegel 4,5 m, GES-Rettungswurf, 2W6 Feuer · Klauen: Nahkampfangriff 1W6 Hieb · Heilende Hände: Heilung', k: 'text' },
-  { t: 'adv', label: 'Vorteil / Nachteil (Hinweis)', group: 'Hinweise', ex: 'Vorteil bei Rettungswürfen gegen Vergiftet', k: 'text' },
+  { t: 'unarmed', label: 'Waffenloser Schlag (Würfel)', group: 'Angriff', ex: 'Waffenlose Schläge verursachen 1W6 + GES (wie Kampfkunst)' },
+  { t: 'style', label: 'Kampfstil', group: 'Angriff', ex: 'Bogenschießen · Duellieren · Kampf mit zwei Waffen · Verteidigung · Kampf mit großen Waffen' },
+  { t: 'spell', label: 'Zauber (angeboren / aus Gegenstand)', group: 'Zauber', ex: 'Du kennst den Zaubertrick Thaumaturgie · St. 3 Höllischer Tadel · Nebelschritt 1× pro kurzer Rast', k: 'text' },
+  { t: 'spellDc', label: 'Zauber-SG (+/−)', group: 'Zauber', ex: '+1 auf den SG deiner Zauber', v: 'n' },
+  { t: 'spellDmg', label: 'Zauberschaden (+)', group: 'Zauber', ex: 'Zaubertricks verursachen zusätzlich deinen CHA-Modifikator · +1 bei Kälteschaden', v: 'n' },
+  { t: 'slots', label: 'Zusätzliche Zauberplätze', group: 'Zauber', ex: '1 zusätzlicher Zauberplatz des 2. Grades' },
+  { t: 'res', label: 'Begrenzte Nutzung / Ladungen', group: 'Ressourcen & Aktionen', ex: '1× pro langer Rast · Übungsbonus-mal pro kurzer Rast · 7 Ladungen, 1W6+1 neu im Morgengrauen', v: 'n' },
+  { t: 'resMax', label: 'Ressource erhöhen', group: 'Ressourcen & Aktionen', ex: 'Eine zusätzliche Nutzung von Göttliche Macht / Bardische Inspiration', v: 'n' },
+  { t: 'bonusAct', label: 'Standardaktion als Bonusaktion', group: 'Ressourcen & Aktionen', ex: 'Spurt, Rückzug oder Verstecken als Bonusaktion (wie Raffinierte Aktion)' },
+  { t: 'action', label: 'Eigene Aktion (Angriff, Odem, Heilung, Kampfhaltung …)', group: 'Ressourcen & Aktionen', ex: 'Odemwaffe · Klauen · Heilende Hände · Kampfrausch · Waffenaktion mit Zustand · Zauberplatz zurückholen', k: 'text' },
+  { t: 'adv', label: 'Hinweis (wirkt nicht automatisch)', group: 'Hinweise', ex: 'Vorteil beim Aufspüren von Fallen', k: 'text' },
 ];
 export const FX_BY = Object.fromEntries(FX_TYPES.map((x) => [x.t, x]));
 export const MOVE_DE = { fly: 'Fliegen', swim: 'Schwimmen', climb: 'Klettern', burrow: 'Graben' };
 export const SENSE_DE = { dark: 'Dunkelsicht', blind: 'Blindsicht', tremor: 'Erschütterungssinn', true: 'Wahrer Blick' };
+// Worauf sich Angriffswirkungen beziehen
+export const FX_ON = { all: 'alle Angriffe', weapon: 'Waffenangriffe', melee: 'Nahkampf', ranged: 'Fernkampf', unarmed: 'waffenlos', thrown: 'Wurfwaffen', spell: 'Zauber', cantrip: 'Zaubertricks', any: 'jeder Schaden', sneak: 'Hinterhältiger Angriff' };
+export const FX_HP = { full: 'Ziel mit vollen TP', hurt: 'Ziel bereits verletzt', half: 'Ziel höchstens halbe TP' };
+export const FX_SELFHP = { hurt: 'wenn du verletzt bist', half: 'wenn du höchstens halbe TP hast' };
+// Wirkungen, die der Kampf als Effekt kennt (für „Bei Treffer“ und Kampfhaltungen)
+export const ENGINE_EFFECTS = {
+  bane: 'Fluch (−1W4 auf Angriffe und Rettungswürfe)', bless: 'Segen (+1W4 auf Angriffe und Rettungswürfe)', slow: 'Verlangsamt',
+  noHeal: 'Kann nicht geheilt werden', advAgainst: 'Angriffe gegen das Ziel im Vorteil', noReactions: 'Keine Reaktionen',
+  speedZero: 'Bewegungsrate 0', dodge: 'Ausweichen', disNext: 'Nachteil beim nächsten Angriff', guided: 'Nächster Angriff gegen das Ziel im Vorteil',
+};
+// Bedingungen, die sich nur im Kampf prüfen lassen
+export const DYN_CONDS = ['conc', 'bloodied', 'raging'];
+export const COND_DE = {
+  noHeavy: 'ohne schwere Rüstung', unarmored: 'ohne Rüstung', unarmoredNoShield: 'ohne Rüstung und ohne Schild', noShield: 'ohne Schild', armored: 'in Rüstung',
+  heavy: 'in schwerer Rüstung', shield: 'mit Schild', conc: 'solange du dich konzentrierst', bloodied: 'bei höchstens halben TP', raging: 'im Kampfrausch',
+};
+// Eigene Zustände aus Regelpaketen: Schlüssel → { name, desc, fx, dot, stack, noHeal, base, save, rounds }
+export const CUSTOM_STATUS = {};
+// Fähigkeiten zum Würfelglück (lib/dice.js kennt sie)
+export const DICE_FX = { lucky: 'Eine gewürfelte 1 beim W20 neu würfeln (Glück)', reliable: 'Fertigkeitswürfe mindestens 10 (Verlässliches Talent)', gwf: 'Schadenswürfel mit 1 oder 2 neu würfeln', elemental: 'Schadenswürfel: 1 zählt als 2', savage: 'Waffenschaden zweimal würfeln, höheren nehmen', elven: 'Bei Vorteil drei W20 (Elfengenauigkeit)' };
+export const STYLE_FX = { archery: 'Bogenschießen (+2 Fernkampf)', defense: 'Verteidigung (+1 RK in Rüstung)', dueling: 'Duellieren (+2 Schaden, eine Waffe)', gwf: 'Kampf mit großen Waffen', twf: 'Kampf mit zwei Waffen (Modifikator auf Zweitwaffe)' };
+export const BONUS_ACTS = { dash: 'Spurt', disengage: 'Rückzug', hide: 'Verstecken', dodge: 'Ausweichen', help: 'Helfen' };
 
 // ───────────────────────── Text zerlegen ─────────────────────────
 // Sätze mit Position (Aufzählungen mit „·“ zählen wie Sätze)
@@ -117,7 +173,7 @@ export function parseFx(text, vocab = {}, opts = {}) {
       const e = s + (len ?? m[0].length - at);
       if (!free(s, e)) return;
       taken.push([s, e]);
-      const hint = kind === 'res' ? null : kind || (t === 'adv' ? 'hint' : situational ? 'cond' : null);
+      const hint = kind === 'res' || kind === 'fx' ? null : kind || (t === 'adv' ? 'hint' : situational ? 'cond' : null);
       out.push({ t, ...extra, ...(lvl ? { lvl } : {}), ...(cond ? { cond } : {}), active: !hint && !extra.choice, why: extra.choice ? 'Auswahl' : hint === 'cond' ? 'bedingt' : hint === 'hint' ? 'Hinweis' : hint === 'money' ? 'Geld' : '', s, e, txt: src.slice(s, e) });
     };
     const each = (re, fn) => { re.lastIndex = 0; let m; while ((m = re.exec(S))) { fn(m); if (!re.global) break; } };
@@ -162,11 +218,18 @@ export function parseFx(text, vocab = {}, opts = {}) {
     });
     each(/([+]\s*\d+)\s*auf\s+(?:alle\s+)?(?:deine\s+)?Rettungswürfe/gi, (m) => add('saveBonus', m, { v: num(m[1]) }));
     // Attributswerte
-    each(new RegExp(`([+−–-]\\s*\\d+)\\s*(?:auf\\s+(?:deine\\s+|dein\\s+)?)?${AB_RE}(?![-\\w])`, 'gi'), (m) => add('abil', m, { k: abOf(m[2]), v: num(m[1]), ...(choice ? { choice: true } : {}) }));
-    each(new RegExp(`${AB_RE}\\s*([+−–-]\\s*\\d+)(?!\\d|,\\d)`, 'gi'), (m) => add('abil', m, { k: abOf(m[1]), v: num(m[2]), ...(choice ? { choice: true } : {}) }));
+    const capM = /(?:höchstens|maximal|bis\s+(?:zu\s+)?|max\.)\s*(\d{2})/i.exec(S);
+    const cap = capM ? { max: Number(capM[1]) } : {};
+    each(new RegExp(`([+−–-]\\s*\\d+)\\s*(?:auf\\s+(?:deine\\s+|dein\\s+)?)?${AB_RE}(?![-\\w])`, 'gi'), (m) => add('abil', m, { k: abOf(m[2]), v: num(m[1]), ...cap, ...(choice ? { choice: true } : {}) }));
+    each(new RegExp(`${AB_RE}\\s*([+−–-]\\s*\\d+)(?!\\d|,\\d)`, 'gi'), (m) => add('abil', m, { k: abOf(m[1]), v: num(m[2]), ...cap, ...(choice ? { choice: true } : {}) }));
     // Angriff und Schaden
     each(/([+−–-]\s*\d+)\s*(?:auf\s+)?(?:alle\s+)?(?:deine\s+)?(?:Angriffswürfe|Angriffe)(?:\s+mit\s+(Fernkampfwaffen|Nahkampfwaffen|Waffen|Zaubern))?/gi, (m) => add('attack', m, { v: num(m[1]), k: /fern/i.test(m[2] || '') ? 'ranged' : /nah/i.test(m[2] || '') ? 'melee' : /zauber/i.test(m[2] || '') ? 'spell' : 'all' }));
     each(/([+−–-]\s*\d+)\s*(?:auf\s+(?:den\s+)?)?(?:Schaden|Schadenswürfe)(?:\s+(?:mit|bei)\s+(Fernkampfwaffen|Nahkampfwaffen|Waffen))?/gi, (m) => add('damage', m, { v: num(m[1]), k: /fern/i.test(m[2] || '') ? 'ranged' : /nah/i.test(m[2] || '') ? 'melee' : 'all' }));
+    // „ignoriert Resistenz gegen …“ zuerst – sonst hielte die Resistenz-Regel es für eine eigene Resistenz
+    each(/ignorier\w*\s+(?:die\s+)?Resistenz(?:en)?\s+gegen\s+((?:[A-Za-zÄÖÜäöüß]+-?(?:schaden)?(?:\s*,\s*|\s+und\s+|\s+sowie\s+)?)+)/gi, (m) => {
+      const k = m[1].split(/\s*,\s*|\s+und\s+|\s+sowie\s+/).map((w) => dmgOf(w.replace(/-?schaden$/i, ''))).filter(Boolean);
+      if (k.length) add('ignoreResist', m, { k }, { kind: 'fx' });
+    });
     // Resistenz, Immunität, Anfälligkeit
     each(/\b(Resistenz(?:en)?|Immunität(?:en)?|immun|Anfälligkeit(?:en)?|anfällig|verwundbar)\s+(?:gegen(?:über)?|für)\s+((?:(?:den\s+Zustand\s+|die\s+Zustände\s+)?[A-Za-zÄÖÜäöüß]+-?(?:schaden)?(?:\s*,\s*|\s+und\s+|\s+sowie\s+)?)+)/gi, (m) => {
       // Liste nur so weit, wie Schadensarten bzw. Zustände folgen („…, Vorteil gegen …“ gehört nicht mehr dazu)
@@ -233,6 +296,59 @@ export function parseFx(text, vocab = {}, opts = {}) {
       taken.push([s, s + m[0].length]);
       out.push({ t: 'spell', k: m[2].trim(), lv: 1, lvl: Number(m[1]), active: true, why: '', s, e: s + m[0].length, txt: m[0] });
     });
+    // Kritische Treffer, Zusatzschaden, Resistenz ignorieren
+    each(/kritische[rn]?\s+Treffer\s+(?:schon\s+|bereits\s+)?(?:bei|ab)\s+(?:einer\s+)?(?:gewürfelten\s+)?(1[5-9])/gi, (m) => add('crit', m, { v: 20 - Number(m[1]) }));
+    each(/(?:zusätzlich(?:e[nr]?)?|weitere[nr]?|extra)\s+(\d*\s*W\s*\d+(?:\s*[+]\s*\d+)?|\d+)\s+(?:Punkte?\s+)?(?:([A-Za-zÄÖÜäöüß]+?)-?schaden|([A-Za-zÄÖÜäöüß]+?)(?:e[nrs]?)?\s+Schaden)/gi, (m) => {
+      const type = dmgOf(m[2] || m[3]);
+      if (!type) return;
+      const d = m[1].replace(/\s+/g, '');
+      const vs = /gegen\s+((?:Untot|Unhold|Drach|Ries|Monstrosit|Konstrukt|Aberration|Elementar|Fee|Pflanz|Bestie|Humanoid|Riesen|Himmlisch)[\wäöüß]*(?:\s*(?:,|und|oder)\s*[A-ZÄÖÜ][\wäöüß]*)*)/i.exec(S);
+      const crit = /kritische/i.test(S);
+      const once = /einmal\s+(?:pro|in\s+jedem)\s+Zug/i.test(S);
+      // „bei einem Treffer“ gehört bei Zusatzschaden dazu – nur andere Bedingungen machen daraus einen Hinweis
+      const other = SITUATION.test(S.replace(/bei\s+einem\s+(?:kritischen\s+)?Treffer|nach\s+einem\s+Treffer|wenn\s+du\s+(?:damit\s+)?triffst|triffst\s+du/gi, ' ').replace(/gegen\s+\S+/gi, ' '));
+      add('dmgExtra', m, { ...(/W/i.test(d) ? { dice: d.replace(/W/gi, 'd') } : { v: Number(d) }), type, ...(vs ? { vs: vs[1] } : {}), ...(crit ? { crit: true } : {}), ...(once ? { once: true } : {}) }, { kind: other ? 'cond' : 'fx' });
+    });
+    each(/ignorier\w*\s+(?:die\s+)?Resistenz(?:en)?\s+gegen\s+((?:[A-Za-zÄÖÜäöüß]+-?(?:schaden)?(?:\s*,\s*|\s+und\s+|\s+sowie\s+)?)+)/gi, (m) => {
+      const k = m[1].split(/\s*,\s*|\s+und\s+|\s+sowie\s+/).map((w) => dmgOf(w.replace(/-?schaden$/i, ''))).filter(Boolean);
+      if (k.length) add('ignoreResist', m, { k });
+    });
+    each(/kritische\s+Treffer\s+gegen\s+dich\s+(?:werden|gelten|zählen)\s+(?:zu|als)\s+normale[n]?\s+Treffer|keine\s+kritischen\s+Treffer\s+gegen\s+dich/gi, (m) => add('critImmune', m, {}, { kind: 'fx' }));
+    // Zauber-SG und Zauberschaden
+    each(/([+−–-]\s*\d+)\s*(?:auf\s+(?:den\s+)?)?(?:(?:deine[ns]?\s+)?Zauber-?(?:rettungswurf)?-?SG|SG\s+(?:deiner\s+)?Zauber|Zauberrettungswurf-?SG)/gi, (m) => add('spellDc', m, { v: num(m[1]) }));
+    each(/(?:Zauber-?SG|Zauberrettungswurf-?SG)\s*([+−–-]\s*\d+)/gi, (m) => add('spellDc', m, { v: num(m[1]) }));
+    // Rettungswürfe: Vorteil (Attribut, gegen Zauber, gegen Zustand) und Bonus je Attribut
+    each(new RegExp(`\\b(Vorteil|Nachteil)\\s+(?:bei|auf)\\s+(?:allen\\s+|deinen\\s+)?(?:${AB_RE}s?[-‑]?\\s*)?(?:und\\s+${AB_RE}s?[-‑]?\\s*)?Rettungsw(?:ü|u)rf\\w*(?:\\s+gegen\\s+([^.;·,]+))?`, 'gi'), (m) => {
+      const k = [m[2], m[3]].map(abOf).filter(Boolean);
+      const target = (m[4] || '').trim();
+      const vs = !target ? '' : /zauber|magi/i.test(target) ? 'spell' : condOf(target.replace(/^(?:den\s+Zustand\s+|die\s+Zustände\s+)/i, '').split(/\s+/)[0]) || (/vergift|gift/i.test(target) ? 'Vergiftet' : /bezauber/i.test(target) ? 'Bezaubert' : /angst|verängst/i.test(target) ? 'Verängstigt' : '');
+      if (target && !vs) return; // gegen etwas Unbekanntes → bleibt Hinweis
+      add('saveAdv', m, { k, vs, ...(m[1].toLowerCase() === 'nachteil' ? { dis: true } : {}) }, { kind: 'fx' });
+    });
+    each(new RegExp(`([+−–-]\\s*\\d+)\\s*auf\\s+(?:deine\\s+)?${AB_RE}s?[-‑]?\\s*Rettungsw(?:ü|u)rf\\w*`, 'gi'), (m) => add('saveBonus', m, { v: num(m[1]), k: [abOf(m[2])] }));
+    each(new RegExp(`${AB_RE}s?[-‑]?\\s*Rettungsw(?:ü|u)rf\\w*\\s*([+−–-]\\s*\\d+)`, 'gi'), (m) => add('saveBonus', m, { v: num(m[2]), k: [abOf(m[1])] }));
+    each(/([+−–-]\s*\d+)\s*auf\s+(?:alle\s+)?Rettungsw(?:ü|u)rf\w*\s+gegen\s+Zauber/gi, (m) => add('saveBonus', m, { v: num(m[1]), vs: 'spell' }));
+    // Fertigkeiten: Vorteil und Bonus
+    each(/\b(Vorteil|Nachteil)\s+(?:bei|auf)\s+(?:Würfen?\s+(?:für|auf)\s+|Proben\s+(?:für|auf)\s+|Attributswürfen\s+(?:für|auf)\s+)?([^.;·]+)/gi, (m) => {
+      const k = (vocab.skills || []).filter((x) => new RegExp(`^\\s*(?:(?:und|,)\\s*)?${esc(x.name)}\\b`, 'i').test(m[2]) || new RegExp(`(?:,|und)\\s*${esc(x.name)}\\b`, 'i').test(m[2])).map((x) => x.key);
+      if (/^\s*Initiative/i.test(m[2])) k.push('init');
+      if (k.length && !/Rettungsw/i.test(m[2])) add('checkAdv', m, { k, ...(m[1].toLowerCase() === 'nachteil' ? { dis: true } : {}) }, { kind: SITUATION.test(m[0]) ? 'cond' : 'fx' });
+    });
+    for (const sk of vocab.skills || []) {
+      each(new RegExp(`([+−–-]\\s*\\d+)\\s*auf\\s+(?:Würfe\\s+für\\s+)?${esc(sk.name)}\\b|\\b${esc(sk.name)}\\s*([+−–-]\\s*\\d+)(?!\\s*m)`, 'gi'), (m) => add('checkBonus', m, { k: [sk.key], v: num(m[1] || m[2]) }));
+    }
+    // Attribut festsetzen („Stärke wird auf 19 gesetzt“, „Stärkewert 19“)
+    each(new RegExp(`${AB_RE}(?:wert)?\\s+(?:wird\\s+|beträgt\\s+|steigt\\s+)?auf\\s+(\\d{2})(?:\\s+gesetzt|\\s+erhöht)?|${AB_RE}wert\\s+(?:von\\s+)?(\\d{2})`, 'gi'), (m) => add('abilSet', m, { k: abOf(m[1] || m[3]), v: Number(m[2] || m[4]) }));
+    // Schaden verringern
+    each(/(?:erleidest|nimmst)\s+(?:du\s+)?(\d+)\s+(?:Punkte?\s+)?weniger\s+([A-Za-zÄÖÜäöüß]*?)-?schaden|([A-Za-zÄÖÜäöüß]*?)-?schaden[^.;·]{0,30}?um\s+(\d+)\s+(?:verringert|reduziert)/gi, (m) => {
+      const t = dmgOf(m[2] || m[3] || '');
+      add('dmgReduce', m, { v: Number(m[1] || m[4]), k: t ? [t] : [], ...(/nichtmagisch/i.test(S) ? { nm: true } : {}) }, { kind: /solange|wenn|während/i.test(S.replace(/solange\s+du\s+(?:eine\s+)?(?:schwere\s+)?Rüstung\s+trägst/i, '')) ? 'cond' : 'fx' });
+    });
+    // Regeneration zu Zugbeginn
+    each(/(?:erhältst|regenerierst|gewinnst|heilst)\s+(?:du\s+)?(\d*\s*W\s*\d+|\d+)\s+(?:TP|Trefferpunkte)(?:\s+zurück)?\s+zu\s+Beginn\s+(?:jedes|deines)\s+Zuges|zu\s+Beginn\s+(?:jedes|deines)\s+Zuges\s+(?:erhältst|regenerierst|gewinnst)\s+(?:du\s+)?(\d*\s*W\s*\d+|\d+)\s+(?:TP|Trefferpunkte)/gi, (m) => {
+      const d = (m[1] || m[2]).replace(/\s+/g, '');
+      add('regen', m, /W/i.test(d) ? { dice: d.replace(/W/gi, 'd') } : { v: Number(d) }, { kind: 'fx' });
+    });
     // Vorteil/Nachteil: nur Hinweis
     each(/\b(Vorteil|Nachteil)\s+(?:bei|auf|gegen|für)\s+([^.;·]+)/gi, (m) => add('adv', m, { k: `${m[1]} ${m[0].slice(m[1].length).trim()}`.replace(/\s+/g, ' ') }, { kind: 'hint' }));
     // Geld (nur Hervorhebung)
@@ -275,105 +391,273 @@ export function fxSegments(text, list) {
   return out;
 }
 
+// Wert in Worten: Zahl, Übungsbonus, Modifikator, Würfel
+export function fxValText(v, { sign = true } = {}) {
+  if (v == null || v === '') return '';
+  const t = String(v);
+  if (t === 'pb') return `${sign ? '+ ' : ''}Übungsbonus`;
+  if (t === 'level') return `${sign ? '+ ' : ''}Stufe`;
+  if (t === 'half') return `${sign ? '+ ' : ''}halbe Stufe`;
+  if (t.startsWith('mod:')) { const k = t.slice(4); return `${sign ? '+ ' : ''}${k === 'spell' ? 'Zauberattribut' : ({ str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' }[k] || k)}-Mod.`; }
+  if (/\d*[dW]\d/.test(t)) return `${sign && !/^[+-]/.test(t) ? '+' : ''}${t.replace(/d/g, 'W')}`;
+  const n = Number.parseFloat(t.replace(',', '.'));
+  return sign && n > 0 ? `+${t}` : t;
+}
+// Filter einer Angriffswirkung in Worten
+export function fxFilterText(f) {
+  const out = [];
+  if (f.on && f.on !== 'all' && FX_ON[f.on]) out.push(FX_ON[f.on]);
+  if (f.vs) out.push(`gegen ${f.vs}`);
+  if (f.vsCond) out.push(`gegen Ziele mit „${condName(f.vsCond)}“`);
+  if (f.hp && FX_HP[f.hp]) out.push(FX_HP[f.hp]);
+  if (f.selfHp && FX_SELFHP[f.selfHp]) out.push(FX_SELFHP[f.selfHp]);
+  if (f.adv) out.push('mit Vorteil');
+  if (f.crit) out.push('nur bei kritischen Treffern');
+  if (f.notActed) out.push('gegen Ziele, die noch nicht am Zug waren');
+  if (f.ifType) out.push(`wenn du ${[].concat(f.ifType).map((k) => FX_DMG[k] || k).join('/')}schaden verursachst`);
+  if (f.once) out.push('einmal pro Zug');
+  return out.join(', ');
+}
+// Runden in Worten (10 Runden = 1 Minute)
+export const durText = (r) => { const n = Number(r) || 0; if (n >= 600 && n % 600 === 0) return `${n / 600} Stunde${n / 600 > 1 ? 'n' : ''}`; if (n >= 10 && n % 10 === 0) return `${n / 10} Minute${n / 10 > 1 ? 'n' : ''}`; return `${n} Runde${n === 1 ? '' : 'n'}`; };
+// Zustand/Effekt/eigener Zustand → Name
+export function condName(c) {
+  const t = String(c || '');
+  if (t.startsWith('eff:')) return (ENGINE_EFFECTS[t.slice(4)] || t.slice(4)).replace(/\s*\(.*$/, '');
+  if (t.startsWith('st:')) return CUSTOM_STATUS[t.slice(3)]?.name || t.slice(3);
+  return t;
+}
+
 // Wirkung in Worten (für Listen und Tooltips)
 export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgName = (k) => FX_DMG[k] || k } = {}) {
   const m = (ft) => `${String(Math.round(Number(ft) * TAU_FT * 10) / 10).replace('.', ',')} m`;
-  const sg = (n) => (typeof n === 'string' && !/^[+-]?\d/.test(n) ? n : Number.parseFloat(String(n).replace(',', '.')) > 0 ? `+${n}` : String(n));
+  const sg = (n) => fxValText(n);
   const list = (a, fn = (x) => x) => (Array.isArray(a) ? a : [a]).filter(Boolean).map(fn).join(', ');
-  const tail = `${f.lvl ? ` (ab Stufe ${f.lvl})` : ''}${f.cond === 'noHeavy' ? ' (ohne schwere Rüstung)' : f.cond === 'unarmored' ? ' (ohne Rüstung)' : f.cond === 'armored' ? ' (in Rüstung)' : f.cond === 'shield' ? ' (mit Schild)' : ''}`;
+  const ab = (k) => FX_AB[k] || k;
+  const abS = (k) => ({ str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' }[k] || k);
+  const cond = f.cond ? (COND_DE[f.cond] || (String(f.cond).startsWith('sp:') ? `nur Spezies ${f.cond.slice(3)}` : String(f.cond).startsWith('cls:') ? `nur Klasse ${f.cond.slice(4)}` : '')) : '';
+  const tail = `${f.lvl ? ` (ab Stufe ${f.lvl})` : ''}${cond ? ` (${cond})` : ''}`;
+  const filt = fxFilterText(f);
+  const ft = filt ? ` (${filt})` : '';
+  const rest = (r) => (r === 'short' ? 'kurzer' : r === 'dawn' ? 'Morgengrauen –' : 'langer');
   switch (f.t) {
     case 'speed': return `Bewegung ${sg(m(f.v))}${tail}`;
     case 'speedSet': return `Bewegungsrate ${m(f.v)}${tail}`;
     case 'move': return `${MOVE_DE[f.k] || f.k} ${f.v === 'walk' ? '= Bewegungsrate' : m(f.v)}${tail}`;
     case 'sense': return `${SENSE_DE[f.k] || f.k} ${m(f.v)}${tail}`;
+    case 'reach': return `Nahkampfreichweite +${m(f.v || 5)}${tail}`;
+    case 'speedMul': return `Bewegungsrate ×${f.v || 2}${tail}`;
     case 'ac': return `RK ${sg(f.v)}${tail}`;
-    case 'acFormula': return `RK ohne Rüstung = ${f.v} + ${list(f.k, (k) => ({ str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' }[k] || k)).replace(/, /g, ' + ')}${tail}`;
-    case 'resist': return `Resistenz: ${list(f.k, dmgName)}${tail}`;
+    case 'acFormula': return `RK ohne Rüstung = ${f.v}${arr(f.k).length ? ` + ${list(f.k, (k) => ({ str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' }[k] || k)).replace(/, /g, ' + ')}` : ''}${tail}`;
+    case 'acMin': return `RK mindestens ${f.v}${tail}`;
+    case 'dexCap': return `GES in mittelschwerer Rüstung bis +${2 + (Number(f.v) || 1)}${tail}`;
+    case 'stealthOk': return `Rüstung ohne Nachteil auf Heimlichkeit${tail}`;
+    case 'resist': return `Resistenz: ${list(f.k, dmgName)}${f.nm ? ' (nur nichtmagisch)' : ''}${tail}`;
     case 'immune': return `Immun: ${list(f.k, dmgName)}${tail}`;
     case 'vuln': return `Anfällig: ${list(f.k, dmgName)}${tail}`;
     case 'condImm': return `Immun gegen ${list(f.k)}${tail}`;
+    case 'dmgReduce': return `${arr(f.k).length ? `${list(f.k, dmgName)}schaden` : 'Schaden'} −${fxValText(f.v, { sign: false })}${f.nm ? ' (nur nichtmagisch)' : ''}${tail}`;
+    case 'critImmune': return `Keine kritischen Treffer gegen dich${tail}`;
+    case 'disAttackers': return `${f.on === 'melee' ? 'Nahkampfangriffe' : f.on === 'ranged' ? 'Fernkampfangriffe' : f.on === 'spell' ? 'Zauberangriffe' : 'Angriffe'} gegen dich im ${f.adv ? 'Vorteil' : 'Nachteil'}${f.vs ? ` (von ${f.vs})` : ''}${tail}`;
+    case 'retaliate': return `Vergeltung: ${f.on === 'hit' ? 'wer dich trifft' : f.on === 'miss' ? 'wer dich verfehlt' : 'wer dich im Nahkampf trifft'}${f.dice || f.v ? ` erleidet ${fxValText(f.dice || f.v, { sign: false })} ${dmgName(f.type || 'force')}` : ''}${f.inflict ? ` · ${condName(f.inflict)}` : ''}${f.save ? ` (${abS(f.save)}-Rettungswurf${f.dc ? `, SG ${f.dc}` : ''})` : ''}${tail}`;
+    case 'evasion': return `Entrinnen${tail}`;
+    case 'endure': return `Bei 0 TP: ${f.dice ? `${fxValText(f.dice, { sign: false })} TP zurück` : 'stattdessen 1 TP'}, ${f.uses === 'pb' ? 'Übungsbonus-mal' : `${f.uses || 1}×`} pro ${rest(f.rest)} Rast${tail}`;
+    case 'aura': return f.k === 'saveAdv' ? `Aura ${m(f.r || 10)}: Vorteil bei Rettungswürfen gegen Zauber für Verbündete${tail}` : `Aura ${m(f.r || 10)}: ${f.k === 'ac' ? 'RK' : f.k === 'heal' ? 'Heilung zu Zugbeginn' : 'Rettungswürfe'} ${fxValText(f.v)} für Verbündete${tail}`;
     case 'hpLevel': return `${sg(f.v)} TP pro Stufe${tail}`;
     case 'hp': return `${sg(f.v)} TP-Maximum${tail}`;
-    case 'abil': return `${FX_AB[f.k] || f.k} ${sg(f.v)}${tail}`;
+    case 'regen': return `Zugbeginn: ${fxValText(f.dice || f.v, { sign: false })} TP zurück${f.only === 'bloodied' ? ' (nur bei höchstens halben TP)' : ''}${tail}`;
+    case 'tempStart': return `Zugbeginn: ${fxValText(f.v, { sign: false })} temporäre TP${tail}`;
+    case 'healBonus': return f.max ? `Heilung immer maximal${tail}` : `Heilung ${sg(f.v)}${tail}`;
+    case 'abil': return `${ab(f.k)} ${sg(f.v)}${f.max ? ` (höchstens ${f.max})` : ''}${tail}`;
+    case 'abilSet': return `${ab(f.k)} = ${f.v} (falls niedriger)${tail}`;
     case 'init': return `Initiative ${f.v === 'pb' ? '+ Übungsbonus' : sg(f.v)}${tail}`;
-    case 'saveProf': return `Übung: ${list(f.k, (k) => FX_AB[k] || k)}-Rettungswürfe${tail}`;
-    case 'saveBonus': return `${sg(f.v)} auf alle Rettungswürfe${tail}`;
+    case 'saveProf': return `Übung: ${list(f.k, abS)}-Rettungswürfe${tail}`;
+    case 'saveBonus': return `${sg(f.v)} auf ${arr(f.k).length ? `${list(f.k, (k) => (k === 'death' ? 'Todes' : k === 'conc' ? 'Konzentrations' : abS(k)))}-Rettungswürfe` : 'alle Rettungswürfe'}${f.vs ? ` gegen ${f.vs === 'spell' ? 'Zauber' : condName(f.vs)}` : ''}${tail}`;
+    case 'saveAdv': return `${f.dis ? 'Nachteil' : 'Vorteil'} bei ${arr(f.k).length ? `${list(f.k, (k) => (k === 'death' ? 'Todes' : k === 'conc' ? 'Konzentrations' : abS(k)))}-Rettungswürfen` : 'Rettungswürfen'}${f.vs ? ` gegen ${f.vs === 'spell' ? 'Zauber' : f.vs === 'conc' ? 'Konzentrationsverlust' : condName(f.vs)}` : ''}${tail}`;
+    case 'checkBonus': return `${list(f.k, (k) => (k === 'all' ? 'alle Attributswürfe' : k === 'init' ? 'Initiative' : FX_AB[k] ? `${ab(k)}-Würfe` : skillName(k)))} ${sg(f.v)}${tail}`;
+    case 'checkAdv': return `${f.dis ? 'Nachteil' : 'Vorteil'}: ${list(f.k, (k) => (k === 'all' ? 'alle Attributswürfe' : k === 'init' ? 'Initiative' : FX_AB[k] ? `${ab(k)}-Würfe` : skillName(k)))}${tail}`;
+    case 'jack': return `Halber Übungsbonus auf ungeübte Attributswürfe${tail}`;
+    case 'dice': return `${list(f.k, (k) => DICE_FX[k] || k)}${tail}`;
     case 'skill': return `Übung: ${list(f.k, skillName)}${tail}`;
     case 'expertise': return `Expertise: ${list(f.k, skillName)}${tail}`;
     case 'weapon': return `Waffenübung: ${list(f.k, (k) => (k === 'simple' ? 'einfache Waffen' : k === 'martial' ? 'Kriegswaffen' : weaponName(k)))}${tail}`;
     case 'armor': return `Rüstungsübung: ${list(f.k, (k) => ({ light: 'leicht', medium: 'mittelschwer', heavy: 'schwer', shield: 'Schilde' }[k] || k))}${tail}`;
     case 'tool': return `Werkzeug: ${f.k}${tail}`;
     case 'lang': return f.n ? `${f.n} Sprache(n) nach Wahl` : `Sprachen: ${list(f.k)}${tail}`;
-    case 'attack': return `${sg(f.v)} auf Angriffe${f.k === 'ranged' ? ' (Fernkampf)' : f.k === 'melee' ? ' (Nahkampf)' : f.k === 'spell' ? ' (Zauber)' : ''}${tail}`;
-    case 'damage': return `${sg(f.v)} Schaden${f.k === 'ranged' ? ' (Fernkampf)' : f.k === 'melee' ? ' (Nahkampf)' : ''}${tail}`;
+    case 'pick': return `Auswahl: ${f.n || 1}× ${PICK_DE[f.k] || f.k}${f.v ? ` (${sg(f.v)})` : ''}${arr(f.from).length ? ` aus ${arr(f.from).length} Möglichkeiten` : ''}${tail}`;
+    case 'attack': return `${sg(f.v)} auf Angriffe${f.k && f.k !== 'all' ? ` (${FX_ON[f.k] || f.k})` : ''}${ft}${tail}`;
+    case 'damage': return `${sg(f.v)} Schaden${f.k && f.k !== 'all' ? ` (${FX_ON[f.k] || f.k})` : ''}${ft}${tail}`;
+    case 'dmgExtra': return f.dice === 'weapon' ? `+${f.n || 1} Waffenwürfel${ft}${tail}` : `Zusatzschaden ${fxValText(f.dice || f.v, { sign: false })}${f.dice && f.v ? ` ${fxValText(f.v)}` : ''} ${f.type ? dmgName(f.type) : '(Waffenschaden)'}${ft}${tail}`;
+    case 'crit': return `Kritisch ab ${20 - (Number(f.v) || 1)}${f.on && f.on !== 'all' ? ` (${FX_ON[f.on] || f.on})` : ''}${tail}`;
+    case 'advAttack': return `${f.dis ? 'Nachteil' : 'Vorteil'} bei Angriffen${ft}${tail}`;
+    case 'onHit': return `Bei Treffer: ${[f.inflict ? `${condName(f.inflict)}${f.save ? ` (${abS(f.save)}-Rettungswurf${f.dc && f.dc !== 'auto' ? ` SG ${f.dc}` : ''})` : ''}${f.rounds ? ` für ${f.rounds} Runden` : ''}${f.self ? ' – für dich' : ''}` : '', f.heal ? `du heilst ${fxValText(f.heal, { sign: false })} TP` : '', f.temp ? `${fxValText(f.temp, { sign: false })} temporäre TP` : '', f.push ? `Stoß ${String(f.push).replace('.', ',')} m` : ''].filter(Boolean).join(' · ')}${ft}${tail}`;
+    case 'ignoreResist': return `Ignoriert Resistenz: ${arr(f.k).length ? list(f.k, dmgName) : 'alle'}${ft}${tail}`;
     case 'attacks': return `${f.v} Angriffe pro Angriffsaktion${tail}`;
-    case 'spell': return `Zauber: ${f.k}${f.lv === 0 ? ' (Zaubertrick)' : ''}${tail}`;
-    case 'res': return `${f.k || 'Fähigkeit'}: ${f.v === 'pb' ? 'Übungsbonus' : String(f.v).startsWith('mod:') ? `${FX_AB[String(f.v).slice(4)]}-Mod.` : f.v}× pro ${f.rest === 'short' ? 'kurzer' : 'langer'} Rast${tail}`;
+    case 'unarmed': return `Waffenloser Schlag ${String(f.dice || '1d4').replace(/d/g, 'W')}${f.type ? ` ${dmgName(f.type)}` : ''}${f.ab === 'dex' ? ' (GES)' : f.ab === 'str' ? ' (STÄ)' : ' (STÄ oder GES)'}${tail}`;
+    case 'style': return `Kampfstil: ${list(f.k, (k) => STYLE_FX[k] || k)}${tail}`;
+    case 'spell': return `Zauber: ${f.k}${f.lv === 0 ? ' (Zaubertrick)' : ''}${f.castLv ? ` (als ${f.castLv}. Grad)` : ''}${f.uses && f.uses !== 'will' && f.uses !== 'always' ? ` – ${f.uses === 'pb' ? 'Übungsbonus-mal' : f.uses === 'charges' ? `${f.cost || 1} Ladung(en)` : `${f.uses}×`}${f.uses === 'charges' ? '' : ` pro ${rest(f.rest)} Rast`}` : f.uses === 'always' ? ' (immer vorbereitet)' : ''}${tail}`;
+    case 'spellDc': return `Zauber-SG ${sg(f.v)}${tail}`;
+    case 'spellDmg': return `Zauberschaden ${sg(f.v)}${f.on === 'cantrip' ? ' (Zaubertricks)' : f.on && f.on !== 'all' ? ` (${f.on})` : ''}${f.ifType ? ` bei ${[].concat(f.ifType).map((k) => FX_DMG[k] || k).join('/')}schaden` : ''}${f.once ? ', einmal pro Zug' : ''}${tail}`;
+    case 'slots': return `+${f.n || 1} Zauberplatz ${f.lv || 1}. Grad${tail}`;
+    case 'res': return `${f.k || 'Fähigkeit'}: ${f.v === 'pb' ? 'Übungsbonus' : String(f.v).startsWith('mod:') ? `${FX_AB[String(f.v).slice(4)]}-Mod.` : f.v}× ${f.rest === 'dawn' ? `– ${f.regain ? `${String(f.regain).replace(/d/g, 'W')} neu` : 'neu'} im Morgengrauen` : `pro ${rest(f.rest)} Rast`}${tail}`;
+    case 'resMax': return `${f.k || 'Ressource'} ${sg(f.v || 1)}${tail}`;
+    case 'bonusAct': return `Als Bonusaktion: ${list(f.k, (k) => BONUS_ACTS[k] || k)}${tail}`;
     case 'action': {
       const w = String(f.dice || '').replace(/d/g, 'W');
       const n = f.uses === 'pb' ? 'Übungsbonus-mal' : String(f.uses).startsWith('mod:') ? `${FX_AB[String(f.uses).slice(4)]}-Mod.-mal` : `${f.uses}×`;
-      return `Aktion: ${f.k || 'ohne Namen'} (${f.kind === 'heal' ? `Heilung ${w}` : f.kind === 'save' ? `Rettungswurf auf ${FX_AB[f.save] || 'Geschicklichkeit'}, ${w} ${dmgName(f.type)}` : `Angriff ${w} ${dmgName(f.type)}`}${f.uses && f.uses !== 'will' ? `, ${n} pro ${f.rest === 'short' ? 'kurzer' : 'langer'} Rast` : ''})${tail}`;
+      const what = f.kind === 'heal' ? `Heilung ${w}` : f.kind === 'save' ? `Rettungswurf auf ${FX_AB[f.save] || 'Geschicklichkeit'}, ${w} ${dmgName(f.type)}` : f.kind === 'weapon' ? `Waffenangriff${w ? ` +${w} ${f.type ? dmgName(f.type) : ''}` : ''}` : f.kind === 'buff' ? `Wirkung für ${f.dur === 'toggle' ? 'beliebig lange' : f.dur === 'conc' ? 'Konzentration' : durText(f.rounds || 10)}` : f.kind === 'temp' ? `temporäre TP ${w}` : f.kind === 'restore' ? (f.what === 'res' ? `${f.res || 'Ressource'} +${f.n || 1}` : `Zauberplatz bis ${f.lvMax || 9}. Grad zurück`) : f.kind === 'mark' ? `Markieren${w ? ` (+${w})` : ''}` : f.kind === 'react' ? `Reaktion bei Treffer` : `Angriff ${w} ${dmgName(f.type)}`;
+      return `Aktion: ${f.k || 'ohne Namen'} (${what}${f.inflict ? `, ${condName(f.inflict)}` : ''}${f.pool ? `, kostet ${f.poolCost || 1} ${f.pool}` : f.uses && f.uses !== 'will' ? `, ${n} pro ${rest(f.rest)} Rast` : ''})${tail}`;
     }
     case 'adv': return String(f.k || 'Vorteil');
     case 'money': return `${f.v} ${({ gp: 'GM', sp: 'SM', cp: 'KM', ep: 'EM', pp: 'PM' })[f.k] || 'GM'}`;
     default: return f.t;
   }
 }
+export const PICK_DE = { skill: 'Fertigkeit', expertise: 'Expertise', ability: 'Attribut', save: 'Rettungswurf-Übung', weapon: 'Waffenübung', armor: 'Rüstungsübung', tool: 'Werkzeug', lang: 'Sprache', dmg: 'Schadensart', spell: 'Zauber', cantrip: 'Zaubertrick', style: 'Kampfstil' };
+function arr(v) { return Array.isArray(v) ? v : v == null || v === '' ? [] : [v]; }
 
 // ───────────────────────── Zusammenfassen ─────────────────────────
-// ctx: { level, armor: 'none'|'clothing'|'light'|'medium'|'heavy', shield: bool, pb }
+// Zahlenwert einer Wirkung: Zahl, 'pb', 'level', 'half', 'mod:str' … 'mod:spell'. Würfel bleiben Text (isDice).
+export const isDice = (v) => typeof v === 'string' && /^\s*[+]?\s*\d*\s*[dW]\s*\d+/.test(v);
+export function fxVal(v, ctx = {}) {
+  if (typeof v === 'number') return v;
+  const t = String(v ?? '').trim();
+  if (!t) return 0;
+  if (t === 'pb') return Number(ctx.pb) || 2;
+  if (t === 'level') return Number(ctx.level) || 1;
+  if (t === 'half') return Math.floor((Number(ctx.level) || 1) / 2);
+  if (t.startsWith('mod:')) { const k = t.slice(4); return k === 'spell' ? Number(ctx.spellMod) || 0 : Number(ctx.mods?.[k]) || 0; }
+  const n = Number(t.replace(',', '.').replace(/^\+/, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+// Würfel-Platzhalter: „PBd4“, „LVd6“, „HLd6“ (halbe Stufe, aufgerundet), „2d6+MOD“ → echte Würfel
+export function fxDice(d, ctx = {}) {
+  return String(d || '').replace(/\s+/g, '').replace(/[Ww](?=\d)/g, 'd')
+    .replace(/\bHL/gi, String(Math.ceil((Number(ctx.level) || 1) / 2))).replace(/\bPB|ÜB/gi, String(Number(ctx.pb) || 2)).replace(/\bLV|STUFE/gi, String(Number(ctx.level) || 1))
+    .replace(/MOD/gi, String(Number(ctx.mod) || 0)).replace(/\+-/g, '-');
+}
+// Bedingungen: ctx { armor: 'none'|'clothing'|'light'|'medium'|'heavy', shield, species, classes, dyn: { conc, bloodied, raging } }
 export function condOk(cond, ctx = {}) {
   const a = ctx.armor || 'none';
+  const unarmored = a === 'none' || a === 'clothing';
   if (cond === 'noHeavy') return a !== 'heavy';
-  if (cond === 'unarmored') return a === 'none' || a === 'clothing';
-  if (cond === 'armored') return a !== 'none' && a !== 'clothing';
+  if (cond === 'unarmored') return unarmored;
+  if (cond === 'unarmoredNoShield') return unarmored && !ctx.shield;
+  if (cond === 'noShield') return !ctx.shield;
+  if (cond === 'armored') return !unarmored;
+  if (cond === 'heavy') return a === 'heavy';
   if (cond === 'shield') return !!ctx.shield;
+  if (DYN_CONDS.includes(cond)) return !!ctx.dyn?.[cond];
+  const s = String(cond || '');
+  if (s.startsWith('sp:')) return !ctx.species || ctx.species === s.slice(3);
+  if (s.startsWith('cls:')) return !ctx.classes || ctx.classes.includes(s.slice(4));
   return true;
 }
+// Wirkungen, die nur für Angriffe mit einer bestimmten Waffe gelten, wenn sie an dieser Waffe hängen
+export const ATTACK_SCOPED = new Set(['attack', 'damage', 'dmgExtra', 'crit', 'advAttack', 'onHit', 'ignoreResist']);
+const FILTERS = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed'];
+export const hasFilter = (f) => FILTERS.some((k) => f[k]);
 export function emptySummary() {
   return {
-    speed: 0, speedSet: 0, move: {}, sense: {}, ac: 0, acF: [], hpLevel: 0, hp: 0, init: 0, abil: {}, saveProf: new Set(), saveBonus: 0,
+    speed: 0, speedSet: 0, speedMul: 1, move: {}, sense: {}, reach: 0, resistNm: new Set(), ac: 0, acF: [], acMin: 0, dexCap: 0, stealthOk: false,
+    hpLevel: 0, hp: 0, init: 0, abil: {}, abilCapped: [], abilSet: {}, saveProf: new Set(), saveBonus: 0, saveBonusAb: {}, saveCond: [], saveAdv: [],
+    checkBonus: {}, checkAdv: new Set(), checkDis: new Set(), jack: false, diceFx: new Set(),
     skill: new Set(), exp: new Set(), tools: [], weapons: new Set(), armor: new Set(), lang: new Set(), langChoice: 0,
-    resist: new Set(), immune: new Set(), vuln: new Set(), condImm: new Set(), adv: [], atk: { all: 0, melee: 0, ranged: 0, spell: 0 }, dmg: { all: 0, melee: 0, ranged: 0 },
-    spells: [], res: [], attacks: 1, actions: [], applied: [],
+    resist: new Set(), immune: new Set(), vuln: new Set(), condImm: new Set(), dmgRed: [], critImmune: false, atkAgainst: [], retaliate: [], evasion: false, endure: [], aura: [],
+    adv: [], atk: { all: 0, melee: 0, ranged: 0, spell: 0, weapon: 0, unarmed: 0, thrown: 0 }, dmg: { all: 0, melee: 0, ranged: 0, weapon: 0, unarmed: 0, thrown: 0 },
+    atkCond: [], dmgExtra: [], crit: [], advAtk: [], onHit: [], ignoreRes: [], unarmed: null, styles: new Set(),
+    spellDc: 0, spellDmg: [], healBonus: 0, healMax: false, slots: {}, regen: [], tempStart: [],
+    spells: [], res: [], resMax: [], bonusAct: new Set(), attacks: 1, actions: [], picks: [], byItem: {}, dynamic: [], applied: [],
   };
 }
+// ctx: { level, pb, mods, spellMod, armor, shield, species, classes, dyn }
 export function fxSummary(list, ctx = {}) {
   const s = emptySummary();
   const lvl = Number(ctx.level) || 1;
+  const V = (v) => fxVal(v, { ...ctx, level: lvl });
+  const arr = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]);
   for (const f of list || []) {
     if (!f || f.active === false) continue;
     if (f.lvl && lvl < f.lvl) continue;
-    if (f.cond && !condOk(f.cond, ctx)) continue;
-    const arr = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]);
+    if (f.cond) {
+      // Kampfbedingungen (Konzentration, halbe TP, Kampfrausch) erst im Kampf – bis dahin nur merken
+      if (DYN_CONDS.includes(f.cond) && !ctx.dyn) { s.dynamic.push(f); continue; }
+      if (!condOk(f.cond, ctx)) continue;
+    }
+    // An einer Waffe: gilt nur für Angriffe mit genau dieser Waffe
+    if (f.item && ATTACK_SCOPED.has(f.t)) { (s.byItem[f.item] ||= []).push(f); s.applied.push(f); continue; }
     switch (f.t) {
-      case 'speed': s.speed += Number(f.v) || 0; break;
-      case 'speedSet': s.speedSet = Math.max(s.speedSet, Number(f.v) || 0); break;
-      case 'move': if (f.k) s.move[f.k] = f.v === 'walk' ? 'walk' : Math.max(Number(s.move[f.k]) || 0, Number(f.v) || 0); break;
-      case 'sense': if (f.k) s.sense[f.k] = Math.max(s.sense[f.k] || 0, Number(f.v) || 0); break;
-      case 'ac': s.ac += Number(f.v) || 0; break;
+      case 'speed': s.speed += V(f.v); break;
+      case 'speedSet': s.speedSet = Math.max(s.speedSet, V(f.v)); break;
+      case 'move': if (f.k) s.move[f.k] = f.v === 'walk' ? 'walk' : Math.max(Number(s.move[f.k]) || 0, V(f.v)); break;
+      case 'sense': if (f.k) s.sense[f.k] = Math.max(s.sense[f.k] || 0, V(f.v)); break;
+      case 'reach': s.reach = Math.max(s.reach, V(f.v || 5)); break;
+      case 'speedMul': s.speedMul = Math.max(s.speedMul, Number(f.v) || 2); break;
+      case 'ac': s.ac += V(f.v); break;
       case 'acFormula': s.acF.push({ base: Number(f.v) || 10, abs: arr(f.k), shield: f.shield !== false, name: f.src || '' }); break;
-      case 'hpLevel': s.hpLevel += Number(f.v) || 0; break;
-      case 'hp': s.hp += Number(f.v) || 0; break;
-      case 'abil': if (f.k) s.abil[f.k] = (s.abil[f.k] || 0) + (Number(f.v) || 0); break;
-      case 'init': s.init += f.v === 'pb' ? Number(ctx.pb) || 2 : Number(f.v) || 0; break;
+      case 'acMin': s.acMin = Math.max(s.acMin, V(f.v)); break;
+      case 'dexCap': s.dexCap = Math.max(s.dexCap, V(f.v || 1)); break;
+      case 'stealthOk': s.stealthOk = true; break;
+      case 'hpLevel': s.hpLevel += V(f.v); break;
+      case 'hp': s.hp += V(f.v); break;
+      case 'regen': s.regen.push({ ...f, dice: isDice(f.dice || f.v) ? String(f.dice || f.v) : '', v: isDice(f.v) ? 0 : V(f.v) }); break;
+      case 'tempStart': s.tempStart.push({ ...f, v: V(f.v) }); break;
+      case 'healBonus': if (f.max) s.healMax = true; else s.healBonus += V(f.v); break;
+      case 'abil': if (f.k) { if (f.max) s.abilCapped.push({ k: f.k, v: V(f.v), max: Number(f.max) }); else s.abil[f.k] = (s.abil[f.k] || 0) + V(f.v); } break;
+      case 'abilSet': if (f.k) s.abilSet[f.k] = Math.max(s.abilSet[f.k] || 0, V(f.v)); break;
+      case 'init': s.init += V(f.v); break;
       case 'saveProf': arr(f.k).forEach((k) => s.saveProf.add(k)); break;
-      case 'saveBonus': s.saveBonus += Number(f.v) || 0; break;
+      case 'saveBonus':
+        if (f.vs || isDice(f.v)) s.saveCond.push({ ...f, v: isDice(f.v) ? f.v : V(f.v) });
+        else if (arr(f.k).length) arr(f.k).forEach((k) => { s.saveBonusAb[k] = (s.saveBonusAb[k] || 0) + V(f.v); });
+        else s.saveBonus += V(f.v);
+        break;
+      case 'saveAdv': s.saveAdv.push({ k: arr(f.k), vs: f.vs || '', dis: !!f.dis, src: f.src || '' }); break;
+      case 'checkBonus': arr(f.k).forEach((k) => { s.checkBonus[k] = (s.checkBonus[k] || 0) + V(f.v); }); break;
+      case 'checkAdv': arr(f.k).forEach((k) => (f.dis ? s.checkDis : s.checkAdv).add(k)); break;
+      case 'jack': s.jack = true; break;
+      case 'dice': arr(f.k).forEach((k) => s.diceFx.add(k)); break;
       case 'skill': arr(f.k).forEach((k) => s.skill.add(k)); break;
       case 'expertise': arr(f.k).forEach((k) => s.exp.add(k)); break;
       case 'weapon': arr(f.k).forEach((k) => s.weapons.add(k)); break;
       case 'armor': arr(f.k).forEach((k) => s.armor.add(k)); break;
       case 'tool': if (f.k) s.tools.push(String(f.k)); break;
       case 'lang': arr(f.k).forEach((k) => s.lang.add(k)); break;
-      case 'resist': arr(f.k).forEach((k) => s.resist.add(k)); break;
+      case 'pick': s.picks.push(f); break;
+      case 'resist': arr(f.k).forEach((k) => (f.nm ? s.resistNm : s.resist).add(k)); break;
       case 'immune': arr(f.k).forEach((k) => s.immune.add(k)); break;
       case 'vuln': arr(f.k).forEach((k) => s.vuln.add(k)); break;
       case 'condImm': arr(f.k).forEach((k) => s.condImm.add(k)); break;
-      case 'attack': s.atk[f.k || 'all'] = (s.atk[f.k || 'all'] || 0) + (Number(f.v) || 0); break;
-      case 'damage': s.dmg[f.k || 'all'] = (s.dmg[f.k || 'all'] || 0) + (Number(f.v) || 0); break;
+      case 'dmgReduce': s.dmgRed.push({ k: arr(f.k), v: isDice(f.v) ? f.v : V(f.v), nm: !!f.nm, src: f.src || '' }); break;
+      case 'critImmune': s.critImmune = true; break;
+      case 'disAttackers': s.atkAgainst.push({ on: f.on || 'all', vs: f.vs || '', adv: !!f.adv, src: f.src || '' }); break;
+      case 'retaliate': s.retaliate.push({ ...f, v: isDice(f.v) ? f.v : V(f.v) }); break;
+      case 'evasion': s.evasion = true; break;
+      case 'endure': s.endure.push({ ...f }); break;
+      case 'aura': s.aura.push({ k: f.k || 'save', v: isDice(f.v) ? f.v : Math.max(Number(f.min) || -99, V(f.v)), min: Number(f.min) || 0, r: Number(f.r) || 10, src: f.src || '' }); break;
+      case 'attack':
+        if (hasFilter(f) || isDice(f.v)) s.atkCond.push({ ...f, v: isDice(f.v) ? String(f.v) : V(f.v) });
+        else s.atk[f.k || 'all'] = (s.atk[f.k || 'all'] || 0) + V(f.v);
+        break;
+      case 'damage':
+        if (hasFilter(f) || isDice(f.v)) s.dmgExtra.push({ ...f, on: f.on || f.k || 'all', dice: isDice(f.v) ? String(f.v) : '', v: isDice(f.v) ? 0 : V(f.v), type: '' });
+        else s.dmg[f.k || 'all'] = (s.dmg[f.k || 'all'] || 0) + V(f.v);
+        break;
+      case 'dmgExtra': s.dmgExtra.push({ ...f, dice: f.dice || (isDice(f.v) ? String(f.v) : ''), v: isDice(f.v) ? 0 : V(f.v) }); break;
+      case 'crit': s.crit.push({ v: Number(f.v) || 1, on: f.on || 'all', item: f.item || null }); break;
+      case 'advAttack': s.advAtk.push({ ...f }); break;
+      case 'onHit': s.onHit.push({ ...f }); break;
+      case 'ignoreResist': s.ignoreRes.push({ k: arr(f.k), on: f.on || 'all' }); break;
       case 'attacks': s.attacks = Math.max(s.attacks, Number(f.v) || 1); break;
-      case 'spell': if (f.k) s.spells.push({ name: String(f.k), lv: f.lv ?? 1, src: f.src || '', uses: f.uses || (f.lv === 0 ? 'will' : 1), rest: f.rest || 'long' }); break;
-      case 'res': s.res.push({ name: f.k || f.src || 'Fähigkeit', v: f.v, rest: f.rest || 'long', src: f.src || '', info: f.info || '' }); break;
+      case 'unarmed': if (!s.unarmed || (dieSize(f.dice) > dieSize(s.unarmed.dice))) s.unarmed = { dice: f.dice || '1d4', ab: f.ab || 'best', type: f.type || 'bludgeoning' }; break;
+      case 'style': arr(f.k).forEach((k) => s.styles.add(k)); break;
+      case 'spell': if (f.k) s.spells.push({ name: String(f.k), lv: f.lv ?? 1, src: f.src || '', uses: f.uses || (f.lv === 0 ? 'will' : 1), rest: f.rest || 'long', castLv: Number(f.castLv) || 0, dc: Number(f.dc) || 0, atk: f.atk ?? null, cost: Number(f.cost) || 1, pool: f.pool || '', item: f.itemId || null }); break;
+      case 'spellDc': s.spellDc += V(f.v); break;
+      case 'spellDmg': s.spellDmg.push({ ...f, v: V(f.v) }); break;
+      case 'slots': s.slots[Number(f.lv) || 1] = (s.slots[Number(f.lv) || 1] || 0) + (Number(f.n) || 1); break;
+      case 'res': s.res.push({ name: f.k || f.src || 'Fähigkeit', v: f.v, rest: f.rest || 'long', regain: f.regain || '', src: f.src || '', info: f.info || '', itemId: f.itemId || null }); break;
+      case 'resMax': s.resMax.push({ k: f.k || '', v: V(f.v || 1) }); break;
+      case 'bonusAct': arr(f.k).forEach((k) => s.bonusAct.add(k)); break;
       case 'action': if (f.k) s.actions.push({ ...f, src: f.src || '' }); break;
       default: break;
     }
@@ -383,6 +667,50 @@ export function fxSummary(list, ctx = {}) {
   for (const f of list || []) if (f?.t === 'adv' && (!f.lvl || lvl >= f.lvl)) s.adv.push({ text: f.k, src: f.src || '' });
   for (const f of list || []) if (f?.t === 'lang' && f.n && (!f.lvl || lvl >= f.lvl)) s.langChoice += Number(f.n) || 0;
   return s;
+}
+const dieSize = (d) => Number((/d(\d+)/.exec(String(d || '')) || [])[1]) || 0;
+// Bedingte Angriffswirkung: passt sie zu diesem Angriff? info: { on (melee|ranged|spell|unarmed|thrown), weapon, cantrip, type (Kreaturentyp), size, conds [], hp, maxHp, selfHp, selfMax, adv, crit, dmgTypes [], sneak, notActed }
+export function fxMatches(f, info = {}) {
+  const on = f.on || f.k || 'all';
+  if (on !== 'all' && on !== 'any') {
+    if (on === 'weapon' && !info.weapon) return false;
+    if (on === 'melee' && info.on !== 'melee') return false;
+    if (on === 'ranged' && info.on !== 'ranged') return false;
+    if (on === 'unarmed' && info.on !== 'unarmed') return false;
+    if (on === 'thrown' && !info.thrown) return false;
+    if (on === 'spell' && info.on !== 'spell') return false;
+    if (on === 'cantrip' && !info.cantrip) return false;
+    if (on === 'sneak' && !info.sneak) return false;
+  }
+  if (f.vs && !vsMatch(f.vs, info)) return false;
+  if (f.vsCond && !(info.conds || []).some((c) => String(c).toLowerCase() === condName(f.vsCond).toLowerCase())) return false;
+  if (f.hp === 'full' && !(info.maxHp && info.hp >= info.maxHp)) return false;
+  if (f.hp === 'hurt' && !(info.maxHp && info.hp < info.maxHp)) return false;
+  if (f.hp === 'half' && !(info.maxHp && info.hp <= info.maxHp / 2)) return false;
+  if (f.selfHp === 'hurt' && !(info.selfMax && info.selfHp < info.selfMax)) return false;
+  if (f.selfHp === 'half' && !(info.selfMax && info.selfHp <= info.selfMax / 2)) return false;
+  if (f.adv && info.adv !== true) return false;
+  if (f.crit && !info.crit) return false;
+  if (f.notActed && !info.notActed) return false;
+  if (f.ifType && ![].concat(f.ifType).some((t) => (info.dmgTypes || []).includes(t))) return false;
+  return true;
+}
+// „gegen Untote, Unholde“, „gegen große Kreaturen“ – Kreaturentyp bzw. Größe des Ziels
+const SIZE_ORDER = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
+export function vsMatch(vs, info = {}) {
+  const words = String(vs).toLowerCase().split(/[,;/]|\s+oder\s+|\s+und\s+/).map((w) => w.trim()).filter(Boolean);
+  const type = String(info.type || '').toLowerCase();
+  const size = info.size || 'medium';
+  return words.some((w) => {
+    const sz = /^(winzig|klein|mittelgroß|groß|riesig|gigantisch)(\+|\s*oder\s+größer)?/.exec(w);
+    if (sz) {
+      const i = ['winzig', 'klein', 'mittelgroß', 'groß', 'riesig', 'gigantisch'].indexOf(sz[1]);
+      const j = SIZE_ORDER.indexOf(size);
+      return sz[2] ? j >= i : j === i;
+    }
+    const stem = w.replace(/(en|n|e|s)$/, '').slice(0, Math.max(4, w.length - 2));
+    return !!stem && (type.includes(stem) || (info.name || '').toLowerCase().includes(stem) || (info.tags || []).some((t) => String(t).toLowerCase().includes(stem)));
+  });
 }
 
 // Kurzhilfe für den Editor: welche Formulierungen wirken
@@ -398,6 +726,12 @@ export const FX_HELP = [
   ['Angriff', '„+2 auf Angriffswürfe mit Fernkampfwaffen“, „+2 Schaden mit Nahkampfwaffen“, „greifst du zweimal an“'],
   ['Zauber', '„Du kennst den Zaubertrick Thaumaturgie“, „St. 3 Höllischer Tadel“ (ab Stufe 3, 1× pro langer Rast)'],
   ['Ressourcen', '„1× pro langer Rast“, „Übungsbonus-mal pro kurzer Rast“, „Charisma-Modifikator-mal pro langer Rast“ – der Name des Merkmals wird zur Ressource'],
+  ['Angriff & Schaden', '„zusätzlich 1W6 Feuerschaden“ (bei Waffen und Gegenständen: gilt für diese Waffe), „zusätzlich 1W8 gleißender Schaden gegen Untote“, „kritischer Treffer bei 19 oder 20“, „ignoriert Resistenz gegen Hiebschaden“'],
+  ['Zauber', '„+1 auf den SG deiner Zauber“, „Zauber-SG +1“'],
+  ['Rettungswürfe', '„Vorteil bei Rettungswürfen gegen Zauber“, „Vorteil auf Konstitutions-Rettungswürfe“, „Vorteil bei Rettungswürfen gegen Vergiftet“, „+1 auf GES-Rettungswürfe“, „+2 auf Rettungswürfe gegen Zauber“'],
+  ['Fertigkeiten', '„Vorteil auf Heimlichkeit“, „Vorteil auf Würfe für Wahrnehmung“, „Heimlichkeit +1“, „+2 auf Überzeugen“'],
+  ['Verteidigung (Gegenstände)', '„Du erleidest 1 weniger Hiebschaden“, „kritische Treffer gegen dich werden zu normalen Treffern“, „zu Beginn deines Zuges erhältst du 1W4 TP zurück“'],
+  ['Attribute festsetzen', '„Stärke wird auf 19 gesetzt“, „Charisma +2 (höchstens 22)“'],
   ['Stufe', '„(ab Stufe 5)“ im Namen oder Satz: gilt erst ab dieser Stufe'],
   ['Nur Hinweis', 'Sätze mit „Bonusaktion“, „Reaktion“, „für 10 Minuten“, „wenn …“, „solange …“ oder einer Auswahl („oder“, „deiner Wahl“) wirken nicht automatisch – sie bleiben Regeltext. Prüfbar sind „ohne schwere Rüstung“, „ohne Rüstung“, „solange du eine Rüstung trägst“ und „mit Schild“.'],
 ];

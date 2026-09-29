@@ -20,7 +20,9 @@ import {
   featsFor, featAsi, perEd, classSkills, classFeatures, subclassLevel, spellSlots, spellcasting, hpAverage, hpBonusPerLevel,
   charMods, totalLevel, multiclassOk, findArmor, findWeapon, edOf, classLevel, SUBCLASS_DESC, subclassText, ABILITY_MAX,
   RULES, rollDice, hpForLevel, charFx, charMovement, featPrereq, prereqText, ROLL_METHODS,
+  charPicks,
 } from '../data/chargen.js';
+import { PicksPanel } from '../ui/picks.js';
 
 const CLASS_BLURB = {
   barbar: 'Wilder Nahkämpfer mit Kampfrausch – viele Trefferpunkte, kaum zu stoppen.',
@@ -323,7 +325,7 @@ export function buildCharacter(d) {
     resUsed: {}, conditions: [], exhaustion: 0, inspiration: false, deathSaves: { s: 0, f: 0 }, xp: XP_LEVELS[d.level - 1] || 0,
     inventory: [...ci.items, ...bi.items].map((it) => ({ id: uid(5), name: it.name, qty: it.qty, notes: '' })),
     currency: { cp: 0, sp: 0, ep: 0, gp: ci.gold + bi.gold + (pk.clsGold || 0), pp: 0 },
-    customFeatures: '', levelLog: [{ level: d.level, cls: d.cls, ts: now() }],
+    customFeatures: '', levelLog: [{ level: d.level, cls: d.cls, ts: now() }], picks: { ...(d.picks || {}) },
     createdAt: now(), updatedAt: now(),
   };
   return derive(c, { fullHp: true });
@@ -712,6 +714,8 @@ function StepTalente({ d, set }) {
           </div>`}
       </div>`;
     }) : html`<div class="small faint">Auf Stufe ${d.level} gibt es noch keine Attributswerterhöhung (die erste kommt auf Stufe 4).</div>`}
+    ${charPicks(buildPreview(d)).length ? html`<div class="card stack sm"><b><${Icon} name="list-checks" size=${15} /> Auswahl aus Spezies, Hintergrund, Talenten und Klasse</b>
+      <${PicksPanel} char=${buildPreview(d)} ed=${d.edition} onChange=${(k, v) => set({ picks: { ...(d.picks || {}), [k]: v } })} /></div>` : null}
     <div class="small muted"><b>Attribute jetzt:</b> ${AB.map((k) => `${AB_SHORT[k]} ${fin[k] ?? '–'}`).join(' · ')}</div>
   </div>`;
 }
@@ -970,6 +974,7 @@ function LevelUp({ c, close }) {
   const allSpells = useSpells(ed);
   const baseline = useMemo(() => (allSpells ? normalizeEntries(c.spell?.list, allSpells, c) : null), [allSpells]);
   const [spellList, setSpellList] = useState(null);
+  const [picks, setPicks] = useState({});
   useEffect(() => { if (baseline) setSpellList(baseline); }, [baseline, clsKey]);
   const cls = findClass(clsKey);
   const entry = c.classes?.find((x) => x.cls === clsKey);
@@ -989,8 +994,17 @@ function LevelUp({ c, close }) {
   const mcHome = isNew && c.classes?.[0] ? multiclassOk(c, c.classes[0].cls) : { ok: true };
   const bonusHp = hpBonusPerLevel(c);
   const probs = [];
+  // Vorschau nach dem Aufstieg: neue Auswahlen aus Talenten und Klassenmerkmalen
+  const preview = cls ? {
+    ...c, picks: { ...(c.picks || {}), ...picks },
+    classes: isNew ? [...(c.classes || []), { cls: clsKey, level: 1, subclass: sub }] : (c.classes || []).map((x) => (x.cls === clsKey ? { ...x, level: x.level + 1, subclass: x.subclass || sub } : x)),
+    feats: asi.type === 'feat' && asi.feat ? [...(c.feats || []), { key: asi.feat }] : c.feats,
+  } : c;
+  const oldPicks = new Set(charPicks(c).map((p) => p.key));
+  const newPicks = cls ? charPicks(preview).filter((p) => !oldPicks.has(p.key)) : [];
   if (!cls) probs.push('Klasse wählen.');
   if (isNew && (!mc.ok || !mcHome.ok)) probs.push(`Mehrklassen-Voraussetzung nicht erfüllt: ${mc.why || mcHome.why}`);
+  for (const p of newPicks) if ((p.chosen || []).length < (Number(p.f.n) || 1)) { probs.push(`Auswahl treffen: ${p.f.label || p.src}`); break; }
   if (hp == null) probs.push('Trefferpunkte würfeln oder den Durchschnitt nehmen.');
   if (needSub && !sub) probs.push(`${cls.subLabel} wählen.`);
   if (asiF && (asi.type === 'feat' ? !asi.feat : !asi.a)) probs.push('Attributswerterhöhung oder Talent wählen.');
@@ -1008,7 +1022,7 @@ function LevelUp({ c, close }) {
   };
   const apply = async () => {
     const next = applyLevelUp(c, { cls: clsKey, hp, subclass: needSub ? sub : '', asi: asiF ? { ...asi, boon: asiF.kind === 'boon' } : null, style: needStyle ? style : '', skills, expertise, spellList: nextNeeds ? spellList : null });
-    close(next);
+    close(Object.keys(picks).length ? { ...next, picks: { ...(next.picks || c.picks || {}), ...picks } } : next);
   };
   const profSkills = ALL_SKILLS.filter((k) => c.skills?.[k] === 1);
   return html`<div class="modal-body stack lg">
@@ -1056,6 +1070,7 @@ function LevelUp({ c, close }) {
         ${expN ? html`<div class="stack sm"><b>Expertise: ${expN} Fertigkeiten</b><${SkillGrid} list=${profSkills} picked=${expertise} max=${expN} onChange=${setExpertise} /></div>` : null}
         ${mcSkill ? html`<div class="stack sm"><b>Fertigkeit der neuen Klasse</b><${SkillGrid} list=${classSkills(cls, ed).list.filter((k) => !c.skills?.[k])} picked=${skills} max=${1} onChange=${setSkills} /></div>` : null}
         ${!feats.length && !needSub ? html`<div class="small faint">Auf dieser Stufe gibt es kein neues Klassenmerkmal – nur mehr Trefferpunkte${nextX ? ' und ggf. Zauber' : ''}.</div>` : null}
+        ${newPicks.length ? html`<div class="stack sm"><b>Auswahl</b><${PicksPanel} char=${preview} ed=${ed} only=${new Set(newPicks.map((p) => p.key))} onChange=${(k, v) => setPicks({ ...picks, [k]: v })} /></div>` : null}
       </div>
       ${nextNeeds ? html`<div class="card stack sm"><b>4. Zauber (Pflicht)</b>
         <div class="small muted">Wähle, was deine Klasse auf Stufe ${newLvl} neu dazubekommt. Die Zähler zeigen, was noch fehlt – erst dann geht der Aufstieg.</div>

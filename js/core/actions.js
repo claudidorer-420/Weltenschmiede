@@ -5,8 +5,8 @@ import { app, col, myUid, bridge } from './app.js';
 import { db } from './db.js';
 import { roll, rollDie, rollDetailed } from '../lib/dice.js';
 import { now, uid } from '../lib/util.js';
-import { charMods, findWeapon, weaponAttack, spellSlots, resourcesFor, classLevel, attacksPerAction, actionDice, fxSlug } from '../data/chargen.js';
-import { dmgOf } from './effects.js';
+import { charMods, findWeapon, weaponAttack, spellSlots, resourcesFor, classLevel, attacksPerAction, actionDice, fxSlug, charWeapons, itemInfo, spellAbilityOf } from '../data/chargen.js';
+import { dmgOf, fxMatches, fxDice, condName, vsMatch, ENGINE_EFFECTS, isDice, BONUS_ACTS, fxSummary, hasFilter } from './effects.js';
 import { WEAPON_RANGE, weaponReach } from '../data/items.js';
 import { loadSpells, damageAt, healAt, healHasMod, fmtDice, levelName, schoolName, rangeShort, SPELL_OVERLAY } from '../data/spells.js';
 import { specFor } from '../data/spellfx.js';
@@ -90,7 +90,7 @@ export function makeCtx(x, extra = {}) {
 }
 function reachOf(c, ctx) {
   const char = ctx.charOf(c);
-  if (char) return Math.max(1.5, ...(char.weapons || []).map(findWeapon).filter((w) => w && !/a/.test(w.p)).map(weaponReach));
+  if (char) return Math.max(1.5, ...charWeapons(char).filter((w) => !/a/.test(w.p)).map((w) => weaponReach(w.baseKey ? findWeapon(w.baseKey) || w : w))) + (Number(charMods(char).fx.reach) || 0) * 0.3;
   if (c.statblock) return Math.max(1.5, ...parseAttacks(normalizeMonster(c.statblock)).filter((a) => a.kind === 'melee').map((a) => a.reach || 1.5));
   return 1.5;
 }
@@ -168,26 +168,33 @@ function weaponAction(char, cm, w, c, ctx, opts = {}) {
     flat = cm.mods[abil];
     dice = ctx.ed === '2024' ? (cm.level >= 17 ? '2d6' : cm.level >= 11 ? '1d12' : cm.level >= 5 ? '1d10' : '1d8') : '1d8';
   }
-  if (opts.offhand && !(char.feats || []).some((f) => f.key === 'style-twf')) flat = Math.min(0, flat);
+  if (opts.offhand && !(char.feats || []).some((f) => f.key === 'style-twf') && !cm.fx.styles.has('twf')) flat = Math.min(0, flat);
   flat += plus;
   const type = DMG_KEY[w.type] || dmgOf(w.type) || 'bludgeoning';
-  const range = ranged || thrown ? WEAPON_RANGE[w.key] || null : null;
+  const range = ranged || thrown ? WEAPON_RANGE[w.baseKey || w.key] || null : null;
   return {
     key: `${opts.offhand ? 'off' : 'w'}:${w.key}`, group: 'attack', kind: 'attack', name: opts.offhand ? `${w.name} (Zweitwaffe)` : w.name,
-    art: { item: { name: w.name, ref: `w:${w.key}` } }, cost: opts.offhand ? 'bonus' : 'attack', hasteOk: true, offhand: !!opts.offhand,
-    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: ranged ? 1.5 : weaponReach(w), range, thrown, damage: [{ dice, flat, type }, ...(a.extraDmg ? [{ dice: a.extraDmg, flat: 0, type: dmgOf(a.extraType) || type }] : [])], magical: !!mw || shil || !!Number(w.magic), weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged },
+    art: { item: { name: w.name, ref: `w:${w.baseKey || w.key}`, magic: !!w.itemId } }, cost: opts.offhand ? 'bonus' : 'attack', hasteOk: true, offhand: !!opts.offhand,
+    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: (ranged ? 1.5 : weaponReach(w.baseKey ? findWeapon(w.baseKey) || w : w)) + (Number(cm.fx.reach) || 0) * 0.3, range, thrown, damage: [{ dice, flat, type }, ...(a.extraDmg ? [{ dice: a.extraDmg, flat: 0, type: dmgOf(a.extraType) || type }] : [])], magical: !!mw || shil || !!Number(w.magic) || !!w.itemId, weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged, itemKey: w.key },
     needs: { target: 'enemy', n: 1, sight: true },
     desc: [a.props, opts.versatile && w.vers ? 'zweihändig geführt' : '', shil ? 'Shillelagh' : '', mw ? mw.name : ''].filter(Boolean).join(' · '),
   };
 }
 function unarmedAction(char, cm, c, ctx) {
   const monk = classLevel(char, 'moench');
-  const abil = monk && cm.mods.dex > cm.mods.str ? 'dex' : 'str';
-  const die = monk ? (ctx.ed === '2024' ? (monk >= 17 ? '1d12' : monk >= 11 ? '1d10' : monk >= 5 ? '1d8' : '1d6') : monk >= 17 ? '1d10' : monk >= 11 ? '1d8' : monk >= 5 ? '1d6' : '1d4') : '';
+  const fu = cm.fx.unarmed;
+  const best = (monk || fu?.ab === 'best' || fu?.ab === 'dex') && cm.mods.dex > cm.mods.str && fu?.ab !== 'str';
+  const abil = best ? 'dex' : 'str';
+  const monkDie = monk ? (ctx.ed === '2024' ? (monk >= 17 ? '1d12' : monk >= 11 ? '1d10' : monk >= 5 ? '1d8' : '1d6') : monk >= 17 ? '1d10' : monk >= 11 ? '1d8' : monk >= 5 ? '1d6' : '1d4') : '';
+  const size = (d) => Number((/d(\d+)/.exec(d || '') || [])[1]) || 0;
+  const die = fu && size(fu.dice) > size(monkDie) ? fu.dice : monkDie;
+  const plusA = (cm.fx.atk.unarmed || 0) + (cm.fx.atk.all || 0);
+  const plusD = (cm.fx.dmg.unarmed || 0) + (cm.fx.dmg.all || 0);
+  const flat = (die ? cm.mods[abil] : Math.max(1, 1 + cm.mods.str)) + plusD;
   return {
     key: 'unarmed', group: 'attack', kind: 'attack', name: 'Waffenloser Schlag', art: { gi: GI.unarmed }, cost: 'attack', hasteOk: true,
-    attack: { kind: 'melee', bonus: cm.mods[abil] + cm.pb, parts: [[cm.mods[abil], `${E.AB_NAME_DE[abil]}-Modifikator`], [cm.pb, 'Übungsbonus']], reach: 1.5, damage: [{ dice: die, flat: monk ? cm.mods[abil] : Math.max(1, 1 + cm.mods.str), type: 'bludgeoning' }], weapon: true, ability: abil, strBased: abil === 'str' },
-    needs: { target: 'enemy', n: 1, sight: true }, desc: monk ? `Kampfkunst (${die})` : 'Faust, Tritt, Kopfstoß',
+    attack: { kind: 'melee', unarmed: true, bonus: cm.mods[abil] + cm.pb + plusA, parts: [[cm.mods[abil], `${E.AB_NAME_DE[abil]}-Modifikator`], [cm.pb, 'Übungsbonus'], ...(plusA ? [[plusA, 'Wirkungen']] : [])], reach: 1.5 + (Number(cm.fx.reach) || 0) * 0.3, damage: [{ dice: die, flat, type: fu?.type || 'bludgeoning' }], weapon: true, ability: abil, strBased: abil === 'str', magical: !!fu },
+    needs: { target: 'enemy', n: 1, sight: true }, desc: die ? `${monk ? 'Kampfkunst' : 'Waffenloser Schlag'} (${die})` : 'Faust, Tritt, Kopfstoß',
   };
 }
 // Zielsicherer Schlag (2024): Waffenangriff mit dem Zauberattribut, ab Stufe 5 zusätzlicher gleißender Schaden
@@ -246,8 +253,8 @@ function pcCatalog(x, c, char, ctx, spells) {
   const ed = ctx.ed;
   const cm = charMods(char);
   const out = [];
-  const weapons = (char.weapons || []).map(findWeapon).filter(Boolean);
-  for (const w of weapons) out.push(weaponAction(char, cm, w, c, ctx, { versatile: !char.armor?.shield && weapons.length === 1 }));
+  const weapons = charWeapons(char);
+  for (const w of weapons) out.push(weaponAction(char, cm, w, c, ctx, { versatile: !char.armor?.shield && !char.armor?.shieldKey && weapons.length === 1 }));
   out.push(unarmedAction(char, cm, c, ctx));
   const lights = weapons.filter((w) => /l/.test(w.p) && !/a/.test(w.p));
   if (lights.length >= 2) out.push(weaponAction(char, cm, lights[1], c, ctx, { offhand: true }));
@@ -261,7 +268,7 @@ function pcCatalog(x, c, char, ctx, spells) {
       seen.add(sp.id);
       const st = cm.spell.find((s) => s.cls === e.cls) || cm.spell[0] || { dc: 8 + cm.pb, attack: cm.pb, ability: 'int' };
       if (sp.en === 'True Strike' && ed === '2024') { for (const w of weapons) out.push(trueStrikeAction(char, cm, w, c, ctx, sp, st)); continue; }
-      out.push({ ...spellAction(sp, specFor(sp, ed), { dc: st.dc, attack: st.attack, mod: cm.mods[st.ability] || 0, level: cm.level, arcanum: e.arcanum }, c), slots });
+      out.push({ ...spellAction(sp, specFor(sp, ed), { dc: st.dc, attack: st.attack, mod: cm.mods[st.ability] || 0, level: cm.level, arcanum: e.arcanum }, c), slots, ...spellBoni(cm, sp) });
     }
   }
   const res = Object.fromEntries(resourcesFor(char).map((r) => [r.key, { ...r, left: r.max >= 99 ? 99 : Math.max(0, r.max - (Number(char.resUsed?.[r.key]) || 0)) }]));
@@ -270,29 +277,12 @@ function pcCatalog(x, c, char, ctx, spells) {
     out.push({ ...f, ...(f.key === 'f:wildshape' && ed === '2024' ? { cost: 'bonus' } : {}), group: 'class', kind: 'feature', art: { gi: f.gi }, needs: f.needs || { target: 'none' }, uses: f.res ? res[f.res] || { left: 0, max: 0 } : null });
   }
   if (res.breath) out.push({ key: 'f:breath', group: 'class', kind: 'feature', name: 'Odemwaffe', art: { gi: GI.breath }, cost: 'action', uses: res.breath, needs: { target: 'point', area: { shape: 'cone', size: 4.5 }, range: 0, rangeKind: 'self' }, desc: 'Kegel von 4,5 m – GES-Rettungswurf, halber Schaden bei Erfolg.' });
-  // Eigene Aktionen aus Regelwerken (Spezies, Talente, Klassen): Angriff, Rettungswurf-Fähigkeit oder Heilung
-  for (const f of cm.fx?.actions || []) {
-    const id = fxSlug(f.k);
-    const resKey = f.uses && f.uses !== 'will' ? `act:${id}` : null;
-    const uses = resKey ? res[resKey] || { left: 0, max: 0 } : null;
-    const ab = f.ab || 'con';
-    const mod = cm.mods[ab] || 0;
-    const dice = actionDice(f, cm.level);
-    const type = f.type || 'bludgeoning';
-    const base = { key: `x:${id}`, group: 'class', name: f.k, cost: f.cost || 'action', res: resKey, uses, desc: f.desc || f.src || '' };
-    if (f.kind === 'heal') {
-      out.push({ ...base, kind: 'item', art: { gi: GI.secondwind }, heal: `${dice}${f.addMod === false ? '' : `+${Math.max(0, mod)}`}`, needs: { target: 'ally', n: 1, range: Number(f.range) || 1.5, selfOk: true } });
-    } else if (f.kind === 'save') {
-      const area = f.area?.shape ? { shape: f.area.shape, size: Number(f.area.size) || 4.5 } : null;
-      out.push({ ...base, kind: 'ability', art: { gi: area ? GI.area : GI.magic }, save: f.save || 'dex', dc: 8 + cm.pb + mod, half: f.half !== false, damage: [{ ...parseDmg(dice), type }], area,
-        needs: area ? { target: 'point', area, range: Number(f.range) || 0, rangeKind: Number(f.range) ? 'dist' : 'self' } : { target: 'enemy', n: 1, range: Number(f.range) || 9, sight: true } });
-    } else {
-      const ranged = Number(f.range) > 3;
-      out.push({ ...base, kind: 'attack', art: { gi: ranged ? GI.ranged : GI.unarmed }, cost: f.cost === 'bonus' ? 'bonus' : 'attack', hasteOk: f.cost !== 'bonus',
-        attack: { kind: ranged ? 'ranged' : 'melee', bonus: cm.pb + mod, parts: [[mod, `${E.AB_NAME_DE[ab]}-Modifikator`], [cm.pb, 'Übungsbonus']], reach: ranged ? 1.5 : Number(f.range) || 1.5, range: ranged ? [Number(f.range), Number(f.range) * 4] : null, damage: [{ dice, flat: mod, type }], magical: false, weapon: true, ability: ab },
-        needs: { target: 'enemy', n: 1, sight: true } });
-    }
-  }
+  // Zauber aus Merkmalen und Gegenständen (angeboren, Zauberstäbe, Tränke): ohne Zauberplatz, mit eigenen Nutzungen
+  if (spells) out.push(...innateSpells(char, cm, c, ctx, spells, res));
+  // Standardaktionen als Bonusaktion („Raffinierte Aktion“ aus Regelwerken)
+  for (const k of cm.fx?.bonusAct || []) if (BONUS_ACTS[k] && !out.some((o) => o.std === k && o.cost === 'bonus')) out.push({ key: `fb:${k}`, group: 'class', kind: 'std', std: k, name: `${BONUS_ACTS[k]} (Bonusaktion)`, art: { gi: GI[k] || GI.dash }, cost: 'bonus', needs: k === 'help' ? { target: 'ally', n: 1, range: 1.5 } : { target: 'none' }, desc: `${BONUS_ACTS[k]} als Bonusaktion.` });
+  // Eigene Aktionen aus Regelwerken und Gegenständen
+  for (const f of cm.fx?.actions || []) { const a = customAction(char, cm, c, ctx, f, res, weapons); if (a) out.push(a); }
   // Zauberschriftrollen: wirken den Zauber ohne Zauberplatz und zerfallen danach
   if (spells) {
     for (const it of char.inventory || []) {
@@ -316,6 +306,110 @@ function pcCatalog(x, c, char, ctx, spells) {
     const m = POT.find(([re]) => re.test(it.name || ''));
     if (!m) continue;
     out.push({ key: `it:${it.id}`, group: 'item', kind: 'item', name: it.name, art: { item: it }, cost: ed === '2024' ? 'bonus' : 'action', heal: m[1], uses: { left: Math.max(0, Number(it.qty) || 0), max: Math.max(1, Number(it.qty) || 0) }, consumed: !(Number(it.qty) > 0), needs: { target: 'ally', n: 1, range: 1.5, selfOk: true }, desc: `Heilt ${fmtDice(m[1])} TP.`, itemId: it.id });
+  }
+  return out;
+}
+// Nutzungen einer eigenen Aktion: Ressource (act:…), Vorrat einer Klassenressource (pool) oder Ladungen eines Gegenstands
+function actionUses(f, res, id, prefix = 'act') {
+  if (f.charge && f.itemId) { const r = res[`it:${f.itemId}`]; const n = Number(f.charge) || 1; return { res: `it:${f.itemId}`, resCost: n, uses: r ? { ...r, left: r.left >= n ? r.left : 0 } : { left: 0, max: 0 } }; }
+  if (f.pool) {
+    const want = String(f.pool).toLowerCase();
+    const r = Object.values(res).find((x) => x.key === f.pool || x.name.toLowerCase().startsWith(want));
+    const n = Number(f.poolCost) || 1;
+    return { res: r?.key || null, resCost: n, uses: r ? { ...r, left: r.left >= n ? r.left : 0 } : { left: 0, max: 0, label: f.pool } };
+  }
+  if (f.uses && f.uses !== 'will') { const key = `${prefix}:${id}`; return { res: key, resCost: 1, uses: res[key] || { left: 0, max: 0 } }; }
+  return { res: null, resCost: 0, uses: null };
+}
+// Reiter einer Aktion: Zustand (mit Rettungswurf), Stoß, Schaden an sich selbst, Heilung, nur gegen Kreaturentyp
+const riderOf = (f, dc) => (f.inflict || f.push || f.selfDmg || f.selfHeal ? { cond: f.inflict || '', save: f.condSaveAb || (f.kind === 'save' ? '' : f.save || ''), dc, rounds: Number(f.condDur) || 0, saveEnd: f.condSave === 'end', push: Number(f.push) || 0, selfDmg: f.selfDmg || '', selfType: f.selfType || 'force', heal: f.selfHeal || '', src: f.k } : null);
+function customAction(char, cm, c, ctx, f, res, weapons) {
+  const id = fxSlug(f.k);
+  if (f.kind === 'react') return null; // Reaktionen fragt der Kampf selbst ab
+  const { res: resKey, resCost, uses } = actionUses(f, res, id);
+  const inv = f.itemId ? (char.inventory || []).find((it) => it.id === f.itemId) : null;
+  const info = inv ? itemInfo(inv) : null;
+  const consumable = !!info?.consumable;
+  const ab = f.ab || 'con';
+  const mod = cm.mods[ab] || 0;
+  const dice = fxDice(actionDice(f, cm.level), { pb: cm.pb, level: cm.level, mod });
+  const type = f.type || 'bludgeoning';
+  const dc = Number(f.dcFixed) || 8 + cm.pb + mod;
+  const base = {
+    key: `x:${id}${f.itemId ? `:${f.itemId}` : ''}`, group: consumable ? 'item' : 'class', name: consumable ? (/^(trinken|benutzen|auftragen)$/i.test(f.k) ? inv.name : `${inv.name}: ${f.k}`) : f.k, cost: f.cost || 'action', res: consumable ? null : resKey, resCost, uses: consumable ? { left: Math.max(0, Number(inv?.qty) || 0), max: Math.max(1, Number(inv?.qty) || 0) } : uses,
+    desc: f.desc || f.src || '', ...(consumable ? { itemId: inv.id, consumed: !(Number(inv.qty) > 0), art: { item: inv } } : {}), fxSrc: f.src || '',
+  };
+  const rider = riderOf(f, dc);
+  const needsOne = (range = 1.5, t = 'enemy') => ({ target: t, n: Number(f.n) || 1, range, sight: true });
+  switch (f.kind) {
+    case 'heal': return { ...base, kind: 'item', art: base.art || { gi: GI.secondwind }, heal: `${dice}${f.addMod === false ? '' : `+${Math.max(0, mod)}`}${f.addLevel ? `+${cm.level}` : ''}`, needs: { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } };
+    case 'temp': return { ...base, kind: 'temp', art: base.art || { gi: GI.secondwind }, temp: `${dice}${f.addMod ? `+${Math.max(0, mod)}` : ''}`, needs: f.target === 'ally' ? { target: 'ally', n: 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
+    case 'buff': return { ...base, kind: 'buff', art: base.art || { gi: GI.rage }, buffFx: f.fx || [], buffItem: f.item || null, eff: f.eff || '', temp: f.temp || 0, dur: f.dur || 'rounds', rounds: Number(f.rounds) || 10, conc: f.dur === 'conc', needs: f.target === 'ally' ? { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
+    case 'restore': return { ...base, kind: 'restore', art: base.art || { gi: GI.magic }, what: f.what || 'slot', lvMax: Number(f.lvMax) || 9, resName: f.res || '', n: Number(f.n) || 1, needs: { target: 'self' } };
+    case 'mark': return { ...base, kind: 'mark', art: base.art || { gi: GI.magic }, markDice: dice === '1d6' && !f.dice ? '' : dice, markFlat: f.flat ? Number(f.flat) || 0 : 0, markAdv: !!f.adv, rounds: Number(f.rounds) || 600, needs: needsOne(Number(f.range) || 27) };
+    case 'save': {
+      const area = f.area?.shape ? { shape: f.area.shape, size: Number(f.area.size) || 4.5 } : null;
+      const dmg = !f.dice || f.dice === '0' ? [] : [{ ...parseDmg(dice), flat: parseDmg(dice).flat + (f.addPb ? cm.pb : 0), type }];
+      return { ...base, kind: 'ability', art: base.art || { gi: area ? GI.area : GI.magic }, save: f.save || 'dex', dc, half: f.half !== false && dmg.length > 0, damage: dmg, area, rider: rider ? { ...rider, save: '' } : null, vs: f.vs || '',
+        needs: area ? { target: 'point', area, range: Number(f.range) || 0, rangeKind: Number(f.range) ? 'dist' : 'self' } : needsOne(Number(f.range) || 9) };
+    }
+    case 'weapon': {
+      // Waffenaktion: Angriff mit der Waffe, an der die Wirkung hängt (sonst der besten Nahkampfwaffe), plus Zusatzschaden und Reiter
+      const w = weapons.find((x) => x.key === f.item) || weapons.filter((x) => !/a/.test(x.p)).sort((p, q) => weaponAttack(char, q, cm.mods, cm.pb).bonus - weaponAttack(char, p, cm.mods, cm.pb).bonus)[0] || weapons[0];
+      const wa = w ? weaponAction(char, cm, w, c, ctx, {}) : unarmedAction(char, cm, c, ctx);
+      const wType = wa.attack.damage[0]?.type || 'bludgeoning';
+      const extra = [...(f.dice && f.dice !== '0' ? [{ ...parseDmg(dice), type: f.type || wType }] : []), ...(f.addPb ? [{ dice: '', flat: cm.pb, type: f.type || wType }] : [])];
+      const wdc = Number(f.dcFixed) || 8 + cm.pb + (cm.mods[wa.attack.ability] || 0);
+      return { ...wa, ...base, kind: 'attack', group: 'class', art: base.art || wa.art, cost: f.cost === 'bonus' ? 'bonus' : f.cost === 'attack' ? 'attack' : 'action', hasteOk: f.cost !== 'bonus',
+        attack: { ...wa.attack, damage: [...wa.attack.damage, ...extra] }, rider: riderOf(f, wdc), needs: { target: 'enemy', n: Number(f.n) || 1, sight: true }, desc: f.desc || `Angriff mit ${wa.name}${extra.length ? ` + ${partsText(extra)}` : ''}` };
+    }
+    default: {
+      const ranged = Number(f.range) > 3;
+      const bonus = Number(f.atkFixed) || cm.pb + mod;
+      return { ...base, kind: 'attack', art: base.art || { gi: ranged ? GI.ranged : GI.unarmed }, cost: f.cost === 'bonus' ? 'bonus' : f.cost === 'action' && f.atkFixed ? 'action' : 'attack', hasteOk: f.cost !== 'bonus',
+        attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: f.atkFixed ? [[bonus, 'Angriffsbonus']] : [[mod, `${E.AB_NAME_DE[ab]}-Modifikator`], [cm.pb, 'Übungsbonus']], reach: ranged ? 1.5 : Number(f.range) || 1.5, range: ranged ? [Number(f.range), Number(f.range) * 4] : null, damage: [{ ...parseDmg(dice), flat: parseDmg(dice).flat + (f.atkFixed ? 0 : mod) + (f.addPb ? cm.pb : 0), type }], magical: !!f.itemId, weapon: !f.atkFixed, ability: ab },
+        rider, needs: { target: 'enemy', n: Number(f.n) || 1, sight: true } };
+    }
+  }
+}
+// Zauberschaden (+CHA auf Zaubertricks, +1 bei Kälte …) und Heilungsboni für eine Zauberaktion
+function spellBoni(cm, sp) {
+  const out = {};
+  const dmg = (cm.fx.spellDmg || []).filter((f) => (!f.on || f.on === 'all' || (f.on === 'cantrip' && sp.level === 0) || String(f.on).toLowerCase() === sp.name.toLowerCase()));
+  if (dmg.length) out.dmgBonus = dmg.map((f) => ({ v: Number(f.v) || 0, types: [].concat(f.ifType || []), src: f.src || 'Wirkung' }));
+  if (cm.fx.healBonus) out.healBonus = cm.fx.healBonus;
+  if (cm.fx.healMax) out.healMax = true;
+  return out;
+}
+// Zauber aus Wirkungen: „Du kennst den Zaubertrick …“, Zauber aus Gegenständen (Ladungen), Tränke
+function innateSpells(char, cm, c, ctx, spells, res) {
+  const out = [];
+  const known = new Set((char.spell?.list || []).map((e) => e.ref));
+  const sab = spellAbilityOf(char, cm.mods);
+  for (const s of cm.fx.spells || []) {
+    const sp = spells.find((q) => (s.en && q.en === s.en) || q.name.toLowerCase() === String(s.name).toLowerCase()) || spells.find((q) => q.en && String(s.name).toLowerCase() === q.en.toLowerCase());
+    if (!sp) continue;
+    const id = fxSlug(s.name);
+    const ab = s.ab || sab || 'cha';
+    const mod = cm.mods[ab] || 0;
+    const st = cm.spell.find((q) => q.ability === ab) || cm.spell[0];
+    const cast = { dc: s.dc || st?.dc || 8 + cm.pb + mod, attack: s.atk ?? st?.attack ?? cm.pb + mod, mod, level: cm.level };
+    // „immer vorbereitet“: normaler Zauber mit Zauberplatz (sofern nicht ohnehin in der Liste)
+    if (s.uses === 'always') { if (!known.has(sp.id)) { known.add(sp.id); out.push({ ...spellAction(sp, specFor(sp, ctx.ed), cast, c), slots: slotInfo(char) }); } continue; }
+    if (s.uses === 'will' && sp.level === 0 && known.has(sp.id)) continue;
+    const a = { ...spellAction(sp, specFor(sp, ctx.ed), cast, c), key: `fs:${id}${s.item ? `:${s.item}` : ''}`, innate: true, arcanum: true, level: s.castLv || sp.level, group: s.uses === 'item' ? 'item' : 'spell', ...spellBoni(cm, sp) };
+    if (s.uses === 'item') {
+      const it = (char.inventory || []).find((q) => q.id === s.item);
+      if (!it) continue;
+      Object.assign(a, { itemId: it.id, uses: { left: Math.max(0, Number(it.qty) || 0), max: Math.max(1, Number(it.qty) || 0) }, consumed: !(Number(it.qty) > 0), desc: `Aus „${it.name}“ – verbraucht sich.` });
+    } else if (s.uses === 'charges') {
+      const r = res[`it:${s.item}`];
+      const n = s.cost || 1;
+      Object.assign(a, { res: `it:${s.item}`, resCost: n, uses: r ? { ...r, left: r.left >= n ? r.left : 0 } : { left: 0, max: 0 }, desc: `${n} Ladung${n > 1 ? 'en' : ''} aus „${s.src}“${s.dc ? ` – SG ${s.dc}` : ''}.` });
+    } else if (s.uses !== 'will') {
+      Object.assign(a, { res: `fs:${id}`, resCost: 1, uses: res[`fs:${id}`] || { left: 0, max: 0 }, desc: `Aus „${s.src}“ – ohne Zauberplatz.` });
+    } else a.desc = `Aus „${s.src}“ – beliebig oft, ohne Zauberplatz.`;
+    out.push(a);
   }
   return out;
 }
@@ -470,7 +564,7 @@ export function availability(x, c, a, ctx, char) {
       const opts = a.monster ? (a.perDay ? [{ level: a.level }] : monsterSlotOptions(c, a)) : slotOptions(char, a.level);
       if (!opts.length) return { ok: false, why: 'Kein passender Zauberplatz frei', slot: true };
     }
-    if (ctx.ed === '2024' && a.level > 0 && !a.scroll && eco.slotSpell) return { ok: false, why: 'Nur ein Zauber mit Zauberplatz pro Zug' };
+    if (ctx.ed === '2024' && a.level > 0 && !a.scroll && !a.innate && eco.slotSpell) return { ok: false, why: 'Nur ein Zauber mit Zauberplatz pro Zug' };
     if (ctx.ed === '2014' && eco.bonusSpell && a.cost === 'action' && a.level > 0) return { ok: false, why: 'Nach einem Bonusaktions-Zauber nur noch Zaubertricks' };
     if (ctx.ed === '2014' && a.cost === 'bonus' && eco.actionSpellLeveled) return { ok: false, why: 'Bonusaktions-Zauber nur zusammen mit Zaubertricks' };
   }
@@ -521,6 +615,15 @@ export function tipFor(a, c, ctx) {
 
 // ───────────────────────── Schaden & Heilung eines Zaubers ─────────────────────────
 export function spellDamage(a, slot, charLevel, choice) {
+  const parts = spellDamageBase(a, slot, charLevel, choice);
+  // Wirkungen „Zauberschaden +X“ (ggf. nur für bestimmte Schadensarten) auf den ersten passenden Teil
+  for (const b of a.dmgBonus || []) {
+    const i = parts.findIndex((q) => !b.types.length || b.types.includes(q.type));
+    if (i >= 0 && b.v) parts[i] = { ...parts[i], flat: (Number(parts[i].flat) || 0) + b.v };
+  }
+  return parts;
+}
+function spellDamageBase(a, slot, charLevel, choice) {
   const sp = a.sp;
   const spec = a.spec || {};
   const lvl = slot || sp?.level || 0;
@@ -542,6 +645,14 @@ export function spellDamage(a, slot, charLevel, choice) {
   return [{ ...p, flat: p.flat + (spec.mod && !/MOD/i.test(d.dice) ? a.castMod || 0 : 0), type: d.type || choice || null }];
 }
 export function healOf(a, slot) {
+  const h = healOfBase(a, slot);
+  if (!h) return h;
+  // Heilung verstärken: +X je Zauber, „immer maximal“ = Würfel werden zum Höchstwert
+  let out = { ...h, flat: (Number(h.flat) || 0) + (Number(a.healBonus) || 0) };
+  if (a.healMax && out.dice) { const m = /^(\d*)d(\d+)$/.exec(out.dice); if (m) out = { dice: '', flat: out.flat + (Number(m[1]) || 1) * Number(m[2]) }; }
+  return out;
+}
+function healOfBase(a, slot) {
   const sp = a.sp;
   const spec = a.spec || {};
   if (spec.heal?.flat) return { dice: '', flat: spec.heal.flat + Math.max(0, (slot || sp.level) - sp.level) * (spec.heal.up || 0) };
@@ -607,13 +718,37 @@ export function riderParts(x, c, a, target, ctx, opts = {}) {
   const out = [];
   const char = ctx.charOf?.(c);
   const weapon = !!a.attack?.weapon;
+  // Wirkungen: „zusätzlich 1W6 Feuer“, „+1W8 gegen Untote“, „+2W6 bei kritischen Treffern“, „einmal pro Zug“
+  const F = E.fxOf(c, ctx);
+  const info = E.attackInfo(x, c, target, a, ctx, { crit: !!opts.crit, adv: opts.mode === 'adv', sneak: !!opts.sneak });
+  const own = a.attack?.itemKey ? [...(F.s.byItem[a.attack.itemKey] || []), ...(F.d.byItem[a.attack.itemKey] || [])].filter((q) => q.t === 'dmgExtra' || (q.t === 'damage' && (hasFilter(q) || isDice(q.v)))) : [];
+  const wType = a.attack?.damage?.[0]?.type || null;
+  const once = opts.once || new Set();
+  const size = (d) => /^(\d*)d(\d+)/.exec(String(d || ''));
+  for (const f0 of [...F.s.dmgExtra, ...F.d.dmgExtra, ...own]) {
+    const f = f0.t === 'damage' ? { ...f0, on: f0.on || f0.k || 'all', dice: isDice(f0.v) ? f0.v : '', v: isDice(f0.v) ? 0 : Number(f0.v) || 0 } : f0;
+    if ((f.on === 'sneak' || f.sneak) && !opts.sneak) continue;
+    if (!fxMatches({ ...f, on: f.on === 'sneak' ? 'all' : f.on }, info)) continue;
+    const key = `${f.src || ''}|${f.lvl || ''}|${f.dice || ''}|${f.v || ''}|${f.type || ''}`;
+    if (f.once && (c.eco?.fxOnce?.[key] || once.has(key))) continue;
+    let dice = f.dice ? fxDice(f.dice, { pb: E.statsOf(c, ctx).pb, level: char ? charMods(char).level : 1 }) : '';
+    // „weapon“: weitere Waffenwürfel (Brutaler kritischer Treffer, Wilde Angriffe)
+    if (f.dice === 'weapon') { const m = size(a.attack?.damage?.[0]?.dice); dice = m ? `${(Number(m[1]) || 1) * (Number(f.n) || 1)}d${m[2]}` : ''; }
+    const flat = Number(f.v) || 0;
+    if (!dice && !flat) continue;
+    if (f.once) { once.add(key); (opts.onceUsed ||= []).push(key); }
+    out.push({ dice, flat, type: f.type || wType, label: f.src || 'Wirkung' });
+  }
+  const dd = F.d.dmg;
+  const dynFlat = (dd.all || 0) + (weapon ? dd.weapon || 0 : 0) + (info.on === 'ranged' ? dd.ranged || 0 : info.on === 'unarmed' ? (dd.unarmed || 0) + (dd.melee || 0) : info.on === 'melee' ? dd.melee || 0 : 0);
+  if (dynFlat) out.push({ dice: '', flat: dynFlat, type: wType, label: 'Kampfhaltung & Zustände' });
   for (const e of c.effects || []) {
-    if ((e.key === 'mark' || e.key === 'hex') && e.data?.target === target?.id && (!e.data.weapon || weapon)) out.push({ dice: e.data.dice, flat: 0, type: e.key === 'hex' ? 'necrotic' : e.data.type || a.attack?.damage?.[0]?.type, label: e.name });
+    if ((e.key === 'mark' || e.key === 'hex') && e.data?.target === target?.id && (!e.data.weapon || weapon) && (e.data.dice || e.data.flat)) out.push({ dice: e.data.dice || '', flat: Number(e.data.flat) || 0, type: e.key === 'hex' ? 'necrotic' : e.data.type || a.attack?.damage?.[0]?.type, label: e.name });
     if (e.key === 'onHit' && (!e.data?.weapon || weapon) && !e.data?.negative && (!e.data?.target || e.data.target === target?.id)) out.push({ dice: e.data.dice, flat: 0, type: e.data.type || e.data.choice || a.attack?.damage?.[0]?.type || 'force', label: e.name });
     if (e.key === 'rage' && a.attack?.strBased && a.attack.kind === 'melee') out.push({ dice: '', flat: Number(e.data?.bonus) || 2, type: a.attack.damage?.[0]?.type || null, label: 'Kampfrausch' });
     if (e.key === 'smiteNext' && weapon && a.attack?.kind === 'melee') out.push(...(e.data?.parts || []).map((p) => ({ ...p, label: e.name })));
   }
-  if (char && weapon && opts.sneak) {
+  if (char && weapon && opts.sneak && classLevel(char, 'schurke')) {
     const lv = classLevel(char, 'schurke');
     if (lv) out.push({ dice: `${Math.ceil(lv / 2)}d6`, flat: 0, type: a.attack.damage[0].type, label: 'Hinterhältiger Angriff' });
   }
@@ -622,7 +757,9 @@ export function riderParts(x, c, a, target, ctx, opts = {}) {
 }
 export function sneakEligible(x, c, a, hit, ctx) {
   const char = ctx.charOf?.(c);
-  if (!char || !classLevel(char, 'schurke') || !a.attack?.weapon || !(a.attack.finesse || a.attack.kind === 'ranged')) return false;
+  // Hinterhältiger Angriff: Schurke oder Wirkungen „nur mit Hinterhältigem Angriff“ (eigene Klassen)
+  const own = char && E.fxOf(c, ctx).s.dmgExtra.some((f) => f.on === 'sneak' || f.sneak);
+  if (!char || !(classLevel(char, 'schurke') || own) || !a.attack?.weapon || !(a.attack.finesse || a.attack.kind === 'ranged')) return false;
   if ((c.eco?.sneakUsed)) return false;
   const tgt = cbOf(x, hit.id);
   return hit.mode === 'adv' || (hit.mode !== 'dis' && !!tgt && ctx.allyNear?.(c, tgt));
@@ -670,9 +807,9 @@ function payCosts(x, c, a, ev, ctx, char) {
     eco.attacked = true;
   }
   if (a.kind === 'spell') {
-    if (a.level > 0 && !a.scroll) eco.slotSpell = true;
+    if (a.level > 0 && !a.scroll && !a.innate) eco.slotSpell = true;
     if (a.cost === 'bonus') eco.bonusSpell = true;
-    if (a.cost === 'action' && a.level > 0 && !a.scroll) eco.actionSpellLeveled = true;
+    if (a.cost === 'action' && a.level > 0 && !a.scroll && !a.innate) eco.actionSpellLeveled = true;
     E.breakInvisibility(x, c);
     if (a.monster) {
       if (a.perDay) c.perDay = { ...(c.perDay || {}), [a.sp.id]: (Number(c.perDay?.[a.sp.id]) || 0) + 1 };
@@ -761,7 +898,7 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
       if (!sv.ok) { rec.targets.push({ id: tgt.id, name: tgt.name, hit: false, note: 'Heiligtum – Angriff abgelenkt' }); return; }
     }
     const rr = reconcile(ev.rolls?.[i], plan.mode);
-    const extras = attackBonusExtras(x, c);
+    const extras = [...attackBonusExtras(x, c), ...fxAttackBonus(x, c, a, tgt, ctx, plan)];
     const bonus = att.bonus + extras.reduce((s, [n]) => s + n, 0);
     const total = rr.natural + bonus;
     let j = E.judge(plan, { natural: rr.natural, total });
@@ -799,11 +936,14 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
     else E.log(x, `${head}${plan.cover ? ' (Ziel in Deckung)' : ''}${tail}`, '', `${head}${acTxt}${tail}`, data);
     rec.targets.push({ id: tgt.id, name: tgt.name, natural: rr.natural, dice: rr.dice, total, ac, hit: j.hit, crit: j.crit, fumble: j.fumble, mode: plan.mode, adv: plan.adv, dis: plan.dis, melee: plan.melee, shield: !!re.shield, parry: !!re.parry, image: !!j.image, halfOnMiss: !j.hit && spec.special === 'acidArrow' });
     if (j.hit) {
+      if (a.rider) applyRider(x, c, tgt, a.rider, ctx, rec);
+      fxOnHit(x, c, tgt, a, ctx, { crit: j.crit, mode: plan.mode }, rec);
       for (const eff of [].concat(spec.eff || []).filter((f) => f.onHit)) applyEff(x, c, tgt, eff, a, c.concentration?.id, ev);
       for (const cond of [].concat(spec.cond || []).filter((f) => f.onHit)) applyCond(x, c, tgt, cond, a, c.concentration?.id, ev, ctx);
       if (spec.special === 'acidArrow') E.addEffect(x, tgt, { key: 'dotEnd', name: 'Säurepfeil (Nachwirkung)', src: c.id, data: { dice: addDice('2d4', '1d4', Math.max(0, (ev.slot || 2) - 2)), type: 'acid' }, until: { cb: tgt.id, at: 'end', n: tgt.turnNo || 0 } });
       if (spec.eff && [].concat(spec.eff).some((f) => f.k === 'enfeebled')) { /* Schwächestrahl: Effekt über onHit */ }
     }
+    if (!j.hit) retaliate(x, tgt, c, 'miss', ctx, { melee: plan.melee });
     E.afterAttack(x, c, tgt);
     if (E.hasEff(c, 'reckless')) E.addEffect(x, c, { key: 'recklessTarget', name: 'Tollkühn (Angriffe gegen dich im Vorteil)', src: c.id, unique: 'any', silent: true, until: { cb: c.id, at: 'start', n: c.turnNo || 0 } });
   });
@@ -819,6 +959,8 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
   rec.damage = dmg;
   rec.drain = spec.drain || a.grant?.drain || 0;
   rec.weapon = !!a.attack?.weapon;
+  rec.itemKey = a.attack?.itemKey || null;
+  rec.unarmed = !!a.attack?.unarmed;
   rec.strBased = !!a.attack?.strBased;
   rec.finesse = !!a.attack?.finesse;
   rec.attKind = a.attack?.kind || null;
@@ -1201,7 +1343,12 @@ function resolveFeature(x, c, a, ev, ctx) {
 function resolveMonsterAbility(x, c, a, ev, ctx) {
   const rec = { ...baseRec(ev, c, a), kind: 'save', stage: 'done', save: a.save, dc: a.dc, half: !!a.half, tpl: ev.tpl || null };
   const targets = ev.tpl ? areaTargets(x, c, ev.tpl, ctx) : targetsOf(x, ev);
-  for (const t of targets) { const sv = E.savingThrow(x, t, a.save, a.dc, { src: c, what: a.name }, ctx); rec.targets.push({ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total, natural: sv.natural, auto: sv.auto } }); }
+  for (const t of targets) {
+    if (a.vs && !vsMatch(a.vs, { type: E.typeOf(t), name: t.name })) { rec.targets.push({ id: t.id, name: t.name, note: 'nicht betroffen (Kreaturentyp)' }); continue; }
+    const sv = E.savingThrow(x, t, a.save, a.dc, { src: c, what: a.name, immuneTo: a.rider?.cond ? condName(a.rider.cond) : undefined }, ctx);
+    rec.targets.push({ id: t.id, name: t.name, save: { ok: sv.ok, total: sv.total, natural: sv.natural, auto: sv.auto } });
+    if (!sv.ok && a.rider) applyRider(x, c, t, { ...a.rider, save: '', saveEnd: a.rider.saveEnd, dc: a.dc, saveAb: a.save }, ctx, rec);
+  }
   rec.damage = a.damage || [];
   if (rec.damage.length && rec.targets.length) rec.stage = 'damage';
   return rec;
@@ -1225,6 +1372,194 @@ function resolveAuto(x, c, a, ev, ctx, reacts) {
   if (!rec.targets.some((t) => t.hit)) rec.stage = 'done';
   E.log(x, `✨ ${c.name}: ${a.name} – ${rec.targets.map((t) => `${t.darts}× ${t.name}`).join(', ')}`);
   return rec;
+}
+
+// ───────────────────────── Wirkungen aus Regelwerken und Gegenständen im Kampf ─────────────────────────
+// Bedingte Angriffsboni: „+1W4 gegen Untote“, „+2 gegen verletzte Ziele“
+function fxAttackBonus(x, c, a, tgt, ctx, plan) {
+  const out = [];
+  const F = E.fxOf(c, ctx);
+  const info = E.attackInfo(x, c, tgt, a, ctx, { adv: plan?.mode === 'adv' });
+  const own = a.attack?.itemKey ? [...(F.s.byItem[a.attack.itemKey] || []), ...(F.d.byItem[a.attack.itemKey] || [])].filter((f) => f.t === 'attack') : [];
+  const ownS = own.length ? fxSummary(own, { pb: E.statsOf(c, ctx).pb, mods: E.statsOf(c, ctx).mods }) : null;
+  for (const f of [...F.s.atkCond, ...F.d.atkCond, ...(ownS?.atkCond || [])]) {
+    if (!fxMatches({ ...f, on: f.on || f.k || 'all' }, info)) continue;
+    if (isDice(f.v)) { const r = roll(String(f.v).replace(/W/gi, 'd')); out.push([r.total, `${f.src || 'Wirkung'} ${String(f.v).replace(/d/g, 'W')}=${r.total}`]); } else if (Number(f.v)) out.push([Number(f.v), f.src || 'Wirkung']);
+  }
+  // Zahlen aus der Kampfschicht (Kampfhaltungen, Zustände), die nicht schon im Bogen stehen
+  const d = F.d;
+  const k = info.on === 'ranged' ? 'ranged' : info.on === 'spell' ? 'spell' : 'melee';
+  const dyn = (d.atk.all || 0) + (info.weapon ? d.atk.weapon || 0 : 0) + (d.atk[k] || 0) + (info.on === 'unarmed' ? d.atk.unarmed || 0 : 0);
+  if (dyn) out.push([dyn, 'Kampfhaltung & Zustände']);
+  return out;
+}
+// Welche Schadensarten ignorieren Resistenz? (Adamantwaffen, Elementarer Adept …)
+function fxIgnoreResist(x, c, rec, ctx) {
+  const F = E.fxOf(c, ctx);
+  const types = (rec.damage || []).map((q) => q.type).filter(Boolean);
+  const info = { on: rec.unarmed ? 'unarmed' : rec.attKind === 'ranged' ? 'ranged' : String(rec.attKind || '').startsWith('spell') || rec.kind !== 'attack' ? 'spell' : 'melee', weapon: !!rec.weapon };
+  const own = rec.itemKey ? [...(F.s.byItem[rec.itemKey] || []), ...(F.d.byItem[rec.itemKey] || [])].filter((f) => f.t === 'ignoreResist').map((f) => ({ k: [].concat(f.k || []), on: 'all' })) : [];
+  const out = new Set();
+  for (const f of [...F.s.ignoreRes, ...F.d.ignoreRes, ...own]) {
+    if (f.on !== 'all' && f.on !== info.on && !(f.on === 'weapon' && info.weapon)) continue;
+    for (const t of f.k.length ? f.k : types) out.add(t);
+  }
+  return [...out];
+}
+// Zustand, Effekt oder eigenen Zustand setzen (onHit, Reiter, Vergeltung)
+function applyCondRef(x, c, tgt, ref, { rounds = 0, save = null } = {}, ctx = {}) {
+  if (!ref || !tgt) return;
+  const t = String(ref);
+  if (t.startsWith('st:')) { E.addStatus(x, tgt, t.slice(3), { by: c, rounds: rounds || undefined, save }, ctx); return; }
+  if (t.startsWith('eff:')) {
+    const k = t.slice(4);
+    E.addEffect(x, tgt, { key: k, name: String(ENGINE_EFFECTS[k] || k).replace(/\s*\(.*$/, ''), src: c.id, rounds: rounds || 10, ...(save ? { save } : {}), data: k === 'guided' ? {} : { target: tgt.id } });
+    E.log(x, `⛓ ${tgt.name}: ${String(ENGINE_EFFECTS[k] || k).replace(/\s*\(.*$/, '')}`, '', '', { e: { t: 'cond', a: E.who(c), o: E.who(tgt), w: k } });
+    return;
+  }
+  if (E.addCondition(x, tgt, { name: t, src: c.id, ...(rounds ? { rounds } : {}), ...(save ? { save } : {}) }, ctx)) E.log(x, `⛓ ${tgt.name}: ${t}`, '', '', { e: { t: 'cond', a: E.who(c), o: E.who(tgt), w: t } });
+}
+// Reiter einer Aktion bzw. einer „Bei Treffer“-Wirkung
+function applyRider(x, c, tgt, r, ctx, rec) {
+  if (!r || !tgt) return;
+  if (r.vs && !vsMatch(r.vs, { type: E.typeOf(tgt), name: tgt.name })) return;
+  const target = r.self ? c : tgt;
+  const dc = Number(r.dc) || 13;
+  if (r.save && !r.self) {
+    const sv = E.savingThrow(x, target, r.save, dc, { src: c, what: r.src || 'Wirkung', immuneTo: r.cond ? condName(r.cond) : undefined }, ctx);
+    if (sv.ok) return;
+  }
+  const saveAb = r.saveAb || r.save;
+  if (r.cond) applyCondRef(x, c, target, r.cond, { rounds: Number(r.rounds) || 0, save: r.saveEnd && saveAb ? { ab: saveAb, dc, at: 'end' } : null }, ctx);
+  if (r.heal) E.applyHealing(x, c, roll(fxDice(r.heal, { pb: E.statsOf(c, ctx).pb })).total, { source: r.src || 'Wirkung', by: c });
+  if (r.temp) E.addTempHp(x, c, isDice(r.temp) ? roll(String(r.temp)).total : Number(r.temp) || 0, r.src || 'Wirkung');
+  if (r.selfDmg) { const rr = roll(fxDice(r.selfDmg, {})); E.applyDamage(x, c, [{ amount: rr.total, type: r.selfType || 'force' }], { source: r.src || 'Rückschlag' }, ctx); }
+  if (r.push && rec) rec.push = [...(rec.push || []), { id: tgt.id, m: Number(r.push) }];
+}
+// „Bei Treffer“-Wirkungen des Angreifers (Waffe, Gegenstände, Merkmale)
+function fxOnHit(x, c, tgt, a, ctx, hit, rec) {
+  const F = E.fxOf(c, ctx);
+  const own = a.attack?.itemKey ? [...(F.s.byItem[a.attack.itemKey] || []), ...(F.d.byItem[a.attack.itemKey] || [])].filter((f) => f.t === 'onHit') : [];
+  const list = [...F.s.onHit, ...F.d.onHit, ...own];
+  if (!list.length) return;
+  const info = E.attackInfo(x, c, tgt, a, ctx, { crit: !!hit.crit, adv: hit.mode === 'adv' });
+  const char = ctx.charOf?.(c);
+  const cm = char ? charMods(char) : null;
+  const s = E.statsOf(c, ctx);
+  for (const f of list) {
+    if (!fxMatches(f, info)) continue;
+    const key = `hit|${f.src || ''}|${f.inflict || ''}|${f.heal || ''}`;
+    if (f.once) { if (c.eco?.fxOnce?.[key]) continue; c.eco = { ...(c.eco || {}), fxOnce: { ...(c.eco?.fxOnce || {}), [key]: true } }; }
+    const ab = a.attack?.ability || (a.kind === 'spell' ? null : 'str');
+    const dc = Number(f.dc) > 0 ? Number(f.dc) : a.kind === 'spell' ? a.dc || 13 : 8 + (s.pb || 2) + ((cm ? cm.mods[ab] : s.mods?.[ab]) || 0);
+    applyRider(x, c, tgt, { ...f, cond: f.inflict || '', dc, src: f.src || 'Bei Treffer' }, ctx, rec);
+  }
+}
+// Vergeltung: wer dich trifft/verfehlt, erleidet Schaden oder einen Zustand
+function retaliate(x, tgt, att, on, ctx, { melee = false } = {}) {
+  if (!tgt || !att || E.isOut(tgt) || tgt.id === att.id) return;
+  const F = E.fxOf(tgt, ctx);
+  for (const f of [...F.s.retaliate, ...F.d.retaliate]) {
+    const when = f.on || 'melee';
+    if (when === 'melee' ? !(melee && on !== 'miss') : when === 'hit' ? on === 'miss' : on !== 'miss') continue;
+    if (f.vs && !vsMatch(f.vs, { type: E.typeOf(att), name: att.name })) continue;
+    let factor = 1;
+    if (f.save) {
+      const sv = E.savingThrow(x, att, f.save, Number(f.dc) || 8 + (E.statsOf(tgt, ctx).pb || 2) + (E.statsOf(tgt, ctx).mods?.con || 0), { src: tgt, what: f.src || 'Vergeltung' }, ctx);
+      if (sv.ok) { if (!f.half) continue; factor = 0.5; }
+    }
+    const amt = f.dice ? roll(fxDice(f.dice, {})).total : Number(f.v) || 0;
+    if (amt > 0) {
+      E.log(x, `⚡ ${f.src || 'Vergeltung'}: ${att.name} erleidet ${Math.floor(amt * factor)}`);
+      E.applyDamage(x, att, [{ amount: Math.floor(amt * factor), type: f.type || 'force' }], { magical: true, attacker: tgt, source: f.src || 'Vergeltung' }, ctx);
+    }
+    if (f.inflict && factor === 1) applyCondRef(x, tgt, att, f.inflict, { rounds: Number(f.rounds) || 1 }, ctx);
+  }
+}
+// Eigene Reaktion eines Charakters: { f, bonus, mod, pb, level } oder null (Auslöser: melee | ranged | hit)
+function reactFx(c, ctx, effect, trigger) {
+  const char = ctx.charOf?.(c);
+  if (!char || !c.reaction) return null;
+  const cm = charMods(char);
+  const res = Object.fromEntries(resourcesFor(char).map((r) => [r.key, r.max - (Number(char.resUsed?.[r.key]) || 0)]));
+  for (const f of cm.fx.actions || []) {
+    if (f.kind !== 'react' || (f.effect || 'reduce') !== effect) continue;
+    const trig = f.trigger || 'hit';
+    if (trig !== 'hit' && trig !== trigger) continue;
+    const id = fxSlug(f.k);
+    if (f.uses && f.uses !== 'will' && !((res[`act:${id}`] || 0) > 0)) continue;
+    const mod = f.addMod ? cm.mods[f.addMod] || 0 : 0;
+    const bonus = f.v === 'pb' ? cm.pb : Number(f.v) || (effect === 'ac' ? 2 : 0);
+    return { f, bonus, mod, pb: cm.pb, level: cm.level, id, owner: c.ownerUid || null, charId: char.id };
+  }
+  return null;
+}
+async function spendReaction(tgt, ra, ctx) {
+  await mutateCombat((x) => { const t = cbOf(x, tgt.id); if (t) t.reaction = false; return x; });
+  if (ra.f.uses && ra.f.uses !== 'will' && ra.owner) {
+    const char = ctx.charOf?.(tgt);
+    if (char) await db.update(`users/${ra.owner}/characters`, char.id, { resUsed: { ...(char.resUsed || {}), [`act:${ra.id}`]: (Number(char.resUsed?.[`act:${ra.id}`]) || 0) + 1 } }).catch(() => {});
+  }
+}
+// Reaktion gegen den Angreifer (Schildstoß, Vergeltungsschlag): Rettungswurf, Zustand, Schaden
+async function offerStrike(st) {
+  const x = await loadCombat();
+  const ctx = makeCtx(x);
+  const tgt = cbOf(x, st.tgt);
+  const att = cbOf(x, st.actor);
+  if (!tgt || !att || E.isOut(att)) return;
+  const ra = reactFx(tgt, ctx, 'strike', st.melee ? 'melee' : 'ranged');
+  if (!ra) return;
+  const owner = tgt.ownerUid || null;
+  const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'rebuke', title: `${ra.f.k}?`, text: `${att.name} hat dich getroffen. Als Reaktion: ${ra.f.desc || ra.f.k}`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
+  if (ans !== 'yes') return;
+  await spendReaction(tgt, ra, ctx);
+  await mutateCombat((xx) => {
+    const cx = makeCtx(xx);
+    const t = cbOf(xx, tgt.id);
+    const a = cbOf(xx, att.id);
+    if (!t || !a) return xx;
+    const cm = charMods(ctx.charOf(t));
+    const dc = Number(ra.f.dcFixed) || 8 + cm.pb + (cm.mods[ra.f.ab || 'str'] || 0);
+    let ok = false;
+    if (ra.f.save) ok = E.savingThrow(xx, a, ra.f.save, dc, { src: t, what: ra.f.k }, cx).ok;
+    if (ra.f.dice && (!ok || ra.f.half)) { const r = roll(fxDice(ra.f.dice, { pb: cm.pb, level: cm.level })); const amt = ok ? Math.floor(r.total / 2) : r.total; E.log(xx, `⚡ ${t.name}: ${ra.f.k} – ${r.text} = ${r.total}${ok ? ' (halbiert)' : ''}`); E.applyDamage(xx, a, [{ amount: amt, type: ra.f.type || 'force' }], { magical: true, attacker: t, source: ra.f.k }, cx); }
+    if (ra.f.inflict && !ok) applyCondRef(xx, t, a, ra.f.inflict, { rounds: Number(ra.f.condDur) || 0 }, cx);
+    return xx;
+  });
+}
+// Kampfhaltungen und Stärkungen (Kampfrausch, Flammenzunge, Trank der Riesenstärke …)
+function resolveBuff(x, c, a, ev, ctx) {
+  const rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' };
+  const targets = a.needs?.target === 'self' ? [c] : targetsOf(x, ev);
+  const concId = a.conc ? E.startConcentration(x, c, { name: a.name }) : null;
+  for (const t of targets.length ? targets : [c]) {
+    const old = (t.effects || []).find((e) => e.key === 'fxbuff' && e.name === a.name && e.src === c.id);
+    if (a.dur === 'toggle' && old) { E.removeEffect(x, t, old.id, 'beendet'); rec.targets.push({ id: t.id, name: t.name, note: 'beendet' }); continue; }
+    if (old) E.removeEffect(x, t, old.id);
+    E.addEffect(x, t, { key: 'fxbuff', name: a.name, src: c.id, data: { fx: a.buffFx || [], item: a.buffItem || null }, ...(a.dur === 'toggle' ? {} : concId ? { conc: concId, rounds: a.rounds || 10 } : { rounds: a.rounds || 10 }) });
+    if (a.eff) E.addEffect(x, t, { key: a.eff, name: `${a.name} (${String(ENGINE_EFFECTS[a.eff] || a.eff).replace(/\s*\(.*$/, '')})`, src: c.id, rounds: a.rounds || 10, data: {} });
+    if (a.temp) E.addTempHp(x, t, isDice(a.temp) ? roll(String(a.temp)).total : Number(a.temp) || 0, a.name);
+    E.log(x, `✨ ${t.name}: ${a.name}`, '', '', { e: { t: 'eff', a: E.who(c), o: E.who(t), w: a.name } });
+    rec.targets.push({ id: t.id, name: t.name, note: a.name });
+  }
+  return rec;
+}
+function resolveTemp(x, c, a, ev, ctx) {
+  const t = targetsOf(x, ev)[0] || c;
+  const r = roll(String(a.temp || '1d4'));
+  E.addTempHp(x, t, r.total, a.name);
+  void ctx;
+  return { ...baseRec(ev, c, a), kind: 'effect', stage: 'done', targets: [{ id: t.id, name: t.name, note: `${r.total} temporäre TP` }] };
+}
+function resolveMark(x, c, a, ev, ctx) {
+  const t = targetsOf(x, ev)[0];
+  if (!t) return { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' };
+  for (const e of [...(c.effects || [])]) if (e.key === 'mark' && e.name.startsWith(`${a.name} →`)) E.removeEffect(x, c, e.id);
+  E.addEffect(x, c, { key: 'mark', name: `${a.name} → ${t.name}`, src: c.id, rounds: a.rounds || 600, data: { target: t.id, dice: a.markDice || '', flat: a.markFlat || 0, adv: !!a.markAdv, type: null } });
+  E.log(x, `🎯 ${c.name}: ${a.name} → ${t.name}`, '', '', { e: { t: 'eff', a: E.who(c), o: E.who(t), w: a.name } });
+  void ctx;
+  return { ...baseRec(ev, c, a), kind: 'effect', stage: 'done', targets: [{ id: t.id, name: t.name, note: 'markiert' }] };
 }
 
 // ───────────────────────── Ereignisse (laufen bei der SL) ─────────────────────────
@@ -1252,6 +1587,12 @@ async function gatherReactions(x0, actor, a, ev, ctx) {
         const parry = E.statsOf(tgt, ctx).reactions?.find((r) => r.kind === 'parry');
         if (parry && plan.melee && total < plan.ac + parry.ac) { reacts[i] = { parry: parry.ac }; E.log(x0, `🛡 ${tgt.name} pariert (+${parry.ac} RK)`); }
         continue;
+      }
+      const ra = reactFx(tgt, ctx, 'ac', plan.melee ? 'melee' : 'ranged');
+      if (ra && total < plan.ac + ra.bonus) {
+        const owner = tgt.ownerUid || null;
+        const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${ra.f.k}?`, text: `${actor.name} trifft ${tgt.name} (${total} gegen RK ${plan.ac}). Mit ${ra.f.k}: RK ${plan.ac + ra.bonus} – der Angriff verfehlt.`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
+        if (ans === 'yes') { reacts[i] = { parry: ra.bonus }; sideFx.push(() => spendReaction(tgt, ra, ctx)); continue; }
       }
       if (total >= plan.ac + 5 || !hasShield(tgt, ctx)) continue;
       const owner = tgt.ownerUid || null;
@@ -1536,6 +1877,10 @@ export async function handleAct(ev) {
     else if (a.kind === 'feature') rec = resolveFeature(x, c, a, ev, ctx);
     else if (a.kind === 'item') rec = resolveItem(x, c, a, ev, ctx);
     else if (a.kind === 'ability') rec = resolveMonsterAbility(x, c, a, ev, ctx);
+    else if (a.kind === 'buff') rec = resolveBuff(x, c, a, ev, ctx);
+    else if (a.kind === 'temp') rec = resolveTemp(x, c, a, ev, ctx);
+    else if (a.kind === 'mark') rec = resolveMark(x, c, a, ev, ctx);
+    else if (a.kind === 'restore') { rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done', targets: [{ id: c.id, name: c.name, note: a.what === 'res' ? `${a.resName || 'Ressource'} +${a.n}` : 'Zauberplatz zurück' }] }; E.log(x, `✨ ${c.name}: ${a.name}`); }
     else if (a.kind === 'granted') {
       if (a.grant?.area) rec = resolveMonsterAbility(x, c, { ...a, save: a.grant.save, dc: a.dc, half: a.grant.half, damage: [{ ...parseDmg(a.grant.dice), type: a.grant.type }] }, ev, ctx);
       else if (a.attack) rec = resolveAttacks(x, c, a, ev, ctx, reacts, side);
@@ -1611,12 +1956,26 @@ export async function handleDamage(ev) {
     const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'uncanny', title: 'Unglaubliches Ausweichen?', text: `${rec0.actorName} trifft ${tgt.name} – mit deiner Reaktion halbierst du den Schaden.`, options: [{ id: 'yes', label: 'Schaden halbieren (Reaktion)', kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
     if (ans === 'yes') halve[t.id] = true;
   }
+  // Eigene Reaktionen „Schaden verringern“ (Steinerne Ausdauer, Geschosse abwehren …)
+  const reduce = {};
+  for (const t of rec0.targets) {
+    const tgt = cbOf(x0, t.id);
+    if (!tgt?.isPC || !tgt.reaction || E.incapacitated(tgt) || !(t.hit || (rec0.kind !== 'attack' && !t.save?.ok))) continue;
+    const ra = reactFx(tgt, ctx0, 'reduce', rec0.kind === 'attack' ? (t.melee ? 'melee' : 'ranged') : 'hit');
+    if (!ra) continue;
+    const owner = tgt.ownerUid || null;
+    const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'uncanny', title: `${ra.f.k}?`, text: `${rec0.actorName} trifft ${tgt.name} – mit deiner Reaktion verringerst du den Schaden (${ra.f.half ? 'halbiert' : `um ${String(ra.f.dice || '').replace(/d/g, 'W')}${ra.mod ? ` + ${ra.mod}` : ''}`}).`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
+    if (ans === 'yes') { if (ra.f.half) halve[t.id] = ra.f.k; else reduce[t.id] = { n: roll(fxDice(ra.f.dice || '1d6', { pb: ra.pb, level: ra.level })).total + ra.mod, why: ra.f.k }; sideFx.push(() => spendReaction(tgt, ra, ctx0)); }
+  }
   const rebukes = [];
+  const strikes = [];
   await mutateCombat((x) => {
     const ctx = makeCtx(x);
     const rec = E.resultOf(x, ev.resultId);
     if (!rec || rec.stage !== 'damage') return x;
     const actor = cbOf(x, rec.actor);
+    if (actor && ev.fxOnce?.length) actor.eco = { ...(actor.eco || {}), fxOnce: { ...(actor.eco?.fxOnce || {}), ...Object.fromEntries(ev.fxOnce.map((k) => [k, true])) } };
+    const ignoreResist = actor ? fxIgnoreResist(x, actor, rec, ctx) : [];
     const rolls = ev.rolls || [];
     const pick = (i) => rolls.find((r) => r.i === i) || rolls.find((r) => r.i === 'all') || rolls[0];
     let drained = 0;
@@ -1630,18 +1989,24 @@ export async function handleDamage(ev) {
       if (!hitOk) return;
       const r = pick(i);
       if (!r) return;
-      const factor = (rec.kind !== 'attack' && rec.kind !== 'auto' && t.save?.ok && rec.half) || (t.halfOnMiss && !t.hit) ? 0.5 : 1;
+      let factor = (rec.kind !== 'attack' && rec.kind !== 'auto' && t.save?.ok && rec.half) || (t.halfOnMiss && !t.hit) ? 0.5 : 1;
+      // Entrinnen: GES-Rettungswurf für halben Schaden → bei Erfolg nichts, sonst die Hälfte
+      const evade = rec.kind !== 'attack' && rec.kind !== 'auto' && rec.save === 'dex' && rec.half && !E.incapacitated(tgt) && (E.fxOf(tgt, ctx).s.evasion || E.fxOf(tgt, ctx).d.evasion);
+      if (evade) factor = t.save?.ok ? 0 : 0.5;
       const times = rec.kind === 'auto' ? Number(t.darts) || 1 : 1;
       for (let k = 0; k < times; k++) {
         const parts = r.parts.map((p) => ({ amount: Math.floor(p.amount * factor), type: p.type }));
         if (rec.disintegrate) parts.forEach((p) => { p.type = 'force'; });
         const rollNote = factor < 1 ? (t.halfOnMiss && !t.hit ? 'Verfehlt – halber Schaden' : 'Rettungswurf geschafft – halber Schaden') : '';
-        const res = E.applyDamage(x, tgt, parts, { crit: t.crit, melee: t.melee, magical: rec.magical || !!ev.magical, attacker: actor, floorOne: rec.floorOne, halve: halve[t.id] ? 'Unglaubliches Ausweichen' : null, source: rec.title, roll: r.det || null, rollNotes: [rollNote, ...(r.notes || [])].filter(Boolean) }, ctx);
+        const res = E.applyDamage(x, tgt, parts, { crit: t.crit, melee: t.melee, magical: rec.magical || !!ev.magical, attacker: actor, floorOne: rec.floorOne, halve: halve[t.id] ? (typeof halve[t.id] === 'string' ? halve[t.id] : 'Unglaubliches Ausweichen') : null, reduceBy: reduce[t.id] || null, ignoreResist, source: rec.title, roll: r.det || null, rollNotes: [rollNote, evade ? 'Entrinnen' : '', ...(r.notes || [])].filter(Boolean) }, ctx);
         t.applied = (t.applied || 0) + res.taken;
         drained += res.taken;
         if (rec.disintegrate && tgt.hp <= 0) { E.die(x, tgt, 'zu Staub zerfallen'); t.note = 'zu Staub zerfallen'; }
       }
-      if (halve[t.id]) tgt.reaction = false;
+      if (halve[t.id] || reduce[t.id]) tgt.reaction = false;
+      // Vergeltung (Feuerschild-artig aus Gegenständen): wer dich trifft, erleidet Schaden
+      if (rec.kind === 'attack' && t.hit && actor && t.applied > 0) retaliate(x, tgt, actor, t.melee ? 'melee' : 'hit', ctx, { melee: t.melee });
+      if (rec.kind === 'attack' && t.hit && actor && tgt.isPC && tgt.reaction && !E.isOut(tgt) && reactFx(tgt, ctx, 'strike', t.melee ? 'melee' : 'ranged')) strikes.push({ tgt: tgt.id, actor: actor.id, melee: !!t.melee });
       t.hpState = tgt.isPC ? `${tgt.hp}/${tgt.maxHp}` : E.isDead(tgt) ? 'besiegt' : null;
       // Feuerschild: Nahkampfangreifer erleidet 2W8
       if (rec.kind === 'attack' && t.melee && actor) for (const fs of E.effs(tgt, 'fireShield')) { const rr = roll('2d8'); E.log(x, `🔥 Feuerschild von ${tgt.name}: ${rr.text} = ${rr.total}`); E.applyDamage(x, actor, [{ amount: rr.total, type: fs.data?.type || 'fire' }], { magical: true, attacker: tgt }, ctx); }
@@ -1682,6 +2047,9 @@ export async function handleDamage(ev) {
   });
   // Höllischer Tadel (Reaktion nach erlittenem Schaden)
   for (const rb of rebukes) await offerRebuke(rb, ctx0);
+  // Eigene Reaktionen gegen den Angreifer (Schildstoß …)
+  for (const st of strikes) await offerStrike(st);
+  await flushSideFx();
 }
 async function offerRebuke(rb, ctx0) {
   const x = await loadCombat();
@@ -1815,8 +2183,19 @@ export async function consumeOnUse(cb, char, a, ev) {
   if (a.kind === 'spell' && a.conc) patch.concentration = { name: a.sp.name, id: a.sp.id };
   const resKey = a.res;
   if (resKey) {
-    const n = a.key === 'f:layonhands' ? Number(ev.amount) || 0 : 1;
+    const n = a.key === 'f:layonhands' ? Number(ev.amount) || 0 : Number(a.resCost) || 1;
     patch.resUsed = { ...(char.resUsed || {}), [resKey]: (Number(char.resUsed?.[resKey]) || 0) + n };
+  }
+  if (a.kind === 'restore') {
+    if (a.what === 'res') {
+      const want = String(a.resName || '').toLowerCase();
+      const r = resourcesFor(char).find((q) => q.key === a.resName || q.name.toLowerCase().startsWith(want));
+      if (r) { const used = { ...(patch.resUsed || char.resUsed || {}) }; used[r.key] = Math.max(0, (Number(used[r.key]) || 0) - (Number(a.n) || 1)); patch.resUsed = used; }
+    } else {
+      const sp = { ...(char.spell || {}), used: { ...(char.spell?.used || {}) } };
+      const lv = Object.keys(sp.used).map(Number).filter((l) => l <= (a.lvMax || 9) && sp.used[l] > 0).sort((p, q) => q - p)[0];
+      if (lv) { sp.used[lv] -= 1; patch.spell = sp; } else if ((Number(sp.pactUsed) || 0) > 0) { sp.pactUsed -= 1; patch.spell = sp; }
+    }
   }
   if (a.itemId) patch.inventory = (char.inventory || []).map((it) => (it.id === a.itemId ? { ...it, qty: Math.max(0, (Number(it.qty) || 0) - 1) } : it));
   if (a.key === 'f:breath') patch.resUsed = { ...(char.resUsed || {}), breath: (Number(char.resUsed?.breath) || 0) + 1 };
@@ -1889,16 +2268,19 @@ export function smiteParts(opt, tgt) {
 export function damagePlan(x, c, rec, ctx, { sneak = true, smite = null } = {}) {
   const out = [];
   const base = (rec.damage || []).filter((p) => p.dice || p.flat);
-  const pseudo = { attack: { weapon: rec.weapon, strBased: rec.strBased, finesse: rec.finesse, kind: rec.attKind || 'melee', damage: rec.damage || [] } };
+  const pseudo = { attack: { weapon: rec.weapon, strBased: rec.strBased, finesse: rec.finesse, kind: rec.attKind || 'melee', damage: rec.damage || [], itemKey: rec.itemKey || null, unarmed: !!rec.unarmed } };
   if (rec.kind === 'attack') {
     let sneakLeft = !!sneak && !c.eco?.sneakUsed;
     let smiteLeft = smite;
+    const once = new Set();
+    const onceUsed = [];
+    out.onceUsed = onceUsed;
     rec.targets.forEach((t, i) => {
       if (t.note || !(t.hit || t.halfOnMiss)) return;
       const tgt = cbOf(x, t.id);
       const useSneak = sneakLeft && t.hit && sneakEligible(x, c, pseudo, t, ctx);
       const sm = smiteLeft && t.hit && t.melee ? smiteParts(smiteLeft, tgt) : null;
-      const riders = t.hit ? riderParts(x, c, pseudo, tgt, ctx, { sneak: useSneak, smite: sm }) : [];
+      const riders = t.hit ? riderParts(x, c, pseudo, tgt, ctx, { sneak: useSneak, smite: sm, crit: t.crit, mode: t.mode, once, onceUsed }) : [];
       if (useSneak) sneakLeft = false;
       if (sm) smiteLeft = null;
       out.push({ i, label: `${rec.title} → ${t.name}${t.crit ? ' (kritisch)' : ''}`, parts: [...base, ...riders], crit: !!t.crit, sneak: useSneak, target: t.name });
@@ -1915,7 +2297,7 @@ export function rollDamage(x, c, rec, ctx, { sneak = true, smite = null, doRoll 
     return { i: p.i, parts: r.parts, total: r.total, det: r.det, notes: r.notes };
   });
   return {
-    type: 'dmg', resultId: rec.id, rolls, sneak: plan.some((p) => p.sneak), mapId: rec.mapId || null,
+    type: 'dmg', resultId: rec.id, rolls, sneak: plan.some((p) => p.sneak), mapId: rec.mapId || null, fxOnce: plan.onceUsed || [],
     smite: smite ? { spellId: smite.sp?.id || null, slot: smite.slot, pact: !!smite.pact, feature: !!smite.feature, label: smite.label } : null,
   };
 }

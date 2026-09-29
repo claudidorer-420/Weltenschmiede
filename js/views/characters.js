@@ -15,7 +15,10 @@ import { CONDITIONS, XP_LEVELS, ALIGNMENTS } from '../data/rules5e.js';
 import {
   AB, AB_NAME, AB_SHORT, ALL_SKILLS, skillName, skillAbility, charMods, rollTraits, resourcesFor, classExtras, spellSlots, classFeatures, RULES, attacksPerAction as attacksPerActionCG,
   findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel, RES_INFO, FEATURE_SRC,
+  charWeapons, itemInfo, baseOptions, ITEMS, ITEM_SLOTS, WEAPONS, charPicks,
 } from '../data/chargen.js';
+import { PicksPanel, openPicks } from '../ui/picks.js';
+import { roll as rollExpr } from '../lib/dice.js';
 import { useSpells, damageAt, healAt, healHasMod, fmtDice, damageName, timeShort, rangeShort, levelName, listClassOf } from '../data/spells.js';
 import { CATALOG, CATEGORIES, catalogItem, catalogByName, fmtCost, fmtWeight, carryCapacity, WEAPON_RANGE, weaponReach } from '../data/items.js';
 import { scrollItem, scrollName, tierOf } from '../data/scrolls.js';
@@ -235,7 +238,7 @@ export function CharacterSheet({ id, owner }) {
     }
     return fx;
   };
-  const roll20 = (bonus, label, kind, prof) => doRoll(`1d20${sg(bonus)}`, { label: `${c.name}: ${label}`, character: c.name, kind, fx: fxFor(kind, prof), edition: ed });
+  const roll20 = (bonus, label, kind, prof, mode = null) => doRoll(`1d20${sg(bonus)}`, { label: `${c.name}: ${label}`, character: c.name, kind, fx: { ...fxFor(kind, prof), ...(mode === 'adv' ? { adv: true } : mode === 'dis' ? { dis: true } : {}) }, edition: ed });
   const rollDmg = (expr, label, kind = 'damage') => doRoll(String(expr), { label: `${c.name}: ${label}`, character: c.name, kind, fx: kind === 'damage' ? fxFor('damage') : {}, edition: ed });
 
   const hpDelta = (d) => {
@@ -421,7 +424,7 @@ function SavesBlock({ c, cm, unlock, upd, roll20, traits }) {
   return html`<div class="save-grid">${AB.map((k) => html`<div class="srow" key=${k}>
       <span class=${`dot${cm.saves[k].prof ? ' p1' : ''}${unlock ? ' edit' : ''}`} onClick=${() => unlock && upd({ saves: cm.saves[k].prof ? (c.saves || []).filter((x) => x !== k) : [...(c.saves || []), k] })}></span>
       <span class="ab">${AB_SHORT[k]}</span><span class="nm">${AB_NAME[k]}</span>
-      <button type="button" class="rollbtn" onClick=${() => roll20(cm.saves[k].bonus, `${AB_NAME[k]}-Rettungswurf`, 'save')}>${fmtMod(cm.saves[k].bonus)}</button>
+      <button type="button" class="rollbtn" title=${cm.saves[k].adv ? 'Vorteil (Wirkung)' : cm.saves[k].dis ? 'Nachteil (Wirkung)' : null} onClick=${() => roll20(cm.saves[k].bonus, `${AB_NAME[k]}-Rettungswurf`, 'save', false, cm.saves[k].adv && !cm.saves[k].dis ? 'adv' : cm.saves[k].dis && !cm.saves[k].adv ? 'dis' : null)}>${fmtMod(cm.saves[k].bonus)}${cm.saves[k].adv ? ' ▲' : cm.saves[k].dis ? ' ▼' : ''}</button>
     </div>`)}</div>
     ${traits.halfling ? html`<div class="tiny faint" style="margin-top:6px">Halblingsglück: natürliche 1 wird automatisch neu gewürfelt.</div>` : null}`;
 }
@@ -441,7 +444,7 @@ function SkillsBlock({ c, cm, unlock, upd, roll20 }) {
   return html`<div class="skill-rows">${ALL_SKILLS.map((k) => html`<div class="srow" key=${k}>
     <span class=${`dot${cm.skills[k].prof ? ` p${cm.skills[k].prof}` : ''}${unlock ? ' edit' : ''}`} onClick=${() => unlock && upd({ skills: { ...c.skills, [k]: ((Number(c.skills?.[k]) || 0) + 1) % 3 } })}></span>
     <span class="ab">${AB_SHORT[skillAbility(k)]}</span><span class="nm">${skillName(k)}</span>
-    <button type="button" class="rollbtn" onClick=${() => roll20(cm.skills[k].bonus, skillName(k), 'check', cm.skills[k].prof)}>${fmtMod(cm.skills[k].bonus)}</button>
+    <button type="button" class="rollbtn" title=${cm.skills[k].adv ? 'Vorteil (Wirkung)' : cm.skills[k].dis ? 'Nachteil (Wirkung)' : null} onClick=${() => roll20(cm.skills[k].bonus, skillName(k), 'check', cm.skills[k].prof, cm.skills[k].adv && !cm.skills[k].dis ? 'adv' : cm.skills[k].dis && !cm.skills[k].adv ? 'dis' : null)}>${fmtMod(cm.skills[k].bonus)}${cm.skills[k].adv ? ' ▲' : cm.skills[k].dis ? ' ▼' : ''}</button>
   </div>`)}</div>
   ${cm.jack ? html`<div class="tiny faint" style="margin-top:6px">Alleskönner: +${cm.jack} auf ungeübte Attributswürfe.</div>` : null}`;
 }
@@ -471,6 +474,7 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
     const hdUsed = {};
     for (const p of hdp) hdUsed[p.cls] = Math.max(0, p.used - (ed === '2024' ? p.total : Math.max(1, Math.floor(totalLevel(c) / 2))));
     const bleibt = Object.fromEntries(res.filter((r) => r.reset === 'never').map((r) => [r.key, c.resUsed?.[r.key] || 0]));
+    for (const r of res) if (r.regain && c.resUsed?.[r.key]) bleibt[r.key] = Math.max(0, (Number(c.resUsed[r.key]) || 0) - Math.max(0, rollExpr(r.regain).total));
     upd({ hp: c.maxHp, tempHp: 0, resUsed: bleibt, spell: { ...(c.spell || {}), used: {}, pactUsed: 0 }, hdUsed, exhaustion: Math.max(0, (Number(c.exhaustion) || 0) - 1), deathSaves: { s: 0, f: 0 }, concentration: null });
     toast('Lange Rast: TP, Ressourcen und Zauberplätze voll.', 'success');
   };
@@ -563,7 +567,12 @@ function openAttackDetail({ name, icon = 'swords', art, rows = [], text }) {
 
 function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries, res }) {
   const [f, setF] = useState('all');
-  const weapons = (c.weapons || []).map((k) => findWeapon(k)).filter(Boolean).map((w) => ({ w, a: weaponAttack(c, w, cm.mods, cm.pb) }));
+  const weapons = charWeapons(c).map((w) => {
+    const a = weaponAttack(c, w, cm.mods, cm.pb);
+    // feste Zusatzwürfel der Waffe (Flammenzunge, Frostbrand …) gleich mit anzeigen
+    const plus = (a.own?.dmgExtra || []).filter((f) => f.dice && f.dice !== 'weapon' && !f.vs && !f.vsCond && !f.crit && !f.hp && !f.adv).map((f) => f.dice);
+    return { w, a: plus.length ? { ...a, extraDmg: [a.extraDmg, ...plus].filter(Boolean).join('+') } : a };
+  });
   const md = martialDie(c);
   const uAb = md && cm.mods.dex > cm.mods.str ? 'dex' : 'str';
   const unarmed = { name: 'Waffenloser Schlag', bonus: cm.mods[uAb] + cm.pb, damage: md ? `1d${md}${cm.mods[uAb] ? sg(cm.mods[uAb]) : ''}` : String(Math.max(1, 1 + cm.mods.str)), type: 'Wucht' };
@@ -592,9 +601,9 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
       <div class="act-table">
         <div class="act-head"><span></span><span>Angriff</span><span>Reichweite</span><span>Treffer/SG</span><span>Schaden</span></div>
         ${weapons.map(({ w, a }, i) => atkRow({
-          key: `w${i}`, art: html`<${ItemArt} item=${{ name: w.name, ref: `w:${w.key}` }} size=${34} />`, name: a.name,
+          key: `w${i}`, art: html`<${ItemArt} item=${{ name: w.name, ref: `w:${w.baseKey || w.key}`, magic: !!w.itemId }} size=${34} />`, name: a.name,
           sub: `${/a/.test(w.p) ? 'Fernkampfwaffe' : 'Nahkampfwaffe'}${a.props ? ` · ${a.props}` : ''}${ed === '2024' && a.mastery ? ` · Meisterschaft: ${a.mastery}` : ''}${a.prof ? '' : ' · ungeübt'}`,
-          range: WEAPON_RANGE[w.key] ? `${WEAPON_RANGE[w.key].join('/')} m` : fmtM(weaponReach(w)),
+          range: WEAPON_RANGE[w.baseKey || w.key] ? `${WEAPON_RANGE[w.baseKey || w.key].join('/')} m` : fmtM(weaponReach(w.baseKey ? findWeapon(w.baseKey) || w : w)),
           hit: fmtMod(a.bonus), onHit: () => roll20(a.bonus, `${a.name} – Angriff`, 'attack'),
           dmg: a.extraDmg ? `${a.damage}+${a.extraDmg}` : a.damage, dmgType: DMG_KEY[w.type], onDmg: () => rollDmg(a.extraDmg ? `${a.damage}+${a.extraDmg}` : a.damage, `${a.name} – Schaden${a.extraType ? ` (+${a.extraType})` : ''}`),
           extra: a.versatile ? html`<button type="button" class="dmgbtn" title="Zweihändig" onClick=${() => rollDmg(a.versatile, `${a.name} – Schaden (zweihändig)`)}>${fmtDice(a.versatile)}</button>` : null,
@@ -831,11 +840,18 @@ function ItemPicker({ close, ed = '2014' }) {
   useEffect(() => { if (tab === 'magic' && !magic) loadMagic().then(setMagic); }, [tab]);
   const ql = q.trim().toLowerCase();
   const cats = [...new Set(CATALOG.map((x) => x.cat))];
+  // Gegenstände, magische Waffen und Rüstungen aus dem Regelwerk der Kampagne
+  const ruleItems = [
+    ...ITEMS.map((x) => ({ key: `items:${x.key}`, name: x.name, type: ITEM_SLOTS[x.slot] || 'Gegenstand', rarity: x.rarity || '', attune: !!x.attune, weight: x.weight, cost: x.cost })),
+    ...WEAPONS.filter((w) => w.rarity || w.fx?.length || w.attune).map((w) => ({ key: `weapons:${w.key}`, name: w.name, type: 'Waffe', rarity: w.rarity || '', attune: !!w.attune, weight: w.weight, cost: w.cost, ref: `w:${w.key}` })),
+    ...ARMOR.filter((a) => a.rarity || a.fx?.length || a.attune).map((a) => ({ key: `armor:${a.key}`, name: a.name, type: ARMOR_TYPE[a.type] || 'Rüstung', rarity: a.rarity || '', attune: !!a.attune, weight: a.weight, cost: a.cost })),
+  ];
   const list = tab === 'catalog' ? CATALOG.filter((x) => (!cat || x.cat === cat) && (!ql || x.name.toLowerCase().includes(ql)))
     : tab === 'scroll' ? (spells || []).filter((x) => !ql || x.name.toLowerCase().includes(ql))
-      : (magic || []).filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql));
+      : tab === 'rules' ? ruleItems.filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql))
+        : (magic || []).filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql));
   return html`<div class="modal-body stack">
-    <div class="sm-tabs">${[['catalog', 'Ausrüstung'], ['magic', 'Magische Gegenstände (SRD)'], ['scroll', 'Zauberschriftrollen'], ['custom', 'Eigener Gegenstand']].map(([k, l]) => html`<button type="button" class=${`sm-tab${tab === k ? ' active' : ''}`} onClick=${() => setTab(k)}>${l}</button>`)}</div>
+    <div class="sm-tabs">${[['catalog', 'Ausrüstung'], ['magic', 'Magische Gegenstände (SRD)'], ...(ruleItems.length ? [['rules', 'Aus dem Regelwerk']] : []), ['scroll', 'Zauberschriftrollen'], ['custom', 'Eigener Gegenstand']].map(([k, l]) => html`<button type="button" class=${`sm-tab${tab === k ? ' active' : ''}`} onClick=${() => setTab(k)}>${l}</button>`)}</div>
     ${tab !== 'custom' ? html`<div class="row">
       <div class="search-box grow" style="margin:0"><${Icon} name="search" size=${15} /><input class="input" placeholder="Suchen …" value=${q} autoFocus onInput=${(e) => setQ(e.target.value)} /></div>
       ${tab === 'catalog' ? html`<select class="select sm" style="width:auto" value=${cat} onChange=${(e) => setCat(e.target.value)}><option value="">Alle Kategorien</option>${cats.map((k) => html`<option value=${k}>${CATEGORIES[k]}</option>`)}</select>` : null}
@@ -852,11 +868,12 @@ function ItemPicker({ close, ed = '2014' }) {
         </div>`;
       }) : null}
       ${tab === 'scroll' ? null : list.slice(0, 250).map((x) => html`<div class="pick-row" key=${x.key || x.id}>
-        <${ItemArt} item=${tab === 'magic' ? { ...x, magic: true } : { name: x.name, ref: x.key, icon: x.icon }} size=${38} />
-        <div class="grow" style="min-width:0"><b>${x.name}</b><div class="tiny faint">${tab === 'magic' ? `${x.type} · ${x.rarity}${x.attune ? ' · Einstimmung' : ''}` : `${CATEGORIES[x.cat]}${x.sub ? ` · ${x.sub}` : ''} · ${fmtCost(x.cost)} · ${fmtWeight(x.weight)}`}</div></div>
+        <${ItemArt} item=${tab === 'magic' || tab === 'rules' ? { ...x, magic: true } : { name: x.name, ref: x.key, icon: x.icon }} size=${38} />
+        <div class="grow" style="min-width:0"><b>${x.name}</b><div class="tiny faint">${tab === 'magic' || tab === 'rules' ? `${x.type}${x.rarity ? ` · ${x.rarity}` : ''}${x.attune ? ' · Einstimmung' : ''}` : `${CATEGORIES[x.cat]}${x.sub ? ` · ${x.sub}` : ''} · ${fmtCost(x.cost)} · ${fmtWeight(x.weight)}`}</div></div>
         <${Btn} size="sm" icon="plus" onClick=${() => close(tab === 'magic'
-          ? { id: uid(6), name: x.name, qty: 1, magic: true, mref: x.id, type: x.type, rarity: x.rarity, attune: !!x.attune }
-          : { id: uid(6), name: x.name, qty: 1, ref: x.key, weight: x.weight, cost: x.cost })}>Hinzufügen<//>
+          ? { id: uid(6), name: x.name, qty: 1, magic: true, mref: x.id, type: x.type, rarity: x.rarity, attune: /einstimmung/i.test(String(x.attune || '')) ? x.attune : false }
+          : tab === 'rules' ? { id: uid(6), name: x.name, qty: 1, magic: true, pack: x.key, type: x.type, rarity: x.rarity, attune: x.attune, weight: x.weight, cost: x.cost }
+            : { id: uid(6), name: x.name, qty: 1, ref: x.key, weight: x.weight, cost: x.cost })}>Hinzufügen<//>
       </div>`)}
     </div>` : html`<div class="stack">
       <${Field} label="Name"><input class="input" value=${custom.name} autoFocus onInput=${(e) => setCustom({ ...custom, name: e.target.value })} placeholder="z. B. Silberner Schlüssel" /><//>
@@ -876,7 +893,10 @@ function ItemDetail({ it, cat, canEdit, close }) {
   const [magic, setMagic] = useState(MAGIC);
   useEffect(() => { if (it.magic && !magic) loadMagic().then(setMagic); }, []);
   const mi = it.magic ? (magic || []).find((m) => m.id === it.mref) : null;
-  const w = cat?.cat === 'weapon' ? findWeapon(cat.ref) : null;
+  const info = itemInfo({ ...it, ...x });
+  const pack = it.pack ? info?.def : null;
+  const bases = info && !info.own && ['weapon', 'armor', 'shield'].includes(info.kind) && info.kind !== 'shield' ? baseOptions(info.kind, info.base) : [];
+  const w = cat?.cat === 'weapon' ? findWeapon(cat.ref) : x.base && info?.kind === 'weapon' ? findWeapon(x.base) : null;
   return html`<div class="modal-body stack">
     <div class="row nowrap"><${ItemArt} item=${it} size=${72} />
       <div style="min-width:0"><b style="font-size:18px">${it.name}</b>
@@ -884,6 +904,11 @@ function ItemDetail({ it, cat, canEdit, close }) {
         <div class="tiny faint">${fmtWeight(it.weight ?? cat?.weight)} · ${fmtCost(it.cost ?? cat?.cost)}</div></div></div>
     ${w ? html`<div class="small">Schaden <b>${fmtDice(w.dmg)} ${w.type}</b>${w.vers ? ` (zweihändig ${fmtDice(w.vers)})` : ''} · ${[...w.p].map((p) => ({ f: 'Finesse', l: 'leicht', h: 'schwer', 2: 'zweihändig', t: 'Wurfwaffe', r: 'Reichweite', v: 'vielseitig', a: 'Munition', o: 'Laden' })[p]).filter(Boolean).join(', ')}${WEAPON_RANGE[w.key] ? ` · ${WEAPON_RANGE[w.key].join('/')} m` : ''}</div>` : null}
     ${mi ? html`<div class="sd-text">${mi.desc.map((p) => html`<p>${p}</p>`)}</div><div class="tiny faint">Quelle: SRD 5.1 (Wizards of the Coast, CC-BY-4.0)</div>` : null}
+    ${pack?.desc ? html`<div class="sd-text"><p><${FxText} text=${pack.desc} name=${pack.name} /></p></div>` : null}
+    ${bases.length ? html`<${Field} label=${info.kind === 'weapon' ? 'Grundwaffe' : 'Grundrüstung'}><${Select} value=${x.base || ''} disabled=${!canEdit} options=${[{ value: '', label: '– wählen –' }, ...bases.map((b) => ({ value: b.key, label: b.name }))]} onChange=${(v) => setX({ ...x, base: v || undefined })} /><//>` : null}
+    ${info?.variants ? html`<${Field} label="Ausprägung"><${Select} value=${x.variant || ''} disabled=${!canEdit} options=${[{ value: '', label: '– wählen –' }, ...info.variants.map((v) => ({ value: v.key, label: v.label }))]} onChange=${(v) => setX({ ...x, variant: v || undefined })} /><//>` : null}
+    ${info?.fx?.length ? html`<div class="small"><b>Wirkt:</b> ${info.fx.map((f) => fxLabel(f, fxNames)).join(' · ')}${info.plus ? ` · magisch +${info.plus}` : ''}${info.charges ? ` · ${info.charges.max} Ladungen` : ''}</div>` : info?.plus ? html`<div class="small"><b>Wirkt:</b> magisch +${info.plus}</div>` : null}
+    ${info?.attune ? html`<div class="tiny faint">Wirkt erst, wenn ausgerüstet und eingestimmt.</div>` : info && info.kind !== 'potion' ? html`<div class="tiny faint">Wirkt, solange es ausgerüstet ist.</div>` : null}
     <div class="grid two">
       <${Field} label="Anzahl"><input class="input" type="number" min="0" value=${x.qty} disabled=${!canEdit} onInput=${(e) => setX({ ...x, qty: Number(e.target.value) || 0 })} /><//>
       <${Field} label="Name"><input class="input" value=${x.name} disabled=${!canEdit} onInput=${(e) => setX({ ...x, name: e.target.value })} /><//>
@@ -908,12 +933,26 @@ function InventoryTab({ c, cm, canEdit, upd }) {
   const load = total / cap;
   const setItem = (id, patch) => upd({ inventory: inv.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   const isEquipped = (r) => {
+    const info = itemInfo(r.it);
+    if (info && ['weapon', 'armor', 'shield'].includes(info.kind)) {
+      const k = info.own ? info.def.key : `i:${r.it.id}`;
+      return info.kind === 'weapon' ? (c.weapons || []).includes(k) : info.kind === 'armor' ? c.armor?.body === k : c.armor?.shieldKey === k;
+    }
     if (r.cat?.cat === 'weapon') return (c.weapons || []).includes(r.cat.ref);
     if (r.cat?.cat === 'armor') return c.armor?.body === r.cat.ref;
     if (r.cat?.cat === 'shield') return !!c.armor?.shield;
     return !!r.it.equipped;
   };
   const toggleEquip = (r) => {
+    const info = itemInfo(r.it);
+    if (info && ['weapon', 'armor', 'shield'].includes(info.kind)) {
+      if (!info.own && info.kind !== 'shield' && !r.it.base) { toast(`Erst die ${info.kind === 'weapon' ? 'Grundwaffe' : 'Grundrüstung'} wählen (Gegenstand antippen).`, 'info'); open(r); return; }
+      const k = info.own ? info.def.key : `i:${r.it.id}`;
+      if (info.kind === 'weapon') { const list = [...(c.weapons || [])]; const i = list.indexOf(k); if (i >= 0) list.splice(i, 1); else list.push(k); upd({ weapons: list }); }
+      else if (info.kind === 'armor') upd({ armor: { ...(c.armor || {}), body: c.armor?.body === k ? '' : k } }, { rederive: true });
+      else upd({ armor: { ...(c.armor || {}), shield: false, shieldKey: c.armor?.shieldKey === k ? '' : k } }, { rederive: true });
+      return;
+    }
     const k = r.cat?.ref;
     if (r.cat?.cat === 'weapon') {
       const list = [...(c.weapons || [])];
@@ -925,6 +964,8 @@ function InventoryTab({ c, cm, canEdit, upd }) {
     else setItem(r.it.id, { equipped: !r.it.equipped });
   };
   const attuned = inv.filter((x) => x.attuned);
+  const attMax = RULES.attuneMax === 0 ? 99 : RULES.attuneMax || 3;
+  const charges = Object.fromEntries(resourcesFor(c).filter((r) => r.itemId).map((r) => [r.itemId, r]));
   const add = async () => {
     const it = await openModal(({ close }) => html`<${ItemPicker} close=${close} ed=${edOf(c)} />`, { title: 'Gegenstand hinzufügen', icon: 'backpack', size: 'lg' });
     if (it) upd({ inventory: [...inv, it] });
@@ -939,12 +980,12 @@ function InventoryTab({ c, cm, canEdit, upd }) {
   const pack = rows.filter((r) => !isEquipped(r));
   const itemRow = (r) => html`<div class="act-row inv-row" key=${r.it.id} onClick=${() => open(r)}>
     <span><${ItemArt} item=${{ ...r.it, icon: r.it.icon || r.cat?.icon }} size=${36} /></span>
-    <span class="nm"><b>${r.it.name}${r.it.attuned ? html` <span class="badge gold">eingestimmt</span>` : null}</b><small>${r.it.magic ? `${r.it.type || ''} · ${r.it.rarity || ''}` : r.cat ? `${CATEGORIES[r.cat.cat]}${r.cat.sub ? ` · ${r.cat.sub}` : ''}` : r.it.notes || ''}</small></span>
+    <span class="nm"><b>${r.it.name}${r.it.attuned ? html` <span class="badge gold">eingestimmt</span>` : null}${charges[r.it.id] ? html` <span class="badge">${charges[r.it.id].max - (Number(c.resUsed?.[`it:${r.it.id}`]) || 0)}/${charges[r.it.id].max} Ladungen</span>` : null}</b><small>${r.it.magic ? [r.it.type || '', r.it.rarity || '', r.it.base ? (findWeapon(r.it.base) || ARMOR.find((a) => a.key === r.it.base))?.name : '', r.it.variant ? itemInfo(r.it)?.variant?.label : ''].filter(Boolean).join(' · ') : r.cat ? `${CATEGORIES[r.cat.cat]}${r.cat.sub ? ` · ${r.cat.sub}` : ''}` : r.it.notes || ''}</small></span>
     <span class="small hide-sm">${fmtWeight(weightOf(r))}</span>
     <span class="small">×${r.it.qty}</span>
     <span class="small hide-sm">${fmtCost((r.it.cost ?? r.cat?.cost ?? 0) * (r.it.qty || 1))}</span>
     <span class="row nowrap" style="gap:4px" onClick=${(e) => e.stopPropagation()}>
-      ${r.it.attune ? html`<button type="button" class=${`equip-toggle${r.it.attuned ? ' on' : ''}`} title="Einstimmen (max. 3)" disabled=${!canEdit || (!r.it.attuned && attuned.length >= 3)} onClick=${() => setItem(r.it.id, { attuned: !r.it.attuned })}><${Icon} name="sparkles" size=${14} /></button>` : null}
+      ${r.it.attune ? html`<button type="button" class=${`equip-toggle${r.it.attuned ? ' on' : ''}`} title=${`Einstimmen${attMax < 99 ? ` (max. ${attMax})` : ''}`} disabled=${!canEdit || (!r.it.attuned && attuned.length >= attMax)} onClick=${() => setItem(r.it.id, { attuned: !r.it.attuned })}><${Icon} name="sparkles" size=${14} /></button>` : null}
       <button type="button" class=${`equip-toggle${isEquipped(r) ? ' on' : ''}`} title=${isEquipped(r) ? 'Ablegen' : 'Ausrüsten'} disabled=${!canEdit} onClick=${() => toggleEquip(r)}><${Icon} name="check" size=${14} /></button>
     </span>
   </div>`;
@@ -965,15 +1006,15 @@ function InventoryTab({ c, cm, canEdit, upd }) {
       </div>
       <div class="sheet-card stack sm">
         <h3><${Icon} name="sparkles" size=${13} />Einstimmung</h3>
-        <div class="attune-slots">${[0, 1, 2].map((i) => (attuned[i] ? html`<span title=${attuned[i].name}><${ItemArt} item=${attuned[i]} size=${52} /></span>` : html`<span class="attune-slot"><${Icon} name="plus" size=${16} /></span>`))}</div>
-        <div class="tiny faint">${attuned.length}/3 magische Gegenstände eingestimmt.</div>
+        <div class="attune-slots">${Array.from({ length: attMax >= 99 ? Math.max(3, attuned.length + 1) : attMax }, (_, i) => (attuned[i] ? html`<span title=${attuned[i].name}><${ItemArt} item=${attuned[i]} size=${52} /></span>` : html`<span class="attune-slot"><${Icon} name="plus" size=${16} /></span>`))}</div>
+        <div class="tiny faint">${attuned.length}${attMax < 99 ? `/${attMax}` : ''} magische Gegenstände eingestimmt.</div>
       </div>
     </div>
 
     <div class="sheet-card stack sm">
       <div class="row"><b class="grow"><${Icon} name="shield" size=${16} /> Rüstung & Schild</b><span class="badge accent">RK ${cm.ac.ac}</span></div>
       <div class="row">
-        <${Select} value=${c.armor?.body || ''} disabled=${!canEdit} onChange=${(v) => upd({ armor: { ...(c.armor || {}), body: v } }, { rederive: true })} options=${[{ value: '', label: 'Keine Rüstung' }, ...ARMOR.filter((a) => a.type !== 'shield').map((a) => ({ value: a.key, label: a.type === 'clothing' ? `${a.name} (Kleidung${Number(a.bonus) ? `, RK +${a.bonus}` : ''})` : `${a.name} (${ARMOR_TYPE[a.type]}, RK ${a.ac})` }))]} style="max-width:340px" />
+        <${Select} value=${c.armor?.body || ''} disabled=${!canEdit} onChange=${(v) => upd({ armor: { ...(c.armor || {}), body: v } }, { rederive: true })} options=${[{ value: '', label: 'Keine Rüstung' }, ...inv.filter((it) => itemInfo(it)?.kind === 'armor' && !itemInfo(it).own && it.base).map((it) => ({ value: `i:${it.id}`, label: `${it.name} (magisch)` })), ...ARMOR.filter((a) => a.type !== 'shield').map((a) => ({ value: a.key, label: a.type === 'clothing' ? `${a.name} (Kleidung${Number(a.bonus) ? `, RK +${a.bonus}` : ''})` : `${a.name} (${ARMOR_TYPE[a.type]}, RK ${a.ac})` }))]} style="max-width:340px" />
         ${ARMOR.some((a) => a.type === 'shield')
           ? html`<${Select} value=${c.armor?.shieldKey || (c.armor?.shield ? '_' : '')} disabled=${!canEdit} style="max-width:220px" onChange=${(v) => upd({ armor: { ...(c.armor || {}), shield: v === '_', shieldKey: v && v !== '_' ? v : '' } }, { rederive: true })}
               options=${[{ value: '', label: 'Kein Schild' }, { value: '_', label: 'Schild (+2)' }, ...ARMOR.filter((a) => a.type === 'shield').map((a) => ({ value: a.key, label: `${a.name} (+${(Number(a.ac) || 2) + (Number(a.bonus) || 0)})` }))]} />`
@@ -1006,7 +1047,18 @@ function FeaturesTab({ c, ed, canEdit, upd, units }) {
   const sp = findSpecies(ed, c.speciesKey);
   const sub = sp?.subs?.find((s) => s.key === c.subspeciesKey);
   const opt = sp?.option?.list.find((o) => o.key === c.speciesOption);
+  const picks = charPicks(c);
+  const open = openPicks(c);
+  const itemFx = charMods(c).fx.applied.filter((f) => f.itemId || f.item);
   return html`<div class="stack">
+    ${picks.length ? html`<div class="sheet-card stack sm">
+      <h3><${Icon} name="list-checks" size=${13} />Auswahl aus Merkmalen und Talenten${open ? html` <span class="badge warn">${open} offen</span>` : null}</h3>
+      <${PicksPanel} char=${c} ed=${ed} disabled=${!canEdit} onChange=${(k, v) => upd({ picks: { ...(c.picks || {}), [k]: v } }, { rederive: true })} />
+    </div>` : null}
+    ${itemFx.length ? html`<div class="sheet-card stack sm">
+      <h3><${Icon} name="sparkles" size=${13} />Wirkungen der Ausrüstung</h3>
+      <div class="feat-list">${[...new Set(itemFx.map((f) => f.src))].map((src) => html`<div key=${src}><b>${src}</b> <span class="small muted">– ${itemFx.filter((f) => f.src === src).map((f) => fxLabel(f, fxNames)).join(' · ')}</span></div>`)}</div>
+    </div>` : null}
     ${(c.classes || []).map((x) => {
       const cls = findClass(x.cls);
       const feats = classFeatures(x.cls, ed, x.level, 1, x.subclass).filter((f) => f.kind !== 'asi' && f.kind !== 'boon');
@@ -1055,9 +1107,20 @@ function ProfsTab({ c, cm, ed }) {
       ${box('Werkzeuge', [c.tools, ...fx.tools].filter(Boolean).join(' · '))}
       ${box('Sprachen', `${langs.join(', ')}${fx.langChoice && langs.length < (c.languages || []).length + fx.langChoice ? ` (+${fx.langChoice} nach Wahl)` : ''}`)}
       ${defs ? box('Verteidigung', defs) : null}
-      ${fx.adv.length ? box('Vorteile & Besonderheiten', fx.adv.map((a) => a.text).join(' · ')) : null}
+      ${fx.adv.length || fx.saveAdv.length || fx.checkAdv.size ? box('Vorteile & Besonderheiten', [
+        ...fx.saveAdv.map((a) => `${a.dis ? 'Nachteil' : 'Vorteil'} bei ${a.k.length ? `${a.k.map((k) => (k === 'death' ? 'Todes' : k === 'conc' ? 'Konzentrations' : AB_SHORT[k] || k)).join('/')}-` : ''}Rettungswürfen${a.vs ? ` gegen ${a.vs === 'spell' ? 'Zauber' : a.vs}` : ''}`),
+        ...[...fx.checkAdv].map((k) => `Vorteil: ${k === 'init' ? 'Initiative' : k === 'all' ? 'alle Attributswürfe' : AB_SHORT[k] || skillName(k)}`),
+        ...fx.adv.map((a) => a.text)].join(' · ')) : null}
+      ${fx.dmgRed.length || fx.critImmune || fx.evasion || fx.endure.length || fx.aura.length || fx.retaliate.length ? box('Schutz', [
+        ...fx.dmgRed.map((r) => `${r.k.length ? r.k.map(dn).join('/') : 'Schaden'} −${r.v}${r.nm ? ' (nichtmagisch)' : ''}`),
+        fx.critImmune ? 'keine kritischen Treffer gegen dich' : '', fx.evasion ? 'Entrinnen' : '',
+        ...fx.endure.map((f) => fxLabel(f, fxNames)), ...fx.aura.map((f) => fxLabel({ t: 'aura', ...f }, fxNames)), ...fx.retaliate.map((f) => fxLabel({ ...f, t: 'retaliate' }, fxNames))].filter(Boolean).join(' · ')) : null}
+      ${fx.dmgExtra.length || fx.crit.length || fx.advAtk.length || fx.onHit.length || Object.keys(fx.byItem).length ? box('Angriff', [
+        ...fx.crit.map((f) => `kritisch ab ${20 - f.v}`), ...fx.dmgExtra.map((f) => fxLabel({ ...f, t: 'dmgExtra' }, fxNames)), ...fx.advAtk.map((f) => fxLabel({ ...f, t: 'advAttack' }, fxNames)),
+        ...fx.onHit.map((f) => fxLabel({ ...f, t: 'onHit' }, fxNames)), ...Object.values(fx.byItem).flat().map((f) => `${f.src}: ${fxLabel(f, fxNames)}`)].join(' · ')) : null}
+      ${fx.spellDc || fx.spellDmg.length || Object.keys(fx.slots).length ? box('Zauber', [fx.spellDc ? `Zauber-SG ${fx.spellDc > 0 ? '+' : ''}${fx.spellDc}` : '', ...fx.spellDmg.map((f) => fxLabel({ ...f, t: 'spellDmg' }, fxNames)), ...Object.entries(fx.slots).map(([l, n]) => `+${n} Zauberplatz ${l}. Grad`)].filter(Boolean).join(' · ')) : null}
       ${fx.actions.length ? box('Eigene Aktionen (Kampfleiste)', fx.actions.map((a) => fxLabel(a, fxNames).replace(/^Aktion: /, '')).join(' · ')) : null}
-      ${fx.spells.length ? box('Verliehene Zauber', fx.spells.map((s) => `${s.name}${s.uses === 'always' ? ' (immer vorbereitet)' : s.lv === 0 ? ' (Zaubertrick)' : ' (1× pro langer Rast)'}`).join(', ')) : null}
+      ${fx.spells.length ? box('Verliehene Zauber', fx.spells.map((s) => fxLabel({ t: 'spell', k: s.name, lv: s.lv, uses: s.uses, rest: s.rest, castLv: s.castLv, cost: s.cost }, fxNames).replace(/^Zauber: /, '')).join(', ')) : null}
       ${box('Fertigkeiten', profSkills.map((k) => `${skillName(k)}${cm.skills[k].prof === 2 ? ' (Expertise)' : ''}`).join(', '))}
       ${box('Talente', (c.feats || []).map((f) => f.name || findFeat(f.key)?.name).join(', '))}
     </div>
