@@ -5,7 +5,8 @@ import { app, col, myUid, bridge } from './app.js';
 import { db } from './db.js';
 import { roll, rollDie, rollDetailed } from '../lib/dice.js';
 import { now, uid } from '../lib/util.js';
-import { charMods, findWeapon, weaponAttack, spellSlots, resourcesFor, classLevel } from '../data/chargen.js';
+import { charMods, findWeapon, weaponAttack, spellSlots, resourcesFor, classLevel, attacksPerAction, actionDice, fxSlug } from '../data/chargen.js';
+import { dmgOf } from './effects.js';
 import { WEAPON_RANGE, weaponReach } from '../data/items.js';
 import { loadSpells, damageAt, healAt, healHasMod, fmtDice, levelName, schoolName, rangeShort, SPELL_OVERLAY } from '../data/spells.js';
 import { specFor } from '../data/spellfx.js';
@@ -112,14 +113,6 @@ function addDice(dice, extra, times = 1) {
   if (a && b && a[2] === b[2]) return `${Number(a[1]) + Number(b[1]) * times}d${a[2]}`;
   return [dice, ...Array(times).fill(extra)].filter(Boolean).join('+');
 }
-function attacksPerAction(char) {
-  let n = 1;
-  for (const x of char.classes || []) {
-    if (x.cls === 'kaempfer') n = Math.max(n, x.level >= 20 ? 4 : x.level >= 11 ? 3 : x.level >= 5 ? 2 : 1);
-    else if (['barbar', 'moench', 'paladin', 'waldlaeufer'].includes(x.cls) && x.level >= 5) n = Math.max(n, 2);
-  }
-  return n;
-}
 const castableEntry = (e) => e.level === 0 || e.always || e.arcanum || e.source || e.prepared || !e.book;
 export function slotInfo(char) {
   const s = spellSlots(char);
@@ -164,7 +157,8 @@ function weaponAction(char, cm, w, c, ctx, opts = {}) {
   let abil = a.ability;
   let bonus = a.bonus + plus;
   // Bestandteile für den Rechenweg im Protokoll (Tooltip)
-  let parts = [[cm.mods[abil] || 0, `${E.AB_NAME_DE[abil]}-Modifikator`], ...(a.prof ? [[cm.pb, 'Übungsbonus']] : []), ...(bonus - plus - (cm.mods[abil] || 0) - (a.prof ? cm.pb : 0) === 2 ? [[2, 'Kampfstil Bogenschießen']] : [])];
+  const rest = bonus - plus - (cm.mods[abil] || 0) - (a.prof ? cm.pb : 0);
+  let parts = [[cm.mods[abil] || 0, `${E.AB_NAME_DE[abil]}-Modifikator`], ...(a.prof ? [[cm.pb, 'Übungsbonus']] : []), ...(rest ? [[rest, rest === 2 && (char.feats || []).some((f) => f.key === 'style-archery') && /a/i.test(w.p) ? 'Kampfstil Bogenschießen' : 'Waffe & Merkmale']] : [])];
   let flat = parseDmg(a.damage).flat;
   const shil = !!E.effs(c, 'shillelagh').length && ['knueppel', 'kampfstab'].includes(w.key);
   if (shil) {
@@ -176,12 +170,12 @@ function weaponAction(char, cm, w, c, ctx, opts = {}) {
   }
   if (opts.offhand && !(char.feats || []).some((f) => f.key === 'style-twf')) flat = Math.min(0, flat);
   flat += plus;
-  const type = DMG_KEY[w.type] || 'bludgeoning';
+  const type = DMG_KEY[w.type] || dmgOf(w.type) || 'bludgeoning';
   const range = ranged || thrown ? WEAPON_RANGE[w.key] || null : null;
   return {
     key: `${opts.offhand ? 'off' : 'w'}:${w.key}`, group: 'attack', kind: 'attack', name: opts.offhand ? `${w.name} (Zweitwaffe)` : w.name,
     art: { item: { name: w.name, ref: `w:${w.key}` } }, cost: opts.offhand ? 'bonus' : 'attack', hasteOk: true, offhand: !!opts.offhand,
-    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: ranged ? 1.5 : weaponReach(w), range, thrown, damage: [{ dice, flat, type }], magical: !!mw || shil, weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged },
+    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: ranged ? 1.5 : weaponReach(w), range, thrown, damage: [{ dice, flat, type }, ...(a.extraDmg ? [{ dice: a.extraDmg, flat: 0, type: dmgOf(a.extraType) || type }] : [])], magical: !!mw || shil || !!Number(w.magic), weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged },
     needs: { target: 'enemy', n: 1, sight: true },
     desc: [a.props, opts.versatile && w.vers ? 'zweihändig geführt' : '', shil ? 'Shillelagh' : '', mw ? mw.name : ''].filter(Boolean).join(' · '),
   };
@@ -276,6 +270,29 @@ function pcCatalog(x, c, char, ctx, spells) {
     out.push({ ...f, ...(f.key === 'f:wildshape' && ed === '2024' ? { cost: 'bonus' } : {}), group: 'class', kind: 'feature', art: { gi: f.gi }, needs: f.needs || { target: 'none' }, uses: f.res ? res[f.res] || { left: 0, max: 0 } : null });
   }
   if (res.breath) out.push({ key: 'f:breath', group: 'class', kind: 'feature', name: 'Odemwaffe', art: { gi: GI.breath }, cost: 'action', uses: res.breath, needs: { target: 'point', area: { shape: 'cone', size: 4.5 }, range: 0, rangeKind: 'self' }, desc: 'Kegel von 4,5 m – GES-Rettungswurf, halber Schaden bei Erfolg.' });
+  // Eigene Aktionen aus Regelwerken (Spezies, Talente, Klassen): Angriff, Rettungswurf-Fähigkeit oder Heilung
+  for (const f of cm.fx?.actions || []) {
+    const id = fxSlug(f.k);
+    const resKey = f.uses && f.uses !== 'will' ? `act:${id}` : null;
+    const uses = resKey ? res[resKey] || { left: 0, max: 0 } : null;
+    const ab = f.ab || 'con';
+    const mod = cm.mods[ab] || 0;
+    const dice = actionDice(f, cm.level);
+    const type = f.type || 'bludgeoning';
+    const base = { key: `x:${id}`, group: 'class', name: f.k, cost: f.cost || 'action', res: resKey, uses, desc: f.desc || f.src || '' };
+    if (f.kind === 'heal') {
+      out.push({ ...base, kind: 'item', art: { gi: GI.secondwind }, heal: `${dice}${f.addMod === false ? '' : `+${Math.max(0, mod)}`}`, needs: { target: 'ally', n: 1, range: Number(f.range) || 1.5, selfOk: true } });
+    } else if (f.kind === 'save') {
+      const area = f.area?.shape ? { shape: f.area.shape, size: Number(f.area.size) || 4.5 } : null;
+      out.push({ ...base, kind: 'ability', art: { gi: area ? GI.area : GI.magic }, save: f.save || 'dex', dc: 8 + cm.pb + mod, half: f.half !== false, damage: [{ ...parseDmg(dice), type }], area,
+        needs: area ? { target: 'point', area, range: Number(f.range) || 0, rangeKind: Number(f.range) ? 'dist' : 'self' } : { target: 'enemy', n: 1, range: Number(f.range) || 9, sight: true } });
+    } else {
+      const ranged = Number(f.range) > 3;
+      out.push({ ...base, kind: 'attack', art: { gi: ranged ? GI.ranged : GI.unarmed }, cost: f.cost === 'bonus' ? 'bonus' : 'attack', hasteOk: f.cost !== 'bonus',
+        attack: { kind: ranged ? 'ranged' : 'melee', bonus: cm.pb + mod, parts: [[mod, `${E.AB_NAME_DE[ab]}-Modifikator`], [cm.pb, 'Übungsbonus']], reach: ranged ? 1.5 : Number(f.range) || 1.5, range: ranged ? [Number(f.range), Number(f.range) * 4] : null, damage: [{ dice, flat: mod, type }], magical: false, weapon: true, ability: ab },
+        needs: { target: 'enemy', n: 1, sight: true } });
+    }
+  }
   // Zauberschriftrollen: wirken den Zauber ohne Zauberplatz und zerfallen danach
   if (spells) {
     for (const it of char.inventory || []) {

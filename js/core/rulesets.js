@@ -11,6 +11,7 @@ import { createStore } from './store.js';
 import { db } from './db.js';
 import * as CG from '../data/chargen.js';
 import { SPELL_OVERLAY } from '../data/spells.js';
+import { WEAPON_RANGE } from '../data/items.js';
 import { uid, now, slugify, sortBy, download } from '../lib/util.js';
 
 export const PACK_FORMAT = 'weltenschmiede-regeln';
@@ -136,10 +137,12 @@ export const NORM = {
     for (const [l, list] of Object.entries(s.features || {})) {
       const lv = num(l);
       if (lv < 1 || lv > 20) continue;
-      const items = arr(list).map((f) => (typeof f === 'string' ? { name: f, desc: '' } : { name: str(f.name), desc: str(f.desc) })).filter((f) => f.name);
+      const items = arr(list).map((f) => (typeof f === 'string' ? { name: f, desc: '' } : { name: str(f.name), desc: str(f.desc), ...(arr(f.fx).length ? { fx: arr(f.fx) } : {}) })).filter((f) => f.name);
       if (items.length) features[lv] = items;
     }
-    return { ...s, cls: str(s.cls), name: str(s.name).trim(), desc: str(s.desc), features, ...(s.ed && ['2014', '2024'].includes(String(s.ed)) ? { ed: String(s.ed) } : { ed: undefined }) };
+    const spells = {};
+    for (const [l, list] of Object.entries(s.spells || {})) { const lv = num(l); const names = arr(list).map((x) => str(x).trim()).filter(Boolean); if (lv >= 1 && lv <= 20 && names.length) spells[lv] = names; }
+    return { ...s, cls: str(s.cls), name: str(s.name).trim(), desc: str(s.desc), features, spells, ...(s.ed && ['2014', '2024'].includes(String(s.ed)) ? { ed: String(s.ed) } : { ed: undefined }) };
   },
   spells(sp) {
     const o = { ...sp, id: str(sp.id || slugify(sp.name || '')), name: str(sp.name || sp.id), level: Math.max(0, Math.min(9, num(sp.level))), school: str(sp.school, 'evocation'), classes: arr(sp.classes) };
@@ -157,7 +160,10 @@ export const NORM = {
     return o;
   },
   weapons(w) { return { ...w, key: keyOf(w), name: str(w.name || w.key), cat: w.cat === 'martial' ? 'martial' : 'simple', dmg: str(w.dmg, '1d6'), type: str(w.type, 'Hieb'), p: str(w.p), m: str(w.m) }; },
-  armor(a) { return { ...a, key: keyOf(a), name: str(a.name || a.key), type: ['light', 'medium', 'heavy'].includes(a.type) ? a.type : 'light', ac: num(a.ac, 11), ...(a.str ? { str: num(a.str) } : {}), ...(a.stealth ? { stealth: true } : {}) }; },
+  armor(a) {
+    const type = ['light', 'medium', 'heavy', 'clothing', 'shield'].includes(a.type) ? a.type : 'light';
+    return { ...a, key: keyOf(a), name: str(a.name || a.key), type, ac: num(a.ac, type === 'shield' ? 2 : type === 'clothing' ? 0 : 11), ...(a.str ? { str: num(a.str) } : {}), ...(a.stealth ? { stealth: true } : {}) };
+  },
 };
 
 export function emptyPack(name = 'Neues Regelpaket', edition = '2024') {
@@ -246,6 +252,7 @@ export function resetRules() {
   SPELL_OVERLAY.lists = {};
   SPELL_OVERLAY.remove = new Set();
   SPELL_OVERLAY.rev = 0;
+  CG.bumpFx();
 }
 
 // packs: vereinheitlichte Pakete in Reihenfolge – spätere überschreiben frühere
@@ -276,12 +283,13 @@ export function applyPacks(packs) {
       }
       if (s.desc) setKey(CG.SUBCLASS_DESC, s.name, s.desc);
       if (Object.keys(s.features).length) setKey(CG.SUBCLASS_FEATURES, `${cls.key}|${s.name}`, s.features);
+      if (Object.keys(s.spells).length) setKey(CG.SUBCLASS_SPELLS, `${cls.key}|${s.name}`, s.spells);
       if (s.caster === 'third') setKey(CG.SUBCLASS_META, s.name, { caster: 'third', ability: AB.includes(s.ability) ? s.ability : 'int', list: s.list || 'magier' });
     });
-    for (const raw of c.species || []) tryDo(p, `Spezies ${raw?.name}`, () => { const s = NORM.species(raw); for (const ed of edsOf(s, p)) put(CG.SPECIES[ed], s); });
+    for (const raw of c.species || []) tryDo(p, `Spezies ${raw?.name}`, () => { const s = { ...NORM.species(raw), _pack: p.name }; for (const ed of edsOf(s, p)) put(CG.SPECIES[ed], s); });
     for (const raw of c.subspecies || []) tryDo(p, `Unterart ${raw?.name}`, () => {
       const s = NORM.subspecies(raw);
-      const { species, ...sub } = s;
+      const { species, ...sub } = { ...s, _pack: p.name };
       let found = false;
       for (const ed of edsOf(s, p)) {
         const sp = CG.SPECIES[ed].find((x) => x.key === species);
@@ -292,14 +300,19 @@ export function applyPacks(packs) {
       }
       if (!found) throw new Error(`Spezies „${species}“ gibt es nicht`);
     });
-    for (const raw of c.backgrounds || []) tryDo(p, `Hintergrund ${raw?.name}`, () => { const b = NORM.backgrounds(raw); for (const ed of edsOf(b, p)) put(CG.BACKGROUNDS[ed], b); });
+    for (const raw of c.backgrounds || []) tryDo(p, `Hintergrund ${raw?.name}`, () => { const b = { ...NORM.backgrounds(raw), _pack: p.name }; for (const ed of edsOf(b, p)) put(CG.BACKGROUNDS[ed], b); });
     for (const raw of c.feats || []) tryDo(p, `Talent ${raw?.name}`, () => {
-      const f = NORM.feats(raw);
+      const f = { ...NORM.feats(raw), _pack: p.name };
       if (!f.ed && p.edition !== 'beide') f.ed = p.edition;
       put(CG.FEATS, f);
     });
-    for (const [name, desc] of Object.entries(p.features || {})) tryDo(p, `Merkmal ${name}`, () => setKey(CG.FEATURE_INFO, name, str(desc)));
-    for (const raw of c.weapons || []) tryDo(p, `Waffe ${raw?.name}`, () => put(CG.WEAPONS, NORM.weapons(raw)));
+    for (const [name, desc] of Object.entries(p.features || {})) tryDo(p, `Merkmal ${name}`, () => { setKey(CG.FEATURE_INFO, name, str(desc)); setKey(CG.FEATURE_SRC, name, p.name); });
+    for (const raw of c.weapons || []) tryDo(p, `Waffe ${raw?.name}`, () => {
+      const w = NORM.weapons(raw);
+      put(CG.WEAPONS, w);
+      // Reichweite (normal/weit in Metern) für Fernkampf- und Wurfwaffen
+      if (Array.isArray(w.range) && Number(w.range[0]) > 0) setKey(WEAPON_RANGE, w.key, [Number(w.range[0]), Number(w.range[1]) || Number(w.range[0]) * 4]);
+    });
     for (const raw of c.armor || []) tryDo(p, `Rüstung ${raw?.name}`, () => put(CG.ARMOR, NORM.armor(raw)));
     for (const raw of c.spells || []) tryDo(p, `Zauber ${raw?.name}`, () => {
       const sp = NORM.spells(raw);
@@ -329,7 +342,12 @@ export function applyPacks(packs) {
     for (const k of arr(r.spells)) { SPELL_OVERLAY.remove.add(k); spellsTouched = true; }
   }
   if (rules) CG.setBaseRules(rules);
+  // Sprachen der Welt (Grundregeln) und Sprachen aus Spezies/Hintergründen in die Auswahl
+  const langs = new Set(arr(rules?.languages));
+  for (const p of packs) for (const k of ['species', 'subspecies', 'backgrounds']) for (const e of p.content?.[k] || []) for (const l of arr(e?.langs)) langs.add(str(l));
+  for (const l of langs) if (l && !CG.LANGUAGES.includes(l)) { CG.LANGUAGES.push(l); undo.push(() => { const j = CG.LANGUAGES.indexOf(l); if (j >= 0) CG.LANGUAGES.splice(j, 1); }); }
   if (spellsTouched) SPELL_OVERLAY.rev = Date.now();
+  CG.bumpFx();
   return { errors };
 }
 
@@ -353,7 +371,8 @@ export const removeFromLibrary = (u, id) => db.remove(LIB(u), id);
 export const watchCampaignPacks = (cid, cb) => db.watchCol(CAMP(cid), {}, (l) => cb(sortBy(l, (x) => num(x.order))), () => cb([]));
 export async function saveToCampaign(cid, p, { active, order } = {}) {
   const old = await db.get(CAMP(cid), p.id).catch(() => null);
-  await db.set(CAMP(cid), p.id, stored(p, { active: active ?? old?.active ?? true, order: order ?? old?.order ?? now() }));
+  const on = active ?? old?.active ?? true;
+  await db.set(CAMP(cid), p.id, stored(p, { active: on, order: order ?? old?.order ?? now(), activatedAt: on && !old?.active ? now() : old?.activatedAt || now() }));
 }
 export const setCampaignPack = (cid, id, patch) => db.update(CAMP(cid), id, patch);
 export const removeFromCampaign = (cid, id) => db.remove(CAMP(cid), id);
@@ -369,15 +388,29 @@ function applyDocs(cid, docs) {
   resetRules();
   const packs = [];
   const errors = [];
-  for (const d of sortBy(docs.filter((x) => x.active !== false), (x) => num(x.order))) {
-    try { packs.push(packFromDoc(d)); } catch (e) { errors.push(`${d.name || d.id}: ${e.message || e}`); }
+  const aktiv = activeDoc(docs);
+  if (aktiv) {
+    try { packs.push(packFromDoc(aktiv)); } catch (e) { errors.push(`${aktiv.name || aktiv.id}: ${e.message || e}`); }
   }
   const res = applyPacks(packs);
   rulesState.set({ rev: rulesState.get().rev + 1, cid, docs, packs: packs.map((p) => ({ id: p.id, name: p.name, edition: p.edition })), errors: [...errors, ...res.errors], ready: true });
 }
+// Je Kampagne gilt genau ein Regelwerk – bei älteren Ständen mit mehreren Häkchen das zuletzt aktivierte
+let prefEd = null; // Regelstand der Kampagne – entscheidet bei älteren Ständen mit mehreren Häkchen
+export function activeDoc(docs, ed = prefEd) {
+  const list = (docs || []).filter((x) => x.active === true || (x.active !== false && x.active == null));
+  const fit = (d) => (!ed || d.edition === ed || d.edition === 'beide' ? 1 : 0);
+  return list.sort((a, b) => num(b.activatedAt) - num(a.activatedAt) || fit(b) - fit(a) || num(b.order) - num(a.order))[0] || null;
+}
+// Genau dieses Paket aktivieren (alle anderen der Kampagne pausieren); id = null → nur Grundbestand
+export async function activateOnly(cid, id, docs) {
+  for (const d of docs || []) if (d.id !== id && d.active !== false) await db.update(CAMP(cid), d.id, { active: false });
+  if (id) await db.update(CAMP(cid), id, { active: true, activatedAt: now() });
+}
 // Beim Öffnen einer Kampagne: wartet auf den ersten Stand (höchstens 2,5 s), danach laufend aktuell
-export function startRules(cid) {
+export function startRules(cid, { edition = null } = {}) {
   stopRules();
+  prefEd = edition;
   if (!cid) return Promise.resolve();
   return new Promise((resolve) => {
     let first = true;

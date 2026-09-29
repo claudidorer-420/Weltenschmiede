@@ -13,8 +13,8 @@ import { settings } from '../core/settings.js';
 import { fmtMod } from '../lib/dice.js';
 import { CONDITIONS, XP_LEVELS, ALIGNMENTS } from '../data/rules5e.js';
 import {
-  AB, AB_NAME, AB_SHORT, ALL_SKILLS, skillName, skillAbility, charMods, rollTraits, resourcesFor, classExtras, spellSlots, classFeatures,
-  findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel, RES_INFO,
+  AB, AB_NAME, AB_SHORT, ALL_SKILLS, skillName, skillAbility, charMods, rollTraits, resourcesFor, classExtras, spellSlots, classFeatures, RULES, attacksPerAction as attacksPerActionCG,
+  findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel, RES_INFO, FEATURE_SRC,
 } from '../data/chargen.js';
 import { useSpells, damageAt, healAt, healHasMod, fmtDice, damageName, timeShort, rangeShort, levelName, listClassOf } from '../data/spells.js';
 import { CATALOG, CATEGORIES, catalogItem, catalogByName, fmtCost, fmtWeight, carryCapacity, WEAPON_RANGE, weaponReach } from '../data/items.js';
@@ -22,6 +22,9 @@ import { scrollItem, scrollName, tierOf } from '../data/scrolls.js';
 import { openCharacterWizard as runWizard, openLevelUp, derive, migrateLegacy } from './charwizard.js';
 import { openSpellManager, normalizeEntries, SpellDetail, openSpellDetail } from './spellbook.js';
 import { SpellArt, ItemArt, DamageTag, GameIcon } from '../ui/art.js';
+import { FxText, fxNames } from '../ui/fxtext.js';
+import { MOVE_DE, SENSE_DE, FX_DMG, fxLabel } from '../core/effects.js';
+import { DAMAGE_ART } from '../data/artmap.js';
 import { ViewFrame } from '../ui/frame.js';
 import {
   Icon, IconBtn, Btn, Field, Select, Toggle, AutoTextarea, openModal, confirmDialog, toast, Empty, Avatar, pickFiles, openMenu, promptDialog, useMedia,
@@ -111,14 +114,7 @@ function Pips({ max, used, onSet, disabled }) {
   return html`<span class="pips">${Array.from({ length: max }, (_, i) => html`<i class=${i < used ? 'used' : ''} onClick=${() => !disabled && onSet(i < used ? i : i + 1)}></i>`)}</span>`;
 }
 
-function attacksPerAction(c) {
-  let n = 1;
-  for (const x of c.classes || []) {
-    if (x.cls === 'kaempfer') n = Math.max(n, x.level >= 20 ? 4 : x.level >= 11 ? 3 : x.level >= 5 ? 2 : 1);
-    else if (['barbar', 'moench', 'paladin', 'waldlaeufer'].includes(x.cls) && x.level >= 5) n = Math.max(n, 2);
-  }
-  return n;
-}
+const attacksPerAction = (c) => attacksPerActionCG(c);
 function martialDie(c) {
   const l = classLevel(c, 'moench');
   if (!l) return 0;
@@ -315,7 +311,7 @@ export function CharacterSheet({ id, owner }) {
 
   const nextXp = XP_LEVELS[Math.min(19, cm.level)] || null;
   const prevXp = XP_LEVELS[cm.level - 1] || 0;
-  const canLevel = canEdit && !legacy && cm.level < 20;
+  const canLevel = canEdit && !legacy && cm.level < RULES.maxLevel;
   const readyXp = nextXp && (Number(c.xp) || 0) >= nextXp;
   const clsLong = (c.classes || []).map((x) => `${findClass(x.cls)?.name || x.cls} ${x.level}${x.subclass ? ` (${x.subclass})` : ''}`).join(' / ') || `${c.cls || ''} ${c.level || ''}`;
   const isCaster = cm.spell.length || Object.keys(slots.slots).length || slots.pact || (c.spell?.list || []).length;
@@ -417,7 +413,7 @@ function AbilityGrid({ c, cm, unlock, upd, roll20 }) {
   return html`<div class="ab-grid">${AB.map((k) => html`<div class="ab-box" key=${k}>
     <span class="l">${AB_NAME[k]}</span>
     <button type="button" class="m" title=${`${AB_NAME[k]}-Probe würfeln`} onClick=${() => roll20(cm.mods[k], `${AB_NAME[k]}-Probe`, 'check', 0)}>${fmtMod(cm.mods[k])}</button>
-    <span class="s">${unlock ? html`<input type="number" value=${c.abilities?.[k] ?? 10} onInput=${(e) => upd({ abilities: { ...c.abilities, [k]: Math.max(1, Math.min(30, Number(e.target.value) || 10)) } }, { rederive: true })} />` : c.abilities?.[k] ?? 10}</span>
+    <span class="s" title=${cm.fx.abil[k] ? `Grundwert ${c.abilities?.[k] ?? 10}, Merkmale ${cm.fx.abil[k] > 0 ? '+' : ''}${cm.fx.abil[k]}` : ''}>${unlock ? html`<input type="number" value=${c.abilities?.[k] ?? 10} onInput=${(e) => upd({ abilities: { ...c.abilities, [k]: Math.max(1, Math.min(30, Number(e.target.value) || 10)) } }, { rederive: true })} />` : cm.scores?.[k] ?? c.abilities?.[k] ?? 10}</span>
   </div>`)}</div>`;
 }
 
@@ -436,6 +432,8 @@ function SensesBlock({ c, cm, units }) {
     <div class="sense"><b>${cm.passive.investigation}</b>Passive Intelligenz (Nachforschungen)</div>
     <div class="sense"><b>${cm.passive.insight}</b>Passive Weisheit (Motiv erkennen)</div>
     ${c.darkvision ? html`<div class="small muted">Dunkelsicht ${fmtDist(c.darkvision, units)}</div>` : null}
+    ${Object.entries(c.senses || {}).map(([k, v]) => html`<div class="small muted" key=${k}>${SENSE_DE[k] || k} ${fmtDist(v, units)}</div>`)}
+    ${Object.keys(c.speeds || {}).length ? html`<div class="small muted">${Object.entries(c.speeds).map(([k, v]) => `${MOVE_DE[k] || k} ${fmtDist(v, units)}`).join(' · ')}</div>` : null}
   </div>`;
 }
 
@@ -472,7 +470,8 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
     if (istTot) return totHinweis();
     const hdUsed = {};
     for (const p of hdp) hdUsed[p.cls] = Math.max(0, p.used - (ed === '2024' ? p.total : Math.max(1, Math.floor(totalLevel(c) / 2))));
-    upd({ hp: c.maxHp, tempHp: 0, resUsed: {}, spell: { ...(c.spell || {}), used: {}, pactUsed: 0 }, hdUsed, exhaustion: Math.max(0, (Number(c.exhaustion) || 0) - 1), deathSaves: { s: 0, f: 0 }, concentration: null });
+    const bleibt = Object.fromEntries(res.filter((r) => r.reset === 'never').map((r) => [r.key, c.resUsed?.[r.key] || 0]));
+    upd({ hp: c.maxHp, tempHp: 0, resUsed: bleibt, spell: { ...(c.spell || {}), used: {}, pactUsed: 0 }, hdUsed, exhaustion: Math.max(0, (Number(c.exhaustion) || 0) - 1), deathSaves: { s: 0, f: 0 }, concentration: null });
     toast('Lange Rast: TP, Ressourcen und Zauberplätze voll.', 'success');
   };
   return html`<div class="sheet-card stack sm">
@@ -493,7 +492,7 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
       <span class="grow"></span>
       ${hdp.map((p) => html`<span class="hd-pool">W${p.hd}: <b>${p.total - p.used}</b>/${p.total} <${Btn} size="sm" kind="ghost" disabled=${!canEdit || p.used >= p.total} onClick=${() => spendHd(p)}>ausgeben<//></span>`)}
     </div>
-    ${unlock ? html`<label class="small muted row">Bewegung (Fuß) <input class="input tiny" type="number" value=${c.speed || 30} onInput=${(e) => upd({ speed: Number(e.target.value) || 30 })} /> = ${fmtDist(c.speed || 30, units)}</label>` : null}
+    ${unlock ? html`<label class="small muted row">Bewegung Korrektur (Fuß, 5 = 1,5 m) <input class="input tiny" type="number" step="5" value=${c.speedAdj || 0} onInput=${(e) => upd({ speedAdj: Number(e.target.value) || 0 }, { rederive: true })} /> → ${fmtDist(c.speed || 30, units)}</label>` : null}
     ${c.hp <= 0 ? html`<div class="row"><b>Todesrettungswürfe</b>
       <span class="death-saves">${[0, 1, 2].map((i) => html`<i class=${i < (c.deathSaves?.s || 0) ? 's' : ''} onClick=${() => upd({ deathSaves: { ...c.deathSaves, s: i < (c.deathSaves?.s || 0) ? i : i + 1 } })}></i>`)}</span> Erfolge
       <span class="death-saves">${[0, 1, 2].map((i) => html`<i class=${i < (c.deathSaves?.f || 0) ? 'f' : ''} onClick=${() => upd({ deathSaves: { ...c.deathSaves, f: i < (c.deathSaves?.f || 0) ? i : i + 1 } })}></i>`)}</span> Fehlschläge
@@ -508,12 +507,12 @@ function VitalsCard({ c, cm, ed, canEdit, unlock, upd, roll20, units, res, hpDel
 
 // Ressourcenname mit Infotext: Zeiger darüber zeigt ihn kurz, Klick/Tipp öffnet ihn ganz
 function resName(r) {
-  const nach = `Frischt sich nach einer ${r.reset === 'short' ? 'kurzen' : 'langen'} Rast wieder auf${r.max >= 99 ? '' : ` · ${r.max}×`}.`;
-  const txt = RES_INFO[r.key] || 'Begrenzt nutzbare Fähigkeit.';
+  const nach = r.reset === 'never' ? 'Wird nicht durch Rasten aufgefrischt – von Hand zurücksetzen.' : `Frischt sich nach einer ${r.reset === 'short' ? 'kurzen' : 'langen'} Rast wieder auf${r.max >= 99 ? '' : ` · ${r.max}×`}.`;
+  const txt = RES_INFO[r.key] || r.info || 'Begrenzt nutzbare Fähigkeit.';
   return html`<button type="button" class="res-name" title=${`${txt} ${nach}`}
     onClick=${() => openModal(() => html`<div class="modal-body stack sm">
       <p style="margin:0">${txt}</p><div class="small muted">${nach}</div></div>`, { title: r.name, icon: 'zap', size: 'sm' })}>
-    <span>${r.name}</span> <small class="faint">(${r.reset === 'short' ? 'kurze' : 'lange'} Rast)</small><${Icon} name="info" size=${12} />
+    <span>${r.name}</span> <small class="faint">(${r.reset === 'short' ? 'kurze Rast' : r.reset === 'never' ? 'Zähler' : 'lange Rast'})</small><${Icon} name="info" size=${12} />
   </button>`;
 }
 
@@ -597,7 +596,7 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
           sub: `${/a/.test(w.p) ? 'Fernkampfwaffe' : 'Nahkampfwaffe'}${a.props ? ` · ${a.props}` : ''}${ed === '2024' && a.mastery ? ` · Meisterschaft: ${a.mastery}` : ''}${a.prof ? '' : ' · ungeübt'}`,
           range: WEAPON_RANGE[w.key] ? `${WEAPON_RANGE[w.key].join('/')} m` : fmtM(weaponReach(w)),
           hit: fmtMod(a.bonus), onHit: () => roll20(a.bonus, `${a.name} – Angriff`, 'attack'),
-          dmg: a.damage, dmgType: DMG_KEY[w.type], onDmg: () => rollDmg(a.damage, `${a.name} – Schaden`),
+          dmg: a.extraDmg ? `${a.damage}+${a.extraDmg}` : a.damage, dmgType: DMG_KEY[w.type], onDmg: () => rollDmg(a.extraDmg ? `${a.damage}+${a.extraDmg}` : a.damage, `${a.name} – Schaden${a.extraType ? ` (+${a.extraType})` : ''}`),
           extra: a.versatile ? html`<button type="button" class="dmgbtn" title="Zweihändig" onClick=${() => rollDmg(a.versatile, `${a.name} – Schaden (zweihändig)`)}>${fmtDice(a.versatile)}</button>` : null,
           onInfo: () => openAttackDetail({
             name: a.name, icon: 'swords',
@@ -605,6 +604,8 @@ function ActionsTab({ c, cm, ed, canEdit, upd, roll20, rollDmg, spells, entries,
             rows: [
               ['Art', /a/.test(w.p) ? 'Fernkampfwaffe' : 'Nahkampfwaffe'],
               ['Reichweite', WEAPON_RANGE[w.key] ? `${WEAPON_RANGE[w.key].join(' / ')} m (normal / weit)` : fmtM(weaponReach(w))],
+              a.extraDmg && ['Zusätzlicher Schaden', `${fmtDice(a.extraDmg)} ${a.extraType || ''}`],
+              w.special && ['Besonderheit', w.special],
               ['Angriffswurf', `W20 ${fmtMod(a.bonus)}${a.prof ? '' : ' – ungeübt, kein Übungsbonus'}`],
               ['Schaden', `${fmtDice(a.damage)} ${w.type || ''}`],
               a.versatile && ['Zweihändig', `${fmtDice(a.versatile)} ${w.type || ''}`],
@@ -972,8 +973,11 @@ function InventoryTab({ c, cm, canEdit, upd }) {
     <div class="sheet-card stack sm">
       <div class="row"><b class="grow"><${Icon} name="shield" size=${16} /> Rüstung & Schild</b><span class="badge accent">RK ${cm.ac.ac}</span></div>
       <div class="row">
-        <${Select} value=${c.armor?.body || ''} disabled=${!canEdit} onChange=${(v) => upd({ armor: { ...(c.armor || {}), body: v } }, { rederive: true })} options=${[{ value: '', label: 'Keine Rüstung' }, ...ARMOR.map((a) => ({ value: a.key, label: `${a.name} (${ARMOR_TYPE[a.type]}, RK ${a.ac})` }))]} style="max-width:340px" />
-        <${Toggle} checked=${!!c.armor?.shield} onChange=${(v) => canEdit && upd({ armor: { ...(c.armor || {}), shield: v } }, { rederive: true })} label="Schild" />
+        <${Select} value=${c.armor?.body || ''} disabled=${!canEdit} onChange=${(v) => upd({ armor: { ...(c.armor || {}), body: v } }, { rederive: true })} options=${[{ value: '', label: 'Keine Rüstung' }, ...ARMOR.filter((a) => a.type !== 'shield').map((a) => ({ value: a.key, label: a.type === 'clothing' ? `${a.name} (Kleidung${Number(a.bonus) ? `, RK +${a.bonus}` : ''})` : `${a.name} (${ARMOR_TYPE[a.type]}, RK ${a.ac})` }))]} style="max-width:340px" />
+        ${ARMOR.some((a) => a.type === 'shield')
+          ? html`<${Select} value=${c.armor?.shieldKey || (c.armor?.shield ? '_' : '')} disabled=${!canEdit} style="max-width:220px" onChange=${(v) => upd({ armor: { ...(c.armor || {}), shield: v === '_', shieldKey: v && v !== '_' ? v : '' } }, { rederive: true })}
+              options=${[{ value: '', label: 'Kein Schild' }, { value: '_', label: 'Schild (+2)' }, ...ARMOR.filter((a) => a.type === 'shield').map((a) => ({ value: a.key, label: `${a.name} (+${(Number(a.ac) || 2) + (Number(a.bonus) || 0)})` }))]} />`
+          : html`<${Toggle} checked=${!!c.armor?.shield} onChange=${(v) => canEdit && upd({ armor: { ...(c.armor || {}), shield: v } }, { rederive: true })} label="Schild" />`}
         <label class="small muted">Magie/Sonstiges <input class="input tiny" type="number" value=${c.acBonus || 0} disabled=${!canEdit} onInput=${(e) => upd({ acBonus: Number(e.target.value) || 0 }, { rederive: true })} /></label>
       </div>
       <div class="tiny faint">${cm.ac.parts.join(' · ')}${cm.ac.stealthDis ? ' · Nachteil auf Heimlichkeit' : ''}${cm.ac.heavyStrShort ? ' · STÄ zu niedrig: −3 m Bewegung' : ''}</div>
@@ -1008,17 +1012,17 @@ function FeaturesTab({ c, ed, canEdit, upd, units }) {
       const feats = classFeatures(x.cls, ed, x.level, 1, x.subclass).filter((f) => f.kind !== 'asi' && f.kind !== 'boon');
       return html`<div class="sheet-card stack sm">
         <h3><${Icon} name="shield" size=${13} />${cls?.name} ${x.level}${x.subclass ? ` · ${x.subclass}` : ''}</h3>
-        <div class="feat-list">${feats.map((f) => html`<div><b>St. ${f.level} · ${f.kind === 'sub' ? (x.subclass ? `${x.subclass}: Merkmal` : f.name) : f.kind === 'subfeature' ? `${x.subclass}: ${f.name}` : f.name}</b>${f.desc && f.kind !== 'sub' ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>
+        <div class="feat-list">${feats.map((f) => html`<div><b>St. ${f.level} · ${f.kind === 'sub' ? (x.subclass ? `${x.subclass}: Merkmal` : f.name) : f.kind === 'subfeature' ? `${x.subclass}: ${f.name}` : f.name}</b>${f.desc && f.kind !== 'sub' ? html` <span class="small muted">– <${FxText} text=${f.desc} name=${f.name} plain=${f.kind === 'feature' && !FEATURE_SRC[f.name]} /></span>` : null}</div>`)}</div>
       </div>`;
     })}
     ${sp ? html`<div class="sheet-card stack sm">
       <h3><${Icon} name="globe" size=${13} />${c.species}</h3>
       <div class="small muted">${c.size || sp.size} · Bewegung ${fmtDist(c.speed || sp.speed, units)}${c.darkvision ? ` · Dunkelsicht ${fmtDist(c.darkvision, units)}` : ''}${opt?.note ? ` · ${opt.note}` : ''}</div>
-      <div class="feat-list">${[...(sp.traits || []), ...(sub?.traits || [])].map(([n, t]) => html`<div><b>${n}</b> <span class="small muted">– ${t}</span></div>`)}</div>
+      <div class="feat-list">${[...(sp.traits || []), ...(sub?.traits || [])].map(([n, t]) => html`<div><b>${n}</b> <span class="small muted">– <${FxText} text=${t} name=${n} plain=${!sp._pack && !sub?._pack} /></span></div>`)}</div>
     </div>` : null}
     ${(c.feats || []).length ? html`<div class="sheet-card stack sm">
       <h3><${Icon} name="star" size=${13} />Talente</h3>
-      <div class="feat-list">${c.feats.map((f) => html`<div><b>${f.name || findFeat(f.key)?.name}</b>${f.source ? html` <span class="tiny faint">(${f.source})</span>` : null} <span class="small muted">– ${findFeat(f.key)?.desc || ''}</span></div>`)}</div>
+      <div class="feat-list">${c.feats.map((f) => html`<div><b>${f.name || findFeat(f.key)?.name}</b>${f.source ? html` <span class="tiny faint">(${f.source})</span>` : null} <span class="small muted">– <${FxText} text=${findFeat(f.key)?.desc || ''} name=${findFeat(f.key)?.name} plain=${!findFeat(f.key)?._pack} /></span></div>`)}</div>
     </div>` : null}
     <${Field} label="Eigene Merkmale (magische Gegenstände, Segnungen, Hausregeln)">
       <${AutoTextarea} value=${c.customFeatures || c.features || ''} disabled=${!canEdit} minRows=${4} onInput=${(e) => upd({ customFeatures: e.target.value })} />
@@ -1027,8 +1031,17 @@ function FeaturesTab({ c, ed, canEdit, upd, units }) {
 }
 
 function ProfsTab({ c, cm, ed }) {
-  const armor = [...new Set((c.classes || []).flatMap((x, i) => (i === 0 ? perEd(findClass(x.cls)?.armor, ed) || [] : [])))];
-  const weapons = [...new Set((c.classes || []).flatMap((x) => perEd(findClass(x.cls)?.weapons, ed) || []))];
+  const fx = cm.fx;
+  const armor = [...new Set([...(c.classes || []).flatMap((x, i) => (i === 0 ? perEd(findClass(x.cls)?.armor, ed) || [] : [])), ...fx.armor])];
+  const weapons = [...new Set([...(c.classes || []).flatMap((x) => perEd(findClass(x.cls)?.weapons, ed) || []), ...fx.weapons])];
+  const langs = [...new Set([...(c.languages || []), ...fx.lang])];
+  const dn = (k) => DAMAGE_ART[k]?.name || FX_DMG[k] || k;
+  const defs = [
+    fx.resist.size ? `Resistenz: ${[...fx.resist].map(dn).join(', ')}` : '',
+    fx.immune.size ? `Immunität: ${[...fx.immune].map(dn).join(', ')}` : '',
+    fx.vuln.size ? `Anfälligkeit: ${[...fx.vuln].map(dn).join(', ')}` : '',
+    fx.condImm.size ? `Immun gegen: ${[...fx.condImm].join(', ')}` : '',
+  ].filter(Boolean).join(' · ');
   const profSkills = ALL_SKILLS.filter((k) => cm.skills[k].prof);
   const box = (label, val) => html`<div class="persona-box"><div class="l">${label}</div><p>${val || '–'}</p></div>`;
   return html`<div class="stack">
@@ -1039,8 +1052,12 @@ function ProfsTab({ c, cm, ed }) {
     <div class="persona-grid">
       ${box('Rüstung', armor.map((a) => (a === 'shield' ? 'Schilde' : ARMOR_TYPE[a] ? `${ARMOR_TYPE[a][0].toUpperCase()}${ARMOR_TYPE[a].slice(1)}e Rüstung` : a)).join(', '))}
       ${box('Waffen', weapons.map((w) => WEAPON_CAT[w] || findWeapon(w)?.name || w).join(', '))}
-      ${box('Werkzeuge', c.tools)}
-      ${box('Sprachen', (c.languages || []).join(', '))}
+      ${box('Werkzeuge', [c.tools, ...fx.tools].filter(Boolean).join(' · '))}
+      ${box('Sprachen', `${langs.join(', ')}${fx.langChoice && langs.length < (c.languages || []).length + fx.langChoice ? ` (+${fx.langChoice} nach Wahl)` : ''}`)}
+      ${defs ? box('Verteidigung', defs) : null}
+      ${fx.adv.length ? box('Vorteile & Besonderheiten', fx.adv.map((a) => a.text).join(' · ')) : null}
+      ${fx.actions.length ? box('Eigene Aktionen (Kampfleiste)', fx.actions.map((a) => fxLabel(a, fxNames).replace(/^Aktion: /, '')).join(' · ')) : null}
+      ${fx.spells.length ? box('Verliehene Zauber', fx.spells.map((s) => `${s.name}${s.uses === 'always' ? ' (immer vorbereitet)' : s.lv === 0 ? ' (Zaubertrick)' : ' (1× pro langer Rast)'}`).join(', ')) : null}
       ${box('Fertigkeiten', profSkills.map((k) => `${skillName(k)}${cm.skills[k].prof === 2 ? ' (Expertise)' : ''}`).join(', '))}
       ${box('Talente', (c.feats || []).map((f) => f.name || findFeat(f.key)?.name).join(', '))}
     </div>

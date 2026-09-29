@@ -1,5 +1,7 @@
 // Würfel-Parser: 2d6+3, d20, 4d6dl1, 2d20kh1, d%, 3d6!, dF, "d20+5 vorteil", "W20" (deutsch)
 
+// Grundregeln der Kampagne, die das Würfeln betreffen (setzt data/chargen.js setBaseRules)
+export const DICE_RULES = { crit: 'dice' };
 export function rollDie(sides) {
   const a = new Uint32Array(1);
   const lim = Math.floor(0x100000000 / sides) * sides;
@@ -229,7 +231,9 @@ export function rollDetailed(input, { kind = 'auto', fx = {}, label = '', editio
       text.push(`${s}${slots.length > 1 ? `${slots.length}d20${high ? 'kh1' : 'kl1'}` : 'd20'} [${rs}]${lbl}`);
       return;
     }
-    const count = t.count * (isDmg && f.crit && !t.bonus ? 2 : 1);
+    // Kritischer Treffer: Würfel verdoppeln (Standard) oder – Hausregel aus den Grundregeln – Maximum + normaler Wurf
+    const critMax = isDmg && f.crit && !t.bonus && !t.fate && DICE_RULES.crit === 'max';
+    const count = t.count * (isDmg && f.crit && !t.bonus && !critMax ? 2 : 1);
     const rollSet = () => {
       const set = [];
       for (let i = 0; i < count; i++) {
@@ -269,15 +273,15 @@ export function rollDetailed(input, { kind = 'auto', fx = {}, label = '', editio
     }
     dice.push(...set);
     const sum = sumOf(set);
-    total += t.sign * sum;
+    total += t.sign * (sum + (critMax ? t.count * t.sides : 0));
     const rs = set.map((d) => (d.dropped ? `~${d.value}~` : d.adj ? `${d.value}→${d.adj}` : d.from ? `${d.from}→${d.value}` : String(d.value))).join(', ');
-    text.push(`${s}${count}d${t.fate ? 'F' : t.sides}${t.mod}${t.explode ? '!' : ''} [${rs}]${lbl}`);
+    text.push(`${s}${count}d${t.fate ? 'F' : t.sides}${t.mod}${t.explode ? '!' : ''} [${rs}]${critMax ? ` + ${t.count * t.sides} (Maximum)` : ''}${lbl}`);
     if (sides20(t) && kind === 'auto' && natural === null) {
       const kept = set.filter((d) => !d.dropped);
       if (kept.length === 1) natural = kept[0].value;
     }
   });
-  if (isDmg && f.crit) notes.unshift('Kritischer Treffer: Schadenswürfel verdoppelt');
+  if (isDmg && f.crit) notes.unshift(DICE_RULES.crit === 'max' ? 'Kritischer Treffer: Maximum der Schadenswürfel + normaler Wurf' : 'Kritischer Treffer: Schadenswürfel verdoppelt');
   if (isDmg && f.gwf) notes.push(edition === '2024' ? 'Kampf mit Großwaffen: 1 und 2 zählen als 3' : 'Kampf mit Großwaffen: 1 und 2 einmal neu gewürfelt');
   if (isDmg && f.elemental) notes.push('Elementarer Adept: 1 zählt als 2');
   return {

@@ -3,22 +3,48 @@
 // Alles darüber hinaus kommt aus Regelpaketen der Kampagne (core/rulesets.js) – nie hier eintragen.
 // Beschreibungen sind kurze Zusammenfassungen in eigenen Worten.
 import { SKILLS } from './rules5e.js';
+import { parseFx, fxSummary } from '../core/effects.js';
+import { DICE_RULES } from '../lib/dice.js';
 
 export const AB = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 export const AB_NAME = { str: 'Stärke', dex: 'Geschicklichkeit', con: 'Konstitution', int: 'Intelligenz', wis: 'Weisheit', cha: 'Charisma' };
 export const AB_SHORT = { str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' };
 export const abMod = (s) => Math.floor(((Number(s) || 10) - 10) / 2);
-export const profBonus = (level) => 2 + Math.floor((Math.max(1, Math.min(20, level)) - 1) / 4);
+export const profBonus = (level) => {
+  const l = Math.max(1, Math.min(20, Number(level) || 1));
+  const t = RULES.profTable;
+  return Array.isArray(t) && t.length ? Number(t[Math.min(t.length, l) - 1]) || 2 : 2 + Math.floor((l - 1) / 4);
+};
 export const skillName = (k) => SKILLS.find((s) => s.key === k)?.name || k;
 export const skillAbility = (k) => SKILLS.find((s) => s.key === k)?.ability || 'int';
 export const ALL_SKILLS = SKILLS.map((s) => s.key);
 
 // Grundregeln – Regelpakete dürfen sie ändern (setBaseRules, core/rulesets.js); die Bindungen sind live.
-const BASE_RULES = { standardArray: [15, 14, 13, 12, 10, 8], pointCost: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }, pointBudget: 27, abilityMax: 20 };
+const BASE_RULES = {
+  standardArray: [15, 14, 13, 12, 10, 8], pointCost: { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }, pointBudget: 27, abilityMax: 20,
+  maxLevel: 20, profTable: null, hpFirst: 'max', hpLevel: 'avg', feats: true, multiclass: true, rollMethod: '4d6kh3', abilityNames: null, trackers: [], critRule: 'dice', asiAmount: 2,
+};
 export let STANDARD_ARRAY = BASE_RULES.standardArray;
 export let POINT_COST = BASE_RULES.pointCost;
 export let POINT_BUDGET = BASE_RULES.pointBudget;
 export let ABILITY_MAX = BASE_RULES.abilityMax;
+// Weitere Grundregeln (live): höchste Stufe, Übungsbonus je Stufe, Trefferpunkte, Talente, Mehrklassen, Würfelmethode, Zähler …
+export const RULES = { maxLevel: 20, profTable: null, hpFirst: 'max', hpLevel: 'avg', feats: true, multiclass: true, rollMethod: '4d6kh3', trackers: [], critRule: 'dice', asiAmount: 2 };
+// Würfelmethoden für Attributswerte (Wert → Würfelausdruck)
+export const ROLL_METHODS = [
+  { value: '4d6kh3', label: '4W6, niedrigsten streichen', dice: '4d6dl1' },
+  { value: '3d6', label: '3W6 der Reihe nach (hart)', dice: '3d6' },
+  { value: '2d6+6', label: '2W6 + 6 (heroisch, gleichmäßig)', dice: '2d6+6' },
+  { value: '5d6kh3', label: '5W6, zwei niedrigste streichen (sehr heroisch)', dice: '5d6dl2' },
+];
+export const rollDice = () => ROLL_METHODS.find((m) => m.value === RULES.rollMethod)?.dice || '4d6dl1';
+// Trefferpunkte für eine Stufe nach den Grundregeln (first = erste Stufe des Charakters)
+export function hpForLevel(hd, first) {
+  if (first) return RULES.hpFirst === 'avg' ? hpAverage(hd) : hd;
+  return RULES.hpLevel === 'max' ? hd : hpAverage(hd);
+}
+const AB_NAME0 = { ...AB_NAME };
+const AB_SHORT0 = { ...AB_SHORT };
 export const baseRules = () => structuredClone(BASE_RULES);
 export function setBaseRules(r) {
   const x = { ...BASE_RULES, ...(r || {}) };
@@ -26,6 +52,23 @@ export function setBaseRules(r) {
   POINT_COST = x.pointCost && Object.keys(x.pointCost).length ? Object.fromEntries(Object.entries(x.pointCost).map(([k, v]) => [Number(k), Number(v)])) : BASE_RULES.pointCost;
   POINT_BUDGET = Number(x.pointBudget) || BASE_RULES.pointBudget;
   ABILITY_MAX = Number(x.abilityMax) || BASE_RULES.abilityMax;
+  RULES.maxLevel = Math.max(1, Math.min(20, Number(x.maxLevel) || 20));
+  RULES.profTable = Array.isArray(x.profTable) && x.profTable.length === 20 && x.profTable.every((n) => Number.isFinite(Number(n))) ? x.profTable.map(Number) : null;
+  RULES.hpFirst = ['max', 'avg'].includes(x.hpFirst) ? x.hpFirst : 'max';
+  RULES.hpLevel = ['avg', 'roll', 'max'].includes(x.hpLevel) ? x.hpLevel : 'avg';
+  RULES.feats = x.feats !== false;
+  RULES.multiclass = x.multiclass !== false;
+  RULES.rollMethod = ROLL_METHODS.some((m) => m.value === x.rollMethod) ? x.rollMethod : '4d6kh3';
+  RULES.trackers = (Array.isArray(x.trackers) ? x.trackers : []).filter((t) => t && t.name).map((t) => ({ name: String(t.name), max: t.max, reset: ['short', 'long', 'none'].includes(t.reset) ? t.reset : 'long', info: String(t.info || '') }));
+  RULES.critRule = ['dice', 'max'].includes(x.critRule) ? x.critRule : 'dice';
+  DICE_RULES.crit = RULES.critRule;
+  RULES.asiAmount = [1, 2, 3].includes(Number(x.asiAmount)) ? Number(x.asiAmount) : 2;
+  // Eigene Namen für die sechs Attribute (nur Anzeige – z. B. „Finesse“, „Instinkt“)
+  const names = x.abilityNames && typeof x.abilityNames === 'object' ? x.abilityNames : {};
+  for (const k of AB) {
+    AB_NAME[k] = String(names[k]?.name || '').trim() || AB_NAME0[k];
+    AB_SHORT[k] = String(names[k]?.short || '').trim().slice(0, 4) || AB_SHORT0[k];
+  }
 }
 
 export function fmtDist(ft, units = 'm') {
@@ -211,7 +254,10 @@ export const ARMOR = [
   { key: 'schienen', name: 'Schienenpanzer', type: 'heavy', ac: 17, str: 15, stealth: true },
   { key: 'platte', name: 'Plattenpanzer', type: 'heavy', ac: 18, str: 15, stealth: true },
 ];
-export const ARMOR_TYPE = { light: 'leicht', medium: 'mittelschwer', heavy: 'schwer' };
+// clothing = Kleidung (zählt als ungerüstet, darf trotzdem RK geben), shield = Schild (wird zusätzlich getragen)
+export const ARMOR_TYPE = { light: 'leicht', medium: 'mittelschwer', heavy: 'schwer', clothing: 'Kleidung', shield: 'Schild' };
+export const bodyArmors = () => ARMOR.filter((a) => a.type !== 'shield');
+export const shields = () => ARMOR.filter((a) => a.type === 'shield');
 
 // p: f=Finesse, l=leicht, h=schwer, 2=zweihändig, t=Wurf, r=Reichweite, v=vielseitig, a=Munition/Fernkampf, o=Laden
 export const WEAPONS = [
@@ -516,7 +562,7 @@ export function classFeatures(clsKey, ed, to, from = 1, sub = '') {
         if (l === subLvl || !own.length) out.push({ level: l, kind: 'sub', name: l === subLvl ? `${cls.subLabel} wählen` : `${cls.subLabel}: Merkmal`, desc: l === subLvl ? `Du wählst deine Unterklasse (${cls.subLabel}).` : `Neues Merkmal deiner Unterklasse (${cls.subLabel}).` });
       } else out.push({ level: l, kind: 'feature', name: f, desc: FEATURE_INFO[f] || '' });
     }
-    for (const f of own) out.push({ level: l, kind: 'subfeature', name: f.name, desc: f.desc || FEATURE_INFO[f.name] || '', sub });
+    for (const f of own) out.push({ level: l, kind: 'subfeature', name: f.name, desc: f.desc || FEATURE_INFO[f.name] || '', sub, ...(f.fx ? { fx: f.fx } : {}) });
   }
   return out;
 }
@@ -613,36 +659,61 @@ export function hpBonusPerLevel(c) {
   const sub = sp?.subs?.find((s) => s.key === c.subspeciesKey);
   let n = (sp?.hpPerLevel || 0) + (sub?.hpPerLevel || 0);
   for (const f of c.feats || []) n += findFeat(f.key)?.hpPerLevel || 0;
-  return n;
+  return n + (charFx(c).hpLevel || 0);
 }
 
-// Rüstungsklasse aus getragener Rüstung, Schild, ungerüsteter Verteidigung und Kampfstil
-export function computeAC(c, mods) {
+// Rüstungsklasse aus getragener Rüstung (oder Kleidung), Schild, ungerüsteter Verteidigung, Kampfstil und Wirkungen
+export function computeAC(c, mods, fx = null) {
   const ed = edOf(c);
   const armor = findArmor(c.armor?.body);
-  const shield = !!c.armor?.shield;
+  const clothing = armor?.type === 'clothing' ? armor : null;
+  const body = armor && !clothing && armor.type !== 'shield' ? armor : null;
+  const shieldItem = c.armor?.shieldKey ? findArmor(c.armor.shieldKey) : null;
+  const shield = !!c.armor?.shield || !!shieldItem;
   const dex = mods.dex;
   const parts = [];
   let ac;
-  if (armor) {
-    const d = armor.type === 'light' ? dex : armor.type === 'medium' ? Math.min(2, dex) : 0;
-    ac = armor.ac + d;
-    parts.push(`${armor.name} ${armor.ac}${armor.type !== 'heavy' ? ` + GES ${d}` : ''}`);
+  if (body) {
+    const cap = body.dexCap != null && body.dexCap !== '' ? Number(body.dexCap) : body.type === 'light' ? 99 : body.type === 'medium' ? 2 : 0;
+    const d = Math.min(cap, dex);
+    ac = body.ac + d + (Number(body.bonus) || 0);
+    parts.push(`${body.name} ${body.ac}${cap > 0 ? ` + GES ${d}` : ''}${body.bonus ? ` + ${body.bonus}` : ''}`);
   } else {
     const opts = [{ v: 10 + dex, t: `10 + GES ${dex}` }];
     if (classLevel(c, 'barbar')) opts.push({ v: 10 + dex + mods.con, t: `Ungerüstet: 10 + GES + KON` });
     if (classLevel(c, 'moench') && !shield) opts.push({ v: 10 + dex + mods.wis, t: `Ungerüstet: 10 + GES + WEI` });
     const sorc = c.classes?.find((x) => x.cls === 'zauberer' && /Drachenblut|Drakonisch/.test(x.subclass || ''));
     if (sorc && (ed === '2014' || sorc.level >= 3)) opts.push(ed === '2014' ? { v: 13 + dex, t: 'Drachenhaut: 13 + GES' } : { v: 10 + dex + mods.cha, t: 'Drachenhaut: 10 + GES + CHA' });
+    // Ungerüstete Verteidigung eigener Klassen aus Regelpaketen
+    for (const x of c.classes || []) {
+      const cls = findClass(x.cls);
+      if (!cls?.unarmored || ['barbar', 'moench'].includes(cls.key) || (cls.unarmoredNoShield && shield)) continue;
+      const base = Number(cls.unarmoredBase) || 10;
+      opts.push({ v: base + dex + (mods[cls.unarmored] || 0), t: `Ungerüstet: ${base} + GES + ${AB_SHORT[cls.unarmored] || ''}` });
+    }
+    for (const f of fx?.acF || []) {
+      if (!f.shield && shield) continue;
+      const v = f.base + f.abs.reduce((a, k) => a + (mods[k] || 0), 0);
+      opts.push({ v, t: `${f.name ? `${f.name}: ` : ''}${f.base}${f.abs.map((k) => ` + ${AB_SHORT[k]}`).join('')}` });
+    }
     const best = opts.sort((a, b) => b.v - a.v)[0];
     ac = best.v;
     parts.push(best.t);
+    if (clothing) {
+      const b = (Number(clothing.bonus) || 0) + (Number(clothing.ac) > 0 && Number(clothing.ac) < 10 ? Number(clothing.ac) : 0);
+      if (b) { ac += b; parts.push(`${clothing.name} +${b}`); }
+    }
   }
-  if (shield) { ac += 2; parts.push('Schild +2'); }
-  if (armor && (c.feats || []).some((f) => f.key === 'style-defense')) { ac += 1; parts.push('Verteidigung +1'); }
+  if (shield) {
+    const b = shieldItem ? (Number(shieldItem.ac) || 2) + (Number(shieldItem.bonus) || 0) : 2;
+    ac += b;
+    parts.push(`${shieldItem?.name || 'Schild'} +${b}`);
+  }
+  if (body && (c.feats || []).some((f) => f.key === 'style-defense')) { ac += 1; parts.push('Verteidigung +1'); }
+  if (fx?.ac) { ac += fx.ac; parts.push(`Merkmale ${fx.ac > 0 ? '+' : ''}${fx.ac}`); }
   const bonus = Number(c.acBonus) || 0;
   if (bonus) { ac += bonus; parts.push(`Magie/Sonstiges ${bonus > 0 ? '+' : ''}${bonus}`); }
-  return { ac, parts, stealthDis: !!armor?.stealth, heavyStrShort: armor?.str && (c.abilities?.str || 10) < armor.str };
+  return { ac, parts, stealthDis: !!body?.stealth || !!clothing?.stealth, heavyStrShort: body?.str && (c.abilities?.str || 10) < body.str };
 }
 
 export function weaponProficient(c, w) {
@@ -654,23 +725,28 @@ export function weaponProficient(c, w) {
     if (list.includes('martial-light') && w.cat === 'martial' && w.p.includes('l')) return true;
     if (list.includes('martial-finesse') && w.cat === 'martial' && (w.p.includes('f') || w.p.includes('l'))) return true;
   }
+  const fw = charFx(c).weapons;
+  if (fw.has(w.key) || fw.has(w.cat)) return true;
   return (c.extraWeapons || []).includes(w.key);
 }
 
 export function weaponAttack(c, w, mods, pbv) {
   const ranged = w.p.includes('a') || w.p.includes('A');
   const finesse = w.p.includes('f');
-  const ab = finesse ? (mods.dex >= mods.str ? 'dex' : 'str') : ranged ? 'dex' : 'str';
+  const ab = w.ability && mods[w.ability] != null ? w.ability : finesse ? (mods.dex >= mods.str ? 'dex' : 'str') : ranged ? 'dex' : 'str';
   const monk = classLevel(c, 'moench') && w.cat === 'simple' && !w.p.includes('h') ? (mods.dex > mods[ab] ? 'dex' : ab) : ab;
   const m = mods[monk];
   const prof = weaponProficient(c, w);
   const feats = new Set((c.feats || []).map((f) => f.key));
-  const bonus = m + (prof ? pbv : 0) + (ranged && feats.has('style-archery') ? 2 : 0);
-  const dmgMod = m + (!ranged && feats.has('style-dueling') && !w.p.includes('2') ? 2 : 0);
+  const fx = charFx(c);
+  const magic = Number(w.magic) || 0;
+  const bonus = m + (prof ? pbv : 0) + (ranged && feats.has('style-archery') ? 2 : 0) + fx.atk.all + (ranged ? fx.atk.ranged : fx.atk.melee) + magic;
+  const dmgMod = m + (!ranged && feats.has('style-dueling') && !w.p.includes('2') ? 2 : 0) + fx.dmg.all + (ranged ? fx.dmg.ranged : fx.dmg.melee) + magic;
   return {
-    key: w.key, name: w.name, ability: monk, prof, bonus,
+    key: w.key, name: w.name, ability: monk, prof, bonus, other: bonus - m - (prof ? pbv : 0),
     damage: `${w.dmg}${dmgMod ? (dmgMod > 0 ? `+${dmgMod}` : dmgMod) : ''}`,
     versatile: w.vers ? `${w.vers}${dmgMod ? (dmgMod > 0 ? `+${dmgMod}` : dmgMod) : ''}` : null,
+    extraDmg: w.extraDmg || '', extraType: w.extraType || '',
     type: w.type, props: [...w.p].map((x) => PROP_NAMES[x]).filter(Boolean).join(', '), mastery: w.m, gwf: w.p.includes('2') || w.p.includes('v'),
   };
 }
@@ -680,29 +756,33 @@ export function charMods(c) {
   const ed = edOf(c);
   const level = totalLevel(c);
   const pbv = profBonus(level);
-  const abil = c.abilities || {};
-  const mods = Object.fromEntries(AB.map((k) => [k, abMod(abil[k] ?? 10)]));
+  const fx = charFx(c);
+  // Attributswerte samt fester Boni aus Merkmalen (z. B. „+1 Weisheit“ in einem Talent eines Regelpakets)
+  const scores = Object.fromEntries(AB.map((k) => [k, Math.min(30, (Number(c.abilities?.[k]) || 10) + (fx.abil[k] || 0))]));
+  const mods = Object.fromEntries(AB.map((k) => [k, abMod(scores[k])]));
   const jack = classLevel(c, 'barde') >= 2 ? Math.floor(pbv / 2) : 0;
   const saves = Object.fromEntries(AB.map((k) => {
-    const prof = (c.saves || []).includes(k);
-    return [k, { prof, bonus: mods[k] + (prof ? pbv : 0) }];
+    const prof = (c.saves || []).includes(k) || fx.saveProf.has(k);
+    return [k, { prof, bonus: mods[k] + (prof ? pbv : 0) + fx.saveBonus }];
   }));
   const skills = Object.fromEntries(ALL_SKILLS.map((k) => {
-    const p = Number(c.skills?.[k]) || 0;
+    let p = Number(c.skills?.[k]) || 0;
+    if (fx.skill.has(k)) p = Math.max(p, 1);
+    if (fx.exp.has(k) && p >= 1) p = 2;
     const bonus = mods[skillAbility(k)] + (p === 2 ? pbv * 2 : p === 1 ? pbv : jack);
     return [k, { prof: p, bonus }];
   }));
   const feats = new Set((c.feats || []).map((f) => f.key));
-  const init = mods.dex + (feats.has('alert') ? (ed === '2024' ? pbv : 5) : 0) + (jack && !feats.has('alert') ? jack : 0) + (Number(c.initBonus) || 0);
+  const init = mods.dex + (feats.has('alert') ? (ed === '2024' ? pbv : 5) : 0) + (jack && !feats.has('alert') ? jack : 0) + (Number(c.initAdj) || 0) + fx.init; // initBonus ist abgeleitet (derive) – nicht wieder einrechnen
   const passive = {
     perception: 10 + skills.perception.bonus + (feats.has('observant') && ed === '2014' ? 5 : 0),
     insight: 10 + skills.insight.bonus,
     investigation: 10 + skills.investigation.bonus + (feats.has('observant') && ed === '2014' ? 5 : 0),
   };
   const casting = (c.classes || []).map((x) => ({ cls: x.cls, ...spellcasting(x, ed, mods) })).filter((x) => x.ability);
-  const spell = casting.map((x) => ({ ...x, dc: 8 + pbv + mods[x.ability], attack: pbv + mods[x.ability] }));
-  const ac = computeAC(c, mods);
-  return { ed, level, pb: pbv, mods, saves, skills, init, passive, spell, ac, jack };
+  const spell = casting.map((x) => ({ ...x, dc: 8 + pbv + mods[x.ability], attack: pbv + mods[x.ability] + fx.atk.spell }));
+  const ac = computeAC(c, mods, fx);
+  return { ed, level, pb: pbv, mods, scores, saves, skills, init, passive, spell, ac, jack, fx };
 }
 
 // Standard-Effekte für die Würfel aus Volk, Talenten, Klassen und Zustand
@@ -780,7 +860,38 @@ export function resourcesFor(c) {
   if (sp?.key === 'aasimar') out.push({ key: 'healinghands', name: 'Heilende Hände', max: 1, reset: 'long' });
   if (sp?.key === 'goliath' && ed === '2024') out.push({ key: 'giant', name: 'Riesenabstammung', max: pbv, reset: 'long' });
   if ((c.feats || []).some((f) => f.key === 'lucky')) out.push({ key: 'luck', name: 'Glückspunkte', max: ed === '2024' ? pbv : 3, reset: 'long' });
+  // Ressourcen eigener Klassen, Merkmale und Grundregeln (Regelpakete)
+  const have = new Set(out.map((r) => r.name.replace(/\s*\(.*$/, '').toLowerCase()));
+  const push = (r) => {
+    const base = r.name.replace(/\s*\(.*$/, '').toLowerCase();
+    if (!r.name || have.has(base) || !(r.max > 0)) return;
+    have.add(base);
+    out.push(r);
+  };
+  const lvlOf = (x) => Number(x) || 0;
+  for (const x of c.classes || []) {
+    const cls = findClass(x.cls);
+    for (const r of cls?.resources || []) {
+      if (lvlOf(r.from) > x.level) continue;
+      push({ key: `c:${cls.key}:${slug(r.name)}`, name: r.name, max: resMax(r.max, { level: x.level, total: totalLevel(c), pb: pbv, mods }), reset: r.reset || 'long', info: r.info || '' });
+    }
+  }
+  for (const r of charFx(c).res) push({ key: `fx:${slug(r.name)}`, name: r.name, max: resMax(r.v, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: r.rest || 'long', info: r.info || `Aus „${r.src || r.name}“.` });
+  // Eigene Aktionen mit begrenzter Nutzung
+  for (const a of charFx(c).actions) if (a.uses && a.uses !== 'will') push({ key: `act:${slug(a.k)}`, name: a.k, max: resMax(a.uses === 'pb' || String(a.uses).startsWith('mod:') ? a.uses : Number(a.uses) || 1, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: a.rest || 'long', info: a.desc || `Aus „${a.src || a.k}“.` });
+  for (const t of RULES.trackers || []) push({ key: `r:${slug(t.name)}`, name: t.name, max: resMax(t.max, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: t.reset === 'none' ? 'never' : t.reset, info: t.info || '' });
   return out;
+}
+const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-').slice(0, 40);
+// Höchstwert einer Ressource: Zahl, 20 Werte je Stufe, 'pb' (Übungsbonus), 'level', 'mod:cha' (mind. 1)
+export function resMax(v, { level = 1, total = 1, pb = 2, mods = {} } = {}) {
+  if (Array.isArray(v)) return Number(v[Math.max(0, Math.min(v.length, level) - 1)]) || 0;
+  if (v === 'pb') return pb;
+  if (v === 'level') return level;
+  if (v === 'total') return total;
+  if (v === 'half') return Math.max(1, Math.floor(level / 2));
+  if (typeof v === 'string' && v.startsWith('mod:')) return Math.max(1, mods[v.slice(4)] || 0);
+  return Number(v) || 0;
 }
 
 // Zusatzinfos pro Klasse (Hinterhältiger Angriff, Kampfkunstwürfel …)
@@ -796,8 +907,196 @@ export function classExtras(c) {
       out.push(`${inv[l - 1]} Schauerliche Anrufungen`);
     }
     if (x.cls === 'zauberer' && l >= 2) out.push(`Metamagie: ${ed === '2024' ? (l >= 17 ? 6 : l >= 10 ? 4 : 2) : l >= 17 ? 4 : l >= 10 ? 3 : l >= 3 ? 2 : 0} Optionen`);
+    // Eigene Tabellenspalten (z. B. „Wutschaden +2“, „Kampfkunst W6“)
+    for (const col of findClass(x.cls)?.columns || []) {
+      const v = Array.isArray(col.values) ? col.values[Math.min(col.values.length, l) - 1] : col.values;
+      if (v != null && v !== '' && v !== 0 && v !== '0' && v !== '–') out.push(`${col.name} ${v}`);
+    }
   }
   return out;
+}
+
+// Angriffe je Angriffsaktion: Klassen des Grundbestands, Merkmalsnamen („Extra-Angriff“) und Wirkungen
+export function attacksPerAction(c) {
+  let n = 1;
+  const ed = edOf(c);
+  for (const x of c.classes || []) {
+    if (x.cls === 'kaempfer') n = Math.max(n, x.level >= 20 ? 4 : x.level >= 11 ? 3 : x.level >= 5 ? 2 : 1);
+    else if (['barbar', 'moench', 'paladin', 'waldlaeufer'].includes(x.cls) && x.level >= 5) n = Math.max(n, 2);
+    else {
+      for (const f of classFeatures(x.cls, ed, x.level, 1, x.subclass)) {
+        if (/^Drei Extra-Angriffe/i.test(f.name)) n = Math.max(n, 4);
+        else if (/^Zwei Extra-Angriffe/i.test(f.name)) n = Math.max(n, 3);
+        else if (/^Extra-Angriff/i.test(f.name)) n = Math.max(n, 2);
+      }
+    }
+  }
+  return Math.max(n, charFx(c).attacks || 1);
+}
+
+// ───────────────────────── Wirkungen (Regelpakete) ─────────────────────────
+// Texte aus Regelpaketen wirken (core/effects.js); der Grundbestand hat seine Regeln fest eingebaut.
+// Strukturierte Wirkungen (Feld fx: [{ t, k, v, lvl, cond }]) wirken überall.
+export const FEATURE_SRC = {};   // Merkmalsname → Paket (nur diese Merkmalstexte werden gelesen)
+let FX_REV = 0;
+let vocab = null;
+const fxCache = new Map();
+export function bumpFx() { FX_REV++; vocab = null; fxCache.clear(); }
+export function fxVocab() {
+  if (!vocab) vocab = { skills: SKILLS.map((s) => ({ key: s.key, name: s.name })), weapons: WEAPONS.map((w) => ({ key: w.key, name: w.name })), languages: [...LANGUAGES] };
+  return vocab;
+}
+export const fxText = (text, opts = {}) => parseFx(text, fxVocab(), opts);
+
+// Alle Wirkungsquellen eines Charakters: [{ ...wirkung, src }]
+export function charFxList(c) {
+  const ed = edOf(c);
+  const out = [];
+  const add = (list, src, { classLevel: cl = null, skip = null } = {}) => {
+    for (const f of list || []) {
+      if (!f || !f.t || (skip && skip.has(f.t))) continue;
+      // Stufenangaben bei Klassenmerkmalen beziehen sich auf die Klassenstufe
+      if (cl != null && f.lvl && f.lvl > cl) continue;
+      out.push({ ...f, active: f.active !== false, lvl: cl != null ? 0 : f.lvl, src: f.src || src });
+    }
+  };
+  const texts = (e, src, pack, opts = {}) => {
+    if (!e || !pack) return;
+    for (const tr of e.traits || []) {
+      const [n, d] = Array.isArray(tr) ? tr : [tr?.name, tr?.desc];
+      add(fxText(d, { name: n }), `${src}: ${n}`, opts);
+    }
+    for (const k of ['note', 'desc', 'featureDesc']) {
+      const t = Array.isArray(e[k]) ? e[k].join('\n') : e[k];
+      if (t) add(fxText(t, { name: e.name }), src, opts);
+    }
+  };
+  // Sprachen und Werkzeuge aus Feldern der Einträge
+  const fields = (e, src) => {
+    if (!e) return;
+    const l = [];
+    if (Array.isArray(e.langs) && e.langs.length) l.push({ t: 'lang', k: e.langs });
+    if (Number(e.langAny) > 0) l.push({ t: 'lang', k: [], n: Number(e.langAny), active: false });
+    add(l, src);
+  };
+  const sp = findSpecies(ed, c.speciesKey);
+  if (sp) {
+    const noAbil = new Set(['abil']);
+    fields(sp, sp.name);
+    add(sp.fx, sp.name);
+    texts(sp, sp.name, sp._pack, { skip: sp.asi || sp.asiChoice ? noAbil : null });
+    const sub = sp.subs?.find((s) => s.key === c.subspeciesKey);
+    if (sub) { fields(sub, sub.name); add(sub.fx, sub.name); texts(sub, sub.name, sp._pack || sub._pack, { skip: sub.asi ? noAbil : null }); }
+    const opt = sp.option?.list?.find((o) => o.key === c.speciesOption);
+    if (opt) { add(opt.fx, opt.name); texts(opt, opt.name, sp._pack); }
+  }
+  const bg = findBackground(ed, c.backgroundKey);
+  if (bg) { fields(bg, bg.name); add(bg.fx, bg.name); texts(bg, bg.name, bg._pack); }
+  for (const pick of c.feats || []) {
+    const f = findFeat(pick.key);
+    if (!f) continue;
+    add(f.fx, f.name);
+    texts(f, f.name, f._pack, { skip: f.a14 || f.a24 ? new Set(['abil']) : null });
+  }
+  for (const x of c.classes || []) {
+    const cls = findClass(x.cls);
+    if (!cls) continue;
+    add(cls.fx, cls.name, { classLevel: x.level });
+    for (const ft of classFeatures(x.cls, ed, x.level, 1, x.subclass)) {
+      if (ft.kind === 'feature' && FEATURE_SRC[ft.name]) add(fxText(ft.desc, { name: ft.name }), `${cls.name}: ${ft.name}`, { classLevel: x.level });
+      if (ft.kind === 'subfeature') {
+        add(ft.fx, `${x.subclass}: ${ft.name}`, { classLevel: x.level });
+        add(fxText(ft.desc, { name: ft.name }), `${x.subclass}: ${ft.name}`, { classLevel: x.level });
+      }
+    }
+    for (const [l, names] of Object.entries(SUBCLASS_SPELLS[`${x.cls}|${x.subclass}`] || {})) {
+      if (Number(l) > x.level) continue;
+      for (const n of names) out.push({ t: 'spell', k: n, lv: 1, active: true, uses: 'always', src: `${x.subclass}` });
+    }
+  }
+  return out;
+}
+const armorKind = (c) => {
+  const a = findArmor(c?.armor?.body);
+  return a && a.type !== 'shield' ? a.type : 'none';
+};
+// Zusammenfassung (zwischengespeichert je Charakterstand und Paketstand)
+export function charFx(c) {
+  if (!c) return fxSummary([]);
+  const key = `${FX_REV}|${edOf(c)}|${c.speciesKey}|${c.subspeciesKey}|${c.speciesOption}|${c.backgroundKey}|${(c.feats || []).map((f) => f.key).join(',')}|${(c.classes || []).map((x) => `${x.cls}:${x.level}:${x.subclass || ''}`).join(',')}|${c.armor?.body || ''}|${c.armor?.shield ? 1 : 0}|${c.armor?.shieldKey || ''}`;
+  const hit = fxCache.get(key);
+  if (hit) return hit;
+  const level = totalLevel(c);
+  const s = fxSummary(charFxList(c), { level, armor: armorKind(c), shield: !!c.armor?.shield || !!c.armor?.shieldKey, pb: profBonus(level) });
+  if (fxCache.size > 200) fxCache.clear();
+  fxCache.set(key, s);
+  return s;
+}
+// Bewegung und Sinne: Spezies (Unterart, Auswahl) + Wirkungen + Korrektur
+export function charMovement(c) {
+  const ed = edOf(c);
+  const sp = findSpecies(ed, c.speciesKey);
+  const sub = sp?.subs?.find((s) => s.key === c.subspeciesKey);
+  const opt = sp?.option?.list?.find((o) => o.key === c.speciesOption);
+  const fx = charFx(c);
+  const baseSpeed = sp ? (opt?.speed || sub?.speed || sp.speed || 30) : Number(c.speed) || 30;
+  const speed = Math.max(0, (fx.speedSet || baseSpeed) + fx.speed + (Number(c.speedAdj) || 0));
+  const dark = Math.max(Number(sp ? (opt?.dark ?? sub?.dark ?? sp.dark ?? 0) : c.darkvision) || 0, fx.sense.dark || 0);
+  const speeds = {};
+  for (const [k, v] of Object.entries({ ...(sp?.speeds || {}), ...(sub?.speeds || {}), ...(opt?.speeds || {}), ...fx.move })) {
+    const n = v === 'walk' ? speed : Number(v) || 0;
+    if (n > 0) speeds[k] = n;
+  }
+  const senses = {};
+  for (const [k, v] of Object.entries({ ...(sp?.senses || {}), ...(sub?.senses || {}), ...(opt?.senses || {}) })) if (Number(v) > 0) senses[k] = Number(v);
+  for (const [k, v] of Object.entries(fx.sense)) if (k !== 'dark' && v > (senses[k] || 0)) senses[k] = v;
+  return { speed, dark, speeds, senses };
+}
+// Zauber je Stufe einer Unterklasse aus Regelpaketen (immer vorbereitet): SUBCLASS_SPELLS['klasse|Unterklasse'] = { 3: ['Segen', …] }
+export const SUBCLASS_SPELLS = {};
+export const fxSlug = (s) => slug(s);
+// Würfel einer eigenen Aktion nach Charakterstufe (Steigerung auf 5/11/17 wie bei Zaubertricks)
+export function actionDice(a, level) {
+  const up = a.up || {};
+  let d = a.dice || '1d6';
+  for (const l of [5, 11, 17]) if (level >= l && up[l]) d = up[l];
+  return d;
+}
+
+// Voraussetzungen eines Talents (Feld req aus Regelpaketen): { level, abil: { str: 13 }, abilAny, spellcasting, armor, species: [], classes: [] }
+export function featPrereq(f, c) {
+  const r = f?.req;
+  const out = [];
+  if (!r || typeof r !== 'object' || !c) return { ok: true, why: '' };
+  if (Number(r.level) > totalLevel(c)) out.push(`ab Stufe ${r.level}`);
+  const need = Object.entries(r.abil || {}).filter(([, v]) => Number(v) > 0);
+  if (need.length) {
+    const hits = need.map(([k, v]) => (Number(c.abilities?.[k]) || 0) >= Number(v));
+    if (!(r.abilAny ? hits.some(Boolean) : hits.every(Boolean))) out.push(need.map(([k, v]) => `${AB_SHORT[k]} ${v}`).join(r.abilAny ? ' oder ' : ' und '));
+  }
+  const ed = edOf(c);
+  if (r.spellcasting && !(c.classes || []).some((x) => spellcasting(x, ed, {}))) out.push('Zauberwirken');
+  if (r.armor) {
+    const own = new Set([...(c.classes || []).flatMap((x) => perEd(findClass(x.cls)?.armor, ed) || []), ...charFx(c).armor]);
+    if (!own.has(r.armor)) out.push(`Übung mit ${{ light: 'leichter Rüstung', medium: 'mittelschwerer Rüstung', heavy: 'schwerer Rüstung', shield: 'Schilden' }[r.armor] || r.armor}`);
+  }
+  if (Array.isArray(r.species) && r.species.length && !r.species.includes(c.speciesKey)) out.push(`Spezies: ${r.species.map((k) => findSpecies(ed, k)?.name || k).join(' / ')}`);
+  if (Array.isArray(r.classes) && r.classes.length && !(c.classes || []).some((x) => r.classes.includes(x.cls))) out.push(`Klasse: ${r.classes.map((k) => findClass(k)?.name || k).join(' / ')}`);
+  return { ok: !out.length, why: out.join(', ') };
+}
+// Voraussetzung als Text (für Listen)
+export function prereqText(f) {
+  const r = f?.req;
+  const parts = [];
+  if (f?.prereq) parts.push(String(f.prereq));
+  if (r && typeof r === 'object') {
+    if (r.level) parts.push(`Stufe ${r.level}`);
+    const need = Object.entries(r.abil || {}).filter(([, v]) => Number(v) > 0);
+    if (need.length) parts.push(need.map(([k, v]) => `${AB_SHORT[k]} ${v}`).join(r.abilAny ? ' oder ' : ' und '));
+    if (r.spellcasting) parts.push('Zauberwirken');
+    if (r.armor) parts.push(`Übung mit ${{ light: 'leichter', medium: 'mittelschwerer', heavy: 'schwerer' }[r.armor] ? `${{ light: 'leichter', medium: 'mittelschwerer', heavy: 'schwerer' }[r.armor]} Rüstung` : 'Schilden'}`);
+  }
+  return [...new Set(parts)].join(', ');
 }
 
 // Mehrklassen-Voraussetzungen (13 im Hauptattribut)

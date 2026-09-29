@@ -152,7 +152,8 @@ function pcBase(char, ed) {
     ac: Number(char.ac) || cm.ac.ac, mods: cm.mods, dex: cm.mods.dex, speedM: Math.round((Number(char.speed) || 30) * 0.3 * 10) / 10,
     saves: Object.fromEntries(Object.entries(cm.saves).map(([k, v]) => [k, v.bonus])), pb: cm.pb, level: cm.level, init: cm.init,
     spell: sp ? { dc: sp.dc, attack: sp.attack, ability: sp.ability } : null, spells: cm.spell,
-    resist: { all: speciesResist(char, ed), nm: [] }, vuln: EMPTY_DEF(), immune: EMPTY_DEF(), condImm: [],
+    // Resistenzen & Co. aus Spezies und Wirkungen (Merkmale, Talente, Klassen aus Regelpaketen)
+    resist: { all: [...new Set([...speciesResist(char, ed), ...cm.fx.resist])], nm: [] }, vuln: { all: [...cm.fx.vuln], nm: [] }, immune: { all: [...cm.fx.immune], nm: [] }, condImm: [...cm.fx.condImm],
     feats: new Set((char.feats || []).map((f) => f.key)), classes: char.classes || [], body: char.armor?.body || null, shield: !!char.armor?.shield,
     size: String(char.size || '').toLowerCase().includes('klein') ? 'small' : 'medium', multi: 1, reactions: [],
   };

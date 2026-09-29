@@ -2346,3 +2346,87 @@ body.resizing .sb-resize::after { background: var(--accent); }
 .map-pv { position: absolute; right: 12px; bottom: 56px; z-index: 6; display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--bg-panel) 94%, transparent); color: var(--text); font-size: 12.5px; box-shadow: var(--shadow-sm); cursor: pointer; }
 .map-pv .x { margin-left: 4px; opacity: .7; font-size: 15px; line-height: 1; }
 .map-pv:hover .x { opacity: 1; }
+
+/* Regelwerk-Editor: Liste der Regelwerke (genau eins aktiv) */
+.rb-side-btns { display: flex; gap: 6px; align-items: center; }
+.rb-side-btns .btn { flex: 1 1 0; min-width: 0; justify-content: center; }
+.rb-side-h { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); margin-top: 6px; }
+.rb-side-h .badge { text-transform: none; letter-spacing: 0; }
+.rb-pk { display: flex; align-items: flex-start; gap: 8px; padding: 8px 6px 8px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-panel); }
+.rb-pk.open { box-shadow: inset 3px 0 0 var(--accent); }
+.rb-pk.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg-panel)); }
+.rb-pk.base .rb-pk-name { font-weight: 600; }
+.rb-radio { flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--border-2); background: none; padding: 0; display: grid; place-items: center; cursor: pointer; }
+.rb-radio i { width: 10px; height: 10px; border-radius: 50%; background: transparent; }
+.rb-radio.on { border-color: var(--accent); cursor: default; }
+.rb-radio.on i { background: var(--accent); }
+.rb-radio:not(.on):hover { border-color: var(--accent); }
+.rb-pk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; background: none; border: 0; color: inherit; padding: 0; cursor: pointer; }
+.rb-pk-main.static { cursor: default; }
+.rb-pk-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; word-break: break-word; }
+.rb-pk-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; font-size: 11.5px; color: var(--text-3); }
+.rb-pk-meta .badge { font-size: 10.5px; }
+.rb-pk > .icon-btn { flex: none; margin-top: -2px; }
+
+/* Info-Symbol mit Erklärung */
+.rb-lab { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.rb-i { position: relative; display: inline-flex; align-items: center; margin-left: 4px; color: var(--text-3); cursor: help; vertical-align: middle; outline: none; }
+.rb-i:hover, .rb-i:focus, .rb-i.pin { color: var(--accent); }
+.rb-i-pop { display: none; position: absolute; z-index: 60; left: -10px; top: calc(100% + 6px); width: min(330px, 76vw); background: var(--bg-panel); border: 1px solid var(--border-2); border-radius: 10px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 12.5px; font-weight: 400; line-height: 1.5; color: var(--text); text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; }
+.rb-i.wide .rb-i-pop { width: min(460px, 86vw); }
+.rb-i:hover .rb-i-pop, .rb-i:focus .rb-i-pop, .rb-i.pin .rb-i-pop { display: block; }
+.rb-help { display: flex; flex-direction: column; gap: 5px; }
+.rb-help > b { font-size: 13px; }
+.fx-hl { font-weight: 700; color: var(--text); }
+.fx-hl.fx-cond { font-weight: 600; font-style: italic; text-decoration: underline dotted; text-underline-offset: 3px; color: inherit; }
+.fx-hl.fx-hint { font-weight: 600; color: inherit; }
+.fx-hl.fx-money { color: #e0b24a; font-weight: 700; }
+.rb-preview .fx-hl:not(.fx-cond):not(.fx-hint):not(.fx-money) { color: #f6e4b8; }
+
+/* Vorschläge und erkannte Wirkungen */
+.rb-suggest { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 5px; }
+.rb-sug { border: 1px dashed var(--border-2); background: none; color: var(--text-2); border-radius: 999px; padding: 1px 8px; font-size: 11.5px; cursor: pointer; }
+.rb-sug:hover { border-color: var(--accent); color: var(--text); }
+.rb-sug.hi { border-style: solid; border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.rb-sug.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--text); }
+.rb-fxarea { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rb-fxchips { display: flex; flex-wrap: wrap; gap: 4px; }
+.rb-fxchip { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); background: var(--bg-2); }
+.rb-fxchip.on { border-color: color-mix(in srgb, var(--success) 55%, transparent); color: var(--text); font-weight: 600; }
+.rb-fxchip.off { border-style: dotted; color: var(--text-3); }
+.rb-fxchip.money { border-color: #e0b24a; color: #e0b24a; font-weight: 700; }
+.rb-fxchip.plain { color: var(--text-3); }
+.rb-prev-fx { margin-top: 8px; font-size: 12px; color: #e9c77b; }
+
+/* Strukturierte Wirkungen */
+.rb-fxlist { display: flex; flex-direction: column; gap: 6px; }
+.rb-fxrow { border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.rb-fxhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rb-fxhead > b { font-size: 13px; }
+.rb-fxhead .select { max-width: 190px; }
+.rb-fxlvl { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text-3); }
+.rb-fxlvl .input { width: 58px; padding: 3px 6px; }
+.rb-fxbody { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.rb-fxp { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rb-fxp > .input:not(.rb-num) { min-width: 180px; }
+
+/* Abschnitte, Bewegungsarten, Voraussetzungen, Attributsnamen */
+.rb-sec { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-panel); }
+.rb-sec > summary { display: flex; align-items: center; gap: 6px; padding: 9px 12px; cursor: pointer; list-style: none; }
+.rb-sec > summary::-webkit-details-marker { display: none; }
+.rb-sec[open] > summary { border-bottom: 1px solid var(--border); }
+.rb-sec-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.rb-speeds { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 14px; }
+.rb-speeds > label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-3); }
+.rb-req { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 16px; }
+.rb-req > label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-3); }
+.rb-req > label.wide { grid-column: 1 / -1; }
+.rb-abnames { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 12px; }
+.rb-abnames > label { display: grid; grid-template-columns: 1fr 64px; gap: 4px 6px; font-size: 11.5px; color: var(--text-3); }
+.rb-abnames > label > span { grid-column: 1 / -1; }
+.rb-short { text-align: center; }
+.rb-act { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.rb-act-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.rb-act-row .rb-fxp { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.rb-act-row .rb-fxp > .input.rb-dice { min-width: 0; width: 76px; }
+.rb-act-full > .rb-fxp, .rb-act-full > .rb-fxp > .input { flex: 1; }

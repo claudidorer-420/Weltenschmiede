@@ -313,7 +313,8 @@ export async function openCampaign(cid) {
     return false;
   }
   // Regelpakete der Kampagne zuerst anwenden – sonst zeigen Bogen und Assistent kurz nur den Grundbestand
-  await startRules(cid);
+  const cdoc = await db.get('campaigns', cid).catch(() => null);
+  await startRules(cid, { edition: cdoc?.settings?.rulesVersion === '2024' ? '2024' : '2014' });
   app.set({ cid, role: member.role, campaign: null, viewAsPlayer: false });
   localStorage.setItem(`ws.lastCampaign.${u.uid}`, cid);
   localStorage.setItem(`ws.inCampaign.${u.uid}`, '1');

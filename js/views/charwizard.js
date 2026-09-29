@@ -19,6 +19,7 @@ import {
   SPECIES, BACKGROUNDS, ARMOR, ARMOR_TYPE, WEAPONS, LANGUAGES, CLASSES, classesFor, findClass, findSpecies, findBackground, findFeat,
   featsFor, featAsi, perEd, classSkills, classFeatures, subclassLevel, spellSlots, spellcasting, hpAverage, hpBonusPerLevel,
   charMods, totalLevel, multiclassOk, findArmor, findWeapon, edOf, classLevel, SUBCLASS_DESC, subclassText, ABILITY_MAX,
+  RULES, rollDice, hpForLevel, charFx, charMovement, featPrereq, prereqText, ROLL_METHODS,
 } from '../data/chargen.js';
 
 const CLASS_BLURB = {
@@ -228,7 +229,7 @@ function parseItems(text) {
 function packageText(d) {
   const co = classEquipOptions(d).find((o) => o.key === d.equipClass);
   const bg = bgOf(d);
-  const bgText = d.edition === '2024' ? (d.equipBg === 'A' ? bg?.equip || '' : '50 GM') : bg?.equip || '';
+  const bgText = d.edition === '2024' ? (d.equipBg === 'A' ? bg?.equip || '' : `${bg?.goldAlt ?? 50} GM`) : bg?.equip || '';
   return { cls: co?.key === 'gold' ? '' : co?.text || '', clsGold: co?.key === 'gold' ? (co.gold ?? d.gold2014 ?? 0) : 0, bg: bgText };
 }
 
@@ -237,7 +238,7 @@ function detectGear(text) {
   const has = (name) => new RegExp(`(^|[\\s,(])${name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(e|en|n|s)?([\\s,)]|$)`).test(t);
   return {
     weapons: WEAPONS.filter((w) => has(w.name)).map((w) => w.key),
-    armor: [...ARMOR].reverse().find((a) => has(a.name))?.key || '',
+    armor: [...ARMOR].filter((a) => a.type !== 'shield').reverse().find((a) => has(a.name))?.key || '',
     shield: /schild/.test(t),
   };
 }
@@ -257,7 +258,7 @@ export function computeMaxHp(c) {
   let sum = 0;
   for (const b of c.hpBase || []) sum += Math.max(1, Number(b) + con);
   const lvl = (c.hpBase || []).length;
-  sum += lvl * hpBonusPerLevel(c);
+  sum += lvl * hpBonusPerLevel(c) + (charFx(c).hp || 0);
   const sorc = (c.classes || []).find((x) => x.cls === 'zauberer' && /Drachenblut|Drakonisch/.test(x.subclass || ''));
   if (sorc) sum += ed === '2014' ? sorc.level : sorc.level >= 3 ? sorc.level : 0;
   return Math.max(1, sum + (Number(c.hpAdjust) || 0));
@@ -270,6 +271,14 @@ export function derive(c, { fullHp = false } = {}) {
   x.cls = (x.classes || []).map((k) => findClass(k.cls)?.name || k.cls).join(' / ') || x.cls || '';
   x.subclass = x.classes?.[0]?.subclass || '';
   const oldMax = c.maxHp;
+  // Bewegung und Sinne aus Spezies und Wirkungen (Korrektur-Modus: speedAdj)
+  if (x.speciesKey) {
+    const mv = charMovement(x);
+    x.speed = mv.speed;
+    x.darkvision = mv.dark;
+    x.speeds = mv.speeds;
+    x.senses = mv.senses;
+  }
   x.maxHp = computeMaxHp(x);
   const cm = charMods(x);
   x.ac = cm.ac.ac;
@@ -302,7 +311,7 @@ export function buildCharacter(d) {
     asi: asiLevels(d).map((l) => ({ level: l.level, cls: d.cls, ...(d.asis[l.level] || {}) })),
     saves: saveList(d), skills, feats: draftFeats(d),
     tools: [cls?.tools, bg?.tool].filter(Boolean).join(' · '),
-    hpBase: Array.from({ length: d.level }, (_, i) => (i === 0 ? cls.hd : hpAverage(cls.hd))), hpAdjust: 0, tempHp: 0, hdUsed: 0,
+    hpBase: Array.from({ length: d.level }, (_, i) => hpForLevel(cls.hd, i === 0)), hpAdjust: 0, tempHp: 0, hdUsed: 0,
     armor: { body: d.armorBody || '', shield: !!d.shield }, weapons: [...d.weapons], acBonus: 0, attacks: [],
     languages: d.languages, alignment: d.alignment, appearance: d.appearance, personality: d.personality, backstory: d.backstory, notes: '',
     spell: {
@@ -441,7 +450,7 @@ function StepBasis({ d, set, setEdition }) {
     <//>
     <div class="grid two">
       <${Field} label="Startstufe" hint="Normal ist Stufe 1. Bei höheren Stufen gibt es Trefferpunkte nach Durchschnitt, und du triffst die Aufstiegs-Entscheidungen im Schritt „Talente & Stufen“.">
-        <div class="row nowrap"><${IconBtn} icon="minus" onClick=${() => set({ level: Math.max(1, d.level - 1), asis: {} })} /><b style="min-width:40px;text-align:center;font-size:20px">${d.level}</b><${IconBtn} icon="plus" onClick=${() => set({ level: Math.min(20, d.level + 1), asis: {} })} /></div>
+        <div class="row nowrap"><${IconBtn} icon="minus" onClick=${() => set({ level: Math.max(1, d.level - 1), asis: {} })} /><b style="min-width:40px;text-align:center;font-size:20px">${d.level}</b><${IconBtn} icon="plus" onClick=${() => set({ level: Math.min(RULES.maxLevel, d.level + 1), asis: {} })} /></div>
       <//>
       ${campaigns.length ? html`<${Field} label="Kampagne" hint="Der Charakter gehört dir und kann später in eine andere Kampagne wechseln.">
         <${Select} value=${d.campaignId} onChange=${(v) => set({ campaignId: v })} options=${[{ value: '', label: '– noch keine –' }, ...campaigns.map((c) => ({ value: c.id, label: c.name }))]} />
@@ -558,8 +567,8 @@ function StepAttribute({ d, set }) {
   const usedIdx = new Set(Object.values(d.assign).filter((x) => x != null));
   const spent = AB.reduce((a, k) => a + POINT_COST[d.buy[k]], 0);
   const rollIt = () => {
-    const sets = Array.from({ length: 6 }, () => prepareRoll('4d6dl1', { kind: 'free' })).filter(Boolean);
-    showRollAnimated({ dice: sets.flatMap((s) => s.dice), total: sets.reduce((a, s) => a + s.total, 0), label: 'Attributswerte', text: sets.map((s) => s.total).join(' · '), notes: [], ts: Date.now(), input: '6 × 4W6' });
+    const sets = Array.from({ length: 6 }, () => prepareRoll(rollDice(), { kind: 'free' })).filter(Boolean);
+    showRollAnimated({ dice: sets.flatMap((s) => s.dice), total: sets.reduce((a, s) => a + s.total, 0), label: 'Attributswerte', text: sets.map((s) => s.total).join(' · '), notes: [], ts: Date.now(), input: `6 × ${ROLL_METHODS.find((m) => m.value === RULES.rollMethod)?.label || '4W6'}` });
     set({ rolled: sets.map((s) => s.total).sort((a, b) => b - a), assign: {} });
   };
   const ts = tashaAmounts(d);
@@ -664,10 +673,15 @@ function BG3Pick({ items, value, onChange, compact = false, empty = 'Wähle link
   </div>`;
 }
 
-function FeatSelect({ d, value, onChange, cats, ab, onAb, exclude = [] }) {
-  const list = featsFor(d.edition, cats).filter((f) => !exclude.includes(f.key) || f.key === value);
+function FeatSelect({ d, char = null, value, onChange, cats, ab, onAb, exclude = [] }) {
+  const list = featsFor(d.edition, cats).filter((f) => !exclude.includes(f.key) || f.key === value || f.repeatable);
   const asi = featAsi(findFeat(value), d.edition);
-  const items = list.map((x) => ({ key: x.key, name: x.name, tag: featAsi(x, d.edition) ? '+1' : '', desc: x.desc, req: x.req }));
+  const pre = useMemo(() => { if (char) return char; try { return buildPreview(d); } catch { return null; } }, [d, char]);
+  const items = list.map((x) => {
+    const chk = featPrereq(x, pre);
+    const req = prereqText(x);
+    return { key: x.key, name: x.name, tag: !chk.ok ? '✖' : featAsi(x, d.edition) ? '+1' : '', desc: x.desc, req: req ? `${req}${chk.ok ? '' : ` – nicht erfüllt (${chk.why})`}` : '' };
+  });
   return html`<${BG3Pick} items=${items} value=${value || ''} onChange=${onChange} empty="Wähle links ein Talent – hier steht dann, was es genau kann."
     foot=${asi ? html`<label class="bg3-foot small">+1 auf <${Select} class="sm" value=${ab || ''} onChange=${onAb} options=${[{ value: '', label: '–' }, ...asi.map((k) => ({ value: k, label: AB_NAME[k] }))]} /></label>` : null} />`;
 }
@@ -689,7 +703,7 @@ function StepTalente({ d, set }) {
       const a = d.asis[l.level] || { type: 'asi' };
       return html`<div class="card stack sm" key=${l.level}>
         <div class="row"><b class="grow">Stufe ${l.level}: ${l.boon ? 'Epische Gabe' : 'Attributswerterhöhung'}</b>
-          <${Segmented} value=${a.type} onChange=${(v) => set({ asis: { ...d.asis, [l.level]: { type: v } } })} options=${[{ value: 'asi', label: l.boon ? '+1 Attribut (bis 30)' : '+2 / +1+1' }, { value: 'feat', label: 'Talent' }]} /></div>
+          ${RULES.feats ? html`<${Segmented} value=${a.type} onChange=${(v) => set({ asis: { ...d.asis, [l.level]: { type: v } } })} options=${[{ value: 'asi', label: l.boon ? '+1 Attribut (bis 30)' : '+2 / +1+1' }, { value: 'feat', label: 'Talent' }]} />` : null}</div>
         ${a.type === 'feat'
           ? html`<${FeatSelect} d=${d} cats=${l.boon ? ['epic', 'general'] : ['general', ...(d.edition === '2014' ? ['origin'] : [])]} value=${a.feat} onChange=${(v) => setAsi(l.level, { type: 'feat', feat: v, featAb: '' })} ab=${a.featAb} onAb=${(v) => setAsi(l.level, { featAb: v })} exclude=${taken} />`
           : html`<div class="row">
@@ -722,7 +736,7 @@ function StepAusruestung({ d, set }) {
     ${d.edition === '2024' && bg ? html`<div class="card stack sm">
       <b>Hintergrundausrüstung</b>
       <label class="radio-card"><input type="radio" name="eqb" checked=${d.equipBg === 'A'} onChange=${() => set({ equipBg: 'A', weaponsTouched: false })} /><span><b>Paket</b><br /><span class="small muted">${bg.equip}</span></span></label>
-      <label class="radio-card"><input type="radio" name="eqb" checked=${d.equipBg === 'B'} onChange=${() => set({ equipBg: 'B', weaponsTouched: false })} /><span><b>Stattdessen 50 GM</b></span></label>
+      <label class="radio-card"><input type="radio" name="eqb" checked=${d.equipBg === 'B'} onChange=${() => set({ equipBg: 'B', weaponsTouched: false })} /><span><b>Stattdessen ${bg?.goldAlt ?? 50} GM</b></span></label>
     </div>` : null}
     <div class="card stack sm">
       <div class="row"><b class="grow">Getragene Rüstung</b><span class="badge accent">RK ${cm.ac.ac}</span></div>
@@ -1003,10 +1017,10 @@ function LevelUp({ c, close }) {
       <b>1. Klasse</b>
       <div class="chips">
         ${(c.classes || []).map((x) => html`<button type="button" class=${`chip${clsKey === x.cls ? ' selected' : ' suggest'}`} onClick=${() => { setClsKey(x.cls); setHp(null); }}>${findClass(x.cls)?.name} ${x.level} → ${x.level + 1}</button>`)}
-        <select class="chip fx-select" value=${isNew ? clsKey : ''} onChange=${(e) => { if (e.target.value) { setClsKey(e.target.value); setHp(null); } }}>
+        ${RULES.multiclass ? html`<select class="chip fx-select" value=${isNew ? clsKey : ''} onChange=${(e) => { if (e.target.value) { setClsKey(e.target.value); setHp(null); } }}>
           <option value="">Neue Klasse (Mehrklassen) …</option>
           ${classesFor(ed).filter((k) => !c.classes?.some((x) => x.cls === k.key)).map((k) => html`<option value=${k.key}>${k.name}${multiclassOk(c, k.key).ok ? '' : ' (Voraussetzung fehlt)'}</option>`)}
-        </select>
+        </select>` : null}
       </div>
       ${isNew && cls ? html`<div class=${`small ${mc.ok && mcHome.ok ? 'muted' : 'danger-text'}`}>${mc.ok && mcHome.ok ? `Mehrklassen: Du erhältst ${cls.mc.gain}.` : mc.why || mcHome.why}</div>` : null}
     </div>
@@ -1014,8 +1028,9 @@ function LevelUp({ c, close }) {
       <div class="card stack sm">
         <b>2. Trefferpunkte</b>
         <div class="row">
-          <${Btn} icon="d20" onClick=${rollHp}>W${cls.hd} würfeln<//>
-          <${Btn} kind=${hpMode === 'avg' ? 'primary' : ''} onClick=${() => { setHp(hpAverage(cls.hd)); setHpMode('avg'); }}>Durchschnitt nehmen (${hpAverage(cls.hd)})<//>
+          ${RULES.hpLevel !== 'max' ? html`<${Btn} icon="d20" onClick=${rollHp}>W${cls.hd} würfeln<//>` : null}
+          ${RULES.hpLevel === 'avg' ? html`<${Btn} kind=${hpMode === 'avg' ? 'primary' : ''} onClick=${() => { setHp(hpAverage(cls.hd)); setHpMode('avg'); }}>Durchschnitt nehmen (${hpAverage(cls.hd)})<//>` : null}
+          ${RULES.hpLevel === 'max' ? html`<${Btn} kind=${hpMode === 'max' ? 'primary' : ''} onClick=${() => { setHp(cls.hd); setHpMode('max'); }}>Maximum nehmen (${cls.hd})<//>` : null}
           ${hp != null ? html`<span><b>+${Math.max(1, hp + con) + bonusHp} TP</b> <span class="small muted">(${hp} ${fmtMod(con)} KON${bonusHp ? ` + ${bonusHp}` : ''})</span></span>` : null}
         </div>
       </div>
@@ -1030,9 +1045,9 @@ function LevelUp({ c, close }) {
           empty="Wähle links einen Kampfstil – hier steht, was er bewirkt." items=${styleItems(ed, clsKey)} /><//>` : null}
         ${asiF ? html`<div class="stack sm">
           <div class="row"><b class="grow">${asiF.kind === 'boon' ? 'Epische Gabe' : 'Attributswerterhöhung'}</b>
-            <${Segmented} value=${asi.type} onChange=${(v) => setAsi({ type: v })} options=${[{ value: 'asi', label: asiF.kind === 'boon' ? '+1 (bis 30)' : '+2 / +1+1' }, { value: 'feat', label: 'Talent' }]} /></div>
+            ${RULES.feats ? html`<${Segmented} value=${asi.type} onChange=${(v) => setAsi({ type: v })} options=${[{ value: 'asi', label: asiF.kind === 'boon' ? '+1 (bis 30)' : '+2 / +1+1' }, { value: 'feat', label: 'Talent' }]} />` : null}</div>
           ${asi.type === 'feat'
-            ? html`<${FeatSelect} d=${{ edition: ed }} cats=${asiF.kind === 'boon' ? ['epic', 'general'] : ['general', ...(ed === '2014' ? ['origin'] : [])]} value=${asi.feat} onChange=${(v) => setAsi({ type: 'feat', feat: v })} ab=${asi.featAb} onAb=${(v) => setAsi({ ...asi, featAb: v })} exclude=${(c.feats || []).map((f) => f.key)} />`
+            ? html`<${FeatSelect} d=${{ edition: ed }} char=${{ ...c, classes: (c.classes || []).map((x) => (x.cls === clsKey ? { ...x, level: x.level + 1 } : x)) }} cats=${asiF.kind === 'boon' ? ['epic', 'general'] : ['general', ...(ed === '2014' ? ['origin'] : [])]} value=${asi.feat} onChange=${(v) => setAsi({ type: 'feat', feat: v })} ab=${asi.featAb} onAb=${(v) => setAsi({ ...asi, featAb: v })} exclude=${(c.feats || []).map((f) => f.key)} />`
             : html`<div class="row">
               <label class="small">${asiF.kind === 'boon' ? '+1' : asi.b && asi.b !== asi.a ? '+1' : '+2'} auf <${Select} class="sm" value=${asi.a || ''} onChange=${(v) => setAsi({ ...asi, a: v })} options=${[{ value: '', label: '–' }, ...AB.map((k) => ({ value: k, label: `${AB_NAME[k]} (${c.abilities?.[k] ?? 10})` }))]} /></label>
               ${asiF.kind !== 'boon' ? html`<label class="small">und +1 auf <${Select} class="sm" value=${asi.b || ''} onChange=${(v) => setAsi({ ...asi, b: v })} options=${[{ value: '', label: '– (dann +2)' }, ...AB.filter((k) => k !== asi.a).map((k) => ({ value: k, label: AB_NAME[k] }))]} /></label>` : null}
