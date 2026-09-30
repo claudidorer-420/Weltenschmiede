@@ -133,9 +133,10 @@ export function finalScores(d) {
 function draftFeats(d) {
   const out = [];
   const sp = speciesOf(d);
+  const bg = bgOf(d);
+  if (bg?.feat) out.push({ key: bg.feat, source: `Hintergrund: ${bg.name}` });
+  if (bg?.featChoice?.length && d.bgFeat && bg.featChoice.includes(d.bgFeat)) out.push({ key: d.bgFeat, source: `Hintergrund: ${bg.name}` });
   if (d.edition === '2024') {
-    const bg = bgOf(d);
-    if (bg?.feat) out.push({ key: bg.feat, source: `Hintergrund: ${bg.name}` });
     if (sp?.originFeat && d.humanFeat) out.push({ key: d.humanFeat, source: `${sp.name}: Vielseitig` });
   } else if (variantFeatAllowed(d) && d.variantFeat) out.push({ key: d.variantFeat, source: sp?.name || 'Volk', ab: d.variantFeatAb });
   if (d.style) out.push({ key: d.style, source: 'Kampfstil' });
@@ -379,6 +380,7 @@ function problems(d, step) {
   }
   if (step === 'talente') {
     if (d.edition === '2024' && sp?.originFeat && !d.humanFeat) p.push('Wähle das zusätzliche Herkunftstalent.');
+    if (bgOf(d)?.featChoice?.length && !bgOf(d).featChoice.includes(d.bgFeat)) p.push('Wähle das Talent deines Hintergrunds.');
     if (variantFeatAllowed(d) && !d.variantFeat) p.push('Wähle ein Talent.');
     if (variantFeatAllowed(d) && d.variantFeat && featAsi(findFeat(d.variantFeat), d.edition) && !d.variantFeatAb) p.push('Wähle das Attribut für das Talent.');
     for (const l of asiLevels(d)) {
@@ -532,7 +534,7 @@ function StepHerkunft({ d, set }) {
 
     <div class="section-title">Hintergrund</div>
     <div class="pick-grid">${BACKGROUNDS[d.edition].map((b) => html`<${Pick} key=${b.key} active=${d.backgroundKey === b.key}
-      onClick=${() => set({ backgroundKey: b.key, bgPlus2: '', bgPlus1: '', classSkills: d.classSkills.filter((k) => !(b.skills || []).includes(k)), anySkills: [], skilledPicks: [] })}
+      onClick=${() => set({ backgroundKey: b.key, bgPlus2: '', bgPlus1: '', bgFeat: '', classSkills: d.classSkills.filter((k) => !(b.skills || []).includes(k)), anySkills: [], skilledPicks: [] })}
       title=${b.name} sub=${(b.skills || []).map(skillName).join(', ') || 'Fertigkeiten frei'}>
       ${d.edition === '2024' && b.abilities ? html`<span class="tiny accent-text">${b.abilities.map((k) => AB_SHORT[k]).join(' · ')} · ${findFeat(b.feat)?.name}</span>` : null}
     <//>`)}</div>
@@ -675,8 +677,8 @@ function BG3Pick({ items, value, onChange, compact = false, empty = 'Wähle link
   </div>`;
 }
 
-function FeatSelect({ d, char = null, value, onChange, cats, ab, onAb, exclude = [] }) {
-  const list = featsFor(d.edition, cats).filter((f) => !exclude.includes(f.key) || f.key === value || f.repeatable);
+function FeatSelect({ d, char = null, value, onChange, cats, ab, onAb, exclude = [], only = null }) {
+  const list = (only?.length ? featsFor(d.edition, null).filter((f) => only.includes(f.key)) : featsFor(d.edition, cats)).filter((f) => !exclude.includes(f.key) || f.key === value || f.repeatable);
   const asi = featAsi(findFeat(value), d.edition);
   const pre = useMemo(() => { if (char) return char; try { return buildPreview(d); } catch { return null; } }, [d, char]);
   const items = list.map((x) => {
@@ -696,7 +698,9 @@ function StepTalente({ d, set }) {
   const setAsi = (lvl, patch) => set({ asis: { ...d.asis, [lvl]: { type: 'asi', ...(d.asis[lvl] || {}), ...patch } } });
   const taken = draftFeats(d).map((f) => f.key).filter((k) => !['skilled', 'magic-initiate-cleric', 'magic-initiate-druid', 'magic-initiate-wizard'].includes(k));
   return html`<div class="stack lg">
-    ${d.edition === '2024' && bg?.feat ? html`<div class="card stack sm"><b><${Icon} name="star" size=${15} /> Herkunftstalent: ${findFeat(bg.feat)?.name}</b><div class="small muted">${findFeat(bg.feat)?.desc}</div><div class="tiny faint">Kommt vom Hintergrund „${bg.name}“.</div></div>` : null}
+    ${bg?.featChoice?.length ? html`<div class="card stack sm"><b><${Icon} name="star" size=${15} /> Talent des Hintergrunds „${bg.name}“ (zur Wahl)</b>
+      <${FeatSelect} d=${d} only=${bg.featChoice} value=${d.bgFeat} onChange=${(v) => set({ bgFeat: v })} exclude=${taken} /></div>` : null}
+    ${bg?.feat ? html`<div class="card stack sm"><b><${Icon} name="star" size=${15} /> ${d.edition === '2024' ? 'Herkunftstalent' : 'Talent'}: ${findFeat(bg.feat)?.name}</b><div class="small muted">${findFeat(bg.feat)?.desc}</div><div class="tiny faint">Kommt vom Hintergrund „${bg.name}“.</div></div>` : null}
     ${d.edition === '2024' && sp?.originFeat ? html`<div class="card stack sm"><b>${sp.name}: zusätzliches Herkunftstalent (Vielseitig)</b>
       <${FeatSelect} d=${d} cats=${['origin']} value=${d.humanFeat} onChange=${(v) => set({ humanFeat: v })} exclude=${taken} /></div>` : null}
     ${variantFeatAllowed(d) ? html`<div class="card stack sm"><b>Talent (${subOf(d)?.name || sp?.name})</b>

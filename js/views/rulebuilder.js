@@ -17,7 +17,7 @@ import { loadBase, TEMPLATE_ONLY } from '../core/rulebase.js';
 import { SKILLS } from '../data/rules5e.js';
 import { DAMAGE_ART, SCHOOL_ART } from '../data/artmap.js';
 import { useSpells } from '../data/spells.js';
-import { FX_TYPES, FX_BY, FX_HELP, FX_CONDS, MOVE_DE, SENSE_DE, fxLabel, CUSTOM_STATUS, ENGINE_EFFECTS, FX_ON, FX_HP, FX_SELFHP, DICE_FX, STYLE_FX, BONUS_ACTS, PICK_DE, SCHOOLS } from '../core/effects.js';
+import { FX_TYPES, FX_BY, FX_HELP, FX_CONDS, MOVE_DE, SENSE_DE, fxLabel, CUSTOM_STATUS, ENGINE_EFFECTS, FX_ON, FX_HP, FX_SELFHP, DICE_FX, STYLE_FX, BONUS_ACTS, PICK_DE, SCHOOLS, REACT_TRIG, REACT_EFF } from '../core/effects.js';
 import { FxText, fxNames, fxTitle } from '../ui/fxtext.js';
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Toggle, Check, Segmented, Select, AutoTextarea, Empty, ViewToggle, openModal, confirmDialog, promptDialog, openMenu, toast, pickFiles } from '../ui/components.js';
@@ -99,7 +99,11 @@ const INFO = {
   subs: 'Unterarten (Regeln 2014), z. B. Hochelf und Waldelf. Sie ergänzen die Spezies.',
   fx: 'Wirkungen, die sich nicht in einem Satz sagen lassen oder die du genau festlegen willst: Bewegungsarten, Sinne, RK, Resistenzen, Übungen, Zauber, begrenzte Nutzungen … „ab Stufe“ = gilt erst ab dieser Charakterstufe (bei Klassen: Klassenstufe). Die Bedingung schränkt ein, wann die Wirkung zählt.',
   abilities: 'Regeln 2024: drei Attribute, auf die der Spieler +2/+1 oder dreimal +1 verteilt.',
-  bgFeat: 'Regeln 2024: Herkunftstalent, das jeder mit diesem Hintergrund erhält.',
+  bgFeat: 'Talent, das jeder mit diesem Hintergrund erhält (Regeln 2024: das Herkunftstalent; in Regeln 2014 z. B. für Hintergründe, die ein Talent mitbringen).',
+  attuneBy: 'Leer = jeder darf sich einstimmen. Sonst nur Charaktere mit einer der gewählten Klassen oder Spezies (z. B. „erfordert Einstimmung durch einen Magier“).',
+  hitOpt: 'Nach einem Treffer beim Schadenswurf wählbar (wie Niederstrecken): Zusatzschaden – auch aus einer Tabellenspalte wie [Überlegenheitswürfel] – plus optional Rettungswurf mit Zustand, Stoß oder Heilung. „einmal pro Zug“ unter Bedingungen setzen, wenn es nur einmal pro Zug geht.',
+  resInit: 'Hast du beim Würfeln der Initiative keine Nutzung mehr übrig, bekommst du so viele zurück (z. B. Rastlos: 1 Überlegenheitswürfel).',
+  bgFeatChoice: 'Der Spieler wählt im Assistenten eines dieser Talente (z. B. „Aufmerksam, Begabt oder Zäh“). Leer lassen, wenn der Hintergrund ein festes oder kein Talent gibt.',
   tool: 'Werkzeug oder Instrument, in dem der Hintergrund Übung gibt (Text wie im Bogen).',
   languages: 'Anzahl zusätzlicher Sprachen nach Wahl (Regeln 2014).',
   feature: 'Name des Hintergrundmerkmals (Regeln 2014), z. B. „Zuflucht der Gläubigen“.',
@@ -327,7 +331,7 @@ const FX_NEW = {
   ac: { v: 1 }, acFormula: { v: 13, k: ['dex'] }, acMin: { v: 16 }, dexCap: { v: 1 }, stealthOk: {},
   resist: { k: [] }, immune: { k: [] }, vuln: { k: [] }, condImm: { k: [] }, dmgReduce: { v: 1, k: [] }, critImmune: {},
   disAttackers: { on: 'all' }, retaliate: { on: 'melee', dice: '1d4', type: 'fire' }, evasion: {}, endure: { uses: '1', rest: 'long' }, aura: { k: 'save', v: 'mod:cha', min: 1, r: 10 },
-  hpLevel: { v: 1 }, hp: { v: 5 }, regen: { dice: '1d4' }, tempStart: { v: 'mod:cha' }, healBonus: { v: 2 },
+  hpLevel: { v: 1 }, hp: { v: 5 }, regen: { dice: '1d4' }, healSelf: { v: 2 }, tempStart: { v: 'mod:cha' }, healBonus: { v: 2 },
   abil: { k: 'str', v: 1 }, abilSet: { k: 'str', v: 19 }, init: { v: 2 }, saveProf: { k: [] }, saveBonus: { v: 1 }, saveAdv: { k: [], vs: 'spell' },
   checkBonus: { k: [], v: 1 }, checkAdv: { k: [] }, jack: {}, dice: { k: [] },
   skill: { k: [] }, expertise: { k: [] }, weapon: { k: [] }, armor: { k: [] }, tool: { k: '' }, lang: { k: [] }, pick: { k: 'skill', n: 1 },
@@ -337,16 +341,26 @@ const FX_NEW = {
   res: { k: '', v: 1, rest: 'long' }, resMax: { k: '', v: 1 }, bonusAct: { k: ['dash', 'disengage', 'hide'] },
   action: { k: '', kind: 'save', cost: 'action', ab: 'con', dice: '2d6', type: 'fire', save: 'dex', half: true, area: { shape: 'cone', size: 4.5 }, uses: 'pb', rest: 'long' },
   adv: { k: 'Vorteil bei …' },
+  heavyOk: {}, healRecv: { v: 'mod:con' }, minRoll: { k: [], v: 10 }, rangedOk: { k: ['long'], on: 'weapon' }, autoCrit: { vsCond: 'surprised' }, concDis: {},
+  hitOpt: { k: '', dice: '1d8', pool: '', poolCost: 1, once: true, on: 'weapon' }, spellList: { cls: '', k: [] }, cantripHalf: {}, sculpt: { school: 'evocation' }, summonHp: { v: 30 },
+  resInit: { k: '', v: 1 },
 };
 const ACT_KIND = [
   { value: 'attack', label: 'Angriff (Trefferwurf gegen RK)' }, { value: 'weapon', label: 'Waffenaktion (Angriff mit der Waffe + Extra)' },
   { value: 'save', label: 'Rettungswurf (Odem, Welle, Blick)' }, { value: 'heal', label: 'Heilung' }, { value: 'temp', label: 'Temporäre TP' },
   { value: 'buff', label: 'Kampfhaltung / Stärkung (Wirkungen auf Zeit)' }, { value: 'mark', label: 'Ziel markieren (Zusatzschaden, Vorteil)' },
-  { value: 'restore', label: 'Zauberplatz / Ressource zurückholen' }, { value: 'react', label: 'Reaktion (wenn du getroffen wirst)' },
+  { value: 'restore', label: 'Zauberplatz / Ressource zurückholen' }, { value: 'react', label: 'Reaktion (Treffer, Verfehlen, Angriff, Verbündete)' },
+  { value: 'summon', label: 'Beschwören / Gefährte (Kreatur aus dem Kompendium)' }, { value: 'form', label: 'Gestalt annehmen (Tiergestalt)' },
 ];
 const ACT_COST = [{ value: 'action', label: 'Aktion' }, { value: 'bonus', label: 'Bonusaktion' }, { value: 'attack', label: 'statt eines Angriffs' }, { value: 'free', label: 'frei (keine Aktion)' }];
 const ACT_AREA = [{ value: '', label: 'ein Ziel' }, { value: 'cone', label: 'Kegel' }, { value: 'line', label: 'Linie' }, { value: 'sphere', label: 'Kugel' }, { value: 'cube', label: 'Würfel' }, { value: 'emanation', label: 'Ausstrahlung um sich' }];
 const ACT_USES = [{ value: 'will', label: 'beliebig oft' }, { value: '1', label: '1×' }, { value: '2', label: '2×' }, { value: '3', label: '3×' }, { value: 'pb', label: 'Übungsbonus-mal' }, ...AB.map((k) => ({ value: `mod:${k}`, label: `${CG.AB_SHORT[k]}-Mod.-mal` }))];
+// Welche Wirkung zu welchem Auslöser passt
+const REACT_OK = {
+  hit: ['reduce', 'ac', 'strike', 'riposte', 'uncrit', 'selfCond'], melee: ['reduce', 'ac', 'strike', 'riposte', 'uncrit', 'selfCond'], ranged: ['reduce', 'ac', 'strike', 'uncrit', 'selfCond'], miss: ['riposte', 'strike'],
+  attacked: ['dis', 'penalty'], ally: ['reduce', 'ac', 'uncrit'], allyAttacked: ['dis', 'penalty', 'strike', 'riposte'], damaged: ['reduce', 'strike', 'selfCond'],
+  failSave: ['bonus', 'reroll', 'success'], allyFailSave: ['bonus', 'reroll', 'success'],
+};
 function MIn({ value, onChange, placeholder = '' }) {
   return html`<div class="rb-unit"><${NumIn} value=${value ?? ''} step=${1.5} min=${0} placeholder=${placeholder} onChange=${onChange} /><span>m</span></div>`;
 }
@@ -354,6 +368,7 @@ function MIn({ value, onChange, placeholder = '' }) {
 const COND_OPTS = [
   { value: '', label: 'immer' }, { value: 'noHeavy', label: 'ohne schwere Rüstung' }, { value: 'unarmored', label: 'ohne Rüstung' }, { value: 'unarmoredNoShield', label: 'ohne Rüstung und Schild' },
   { value: 'noShield', label: 'ohne Schild' }, { value: 'armored', label: 'in Rüstung' }, { value: 'heavy', label: 'in schwerer Rüstung' }, { value: 'shield', label: 'mit Schild' },
+  { value: 'noMedHeavy', label: 'ohne mittelschwere oder schwere Rüstung' }, { value: 'dual', label: 'mit zwei Nahkampfwaffen' },
   { value: 'conc', label: 'solange du dich konzentrierst (Kampf)' }, { value: 'bloodied', label: 'bei höchstens halben TP (Kampf)' }, { value: 'raging', label: 'im Kampfrausch (Kampf)' },
 ];
 const condOpts = () => [...COND_OPTS,
@@ -387,7 +402,7 @@ function ValIn({ value, onChange, dice = true, spell = false, level = false, pla
 }
 // Bedingungen einer Angriffswirkung: worauf, gegen wen, wann
 function Filters({ f, set, on = true, types = true }) {
-  const n = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed', 'first'].filter((k) => f[k]).length;
+  const n = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed', 'first', 'allyNear', 'wk'].filter((k) => f[k]).length;
   return html`<details class="rb-filt" open=${n > 0}>
     <summary><span class="small">Bedingungen${n ? ` (${n})` : ''}</span><${Info} text=${INFO.filters} /></summary>
     <div class="rb-act-row">
@@ -403,7 +418,10 @@ function Filters({ f, set, on = true, types = true }) {
       <span class="rb-fxp"><${Check} checked=${!!f.once} label="einmal pro Zug" onChange=${(x) => set({ once: x || undefined })} /></span>
       <span class="rb-fxp"><${Check} checked=${!!f.notActed} label="Ziel noch nicht am Zug" onChange=${(x) => set({ notActed: x || undefined })} /></span>
       <span class="rb-fxp"><${Check} checked=${!!f.first} label="erste Kampfrunde" onChange=${(x) => set({ first: x || undefined })} /></span>
+      <span class="rb-fxp"><${Check} checked=${!!f.allyNear} label="Verbündeter neben dem Ziel" onChange=${(x) => set({ allyNear: x || undefined })} /></span>
     </div>
+    <div class="rb-act-row"><span class="rb-fxp"><span class="small muted">nur mit diesen Waffen</span><${Select} value="" options=${[{ value: '', label: '+ Waffe' }, ...CG.WEAPONS.map((w) => ({ value: w.key, label: w.name }))]} onChange=${(k) => k && set({ wk: [...new Set([...toArr(f.wk), k])] })} /></span>
+      ${toArr(f.wk).map((k) => html`<button type="button" class="rb-chip on" key=${k} onClick=${() => { const r = toArr(f.wk).filter((y) => y !== k); set({ wk: r.length ? r : undefined }); }}>${CG.findWeapon(k)?.name || k} ×</button>`)}</div>
     ${types ? html`<div class="rb-act-row"><span class="rb-fxp"><span class="small muted">nur wenn du diesen Schaden verursachst</span></span><${Chips} options=${DMG} value=${toArr(f.ifType)} onChange=${(x) => set({ ifType: x.length ? x : undefined })} /></div>` : null}
   </details>`;
 }
@@ -434,7 +452,8 @@ function FxParams({ f, set, spells }) {
         ${v(html`<${Check} checked=${!!f.once} label="einmal pro Zug" onChange=${(x) => set({ once: x || undefined })} />`)}</div></div>`;
     case 'acFormula': return html`${v(html`${lab('RK =')}<${NumIn} value=${f.v} min=${0} max=${25} onChange=${(x) => set({ v: x || 10 })} />${lab('+')}`)}${v(html`<${Chips} options=${AB_OPTS} value=${f.k} max=${2} onChange=${(x) => set({ k: x })} />`)}
       ${v(html`<${Check} checked=${f.shield !== false} label="Schild erlaubt" onChange=${(x) => set({ shield: x ? undefined : false })} />`)}`;
-    case 'resist': return html`${v(html`<${Chips} options=${DMG} value=${f.k} onChange=${(x) => set({ k: x })} />`)}${v(html`<${Check} checked=${!!f.nm} label="nur gegen nichtmagische Angriffe" onChange=${(x) => set({ nm: x || undefined })} />`)}`;
+    case 'resist': return html`${v(html`<${Chips} options=${DMG} value=${f.k} onChange=${(x) => set({ k: x })} /><${Btn} size="sm" kind="ghost" onClick=${() => set({ k: DMG.map((d) => d.value) })}>alle<//>`)}${v(html`<${Check} checked=${!!f.nm} label="nur gegen nichtmagische Angriffe" onChange=${(x) => set({ nm: x || undefined, spell: undefined })} /><${Check} checked=${!!f.spell} label="nur gegen Zauberschaden" onChange=${(x) => set({ spell: x || undefined, nm: undefined })} />`)}`;
+    case 'healSelf': return v(html`${lab('du erhältst')}<${ValIn} value=${f.v ?? 2} dice=${false} onChange=${(x) => set({ v: x })} /><${Check} checked=${f.slot !== false} label="+ Grad des Zaubers" onChange=${(x) => set({ slot: x ? undefined : false })} />`);
     case 'immune': case 'vuln': return v(html`<${Chips} options=${DMG} value=${f.k} onChange=${(x) => set({ k: x })} />`);
     case 'ignoreResist': return html`${v(html`<${Chips} options=${DMG} value=${f.k} onChange=${(x) => set({ k: x })} />`)}${v(html`${lab('leer = Schadensart des Angriffs · gilt für')}<${Select} value=${f.on || 'all'} options=${ON_OPTS.slice(0, 7)} onChange=${(x) => set({ on: x })} />`)}`;
     case 'condImm': return v(html`<${Chips} options=${FX_CONDS.map((c) => ({ value: c, label: c }))} value=${f.k} onChange=${(x) => set({ k: x })} />`);
@@ -451,9 +470,11 @@ function FxParams({ f, set, spells }) {
     case 'endure': return html`${v(html`<${Select} value=${f.dice ? 'dice' : 'one'} options=${[{ value: 'one', label: 'stattdessen 1 TP' }, { value: 'dice', label: 'TP zurück (Würfel)' }]} onChange=${(x) => set({ dice: x === 'dice' ? '2d6' : undefined })} />`)}
       ${f.dice ? v(html`<${TextIn} cls="rb-dice" value=${f.dice} onChange=${(x) => set({ dice: x.replace(/[Ww]/g, 'd') })} />`) : null}
       ${v(html`<${Select} value=${f.uses || '1'} options=${ACT_USES.filter((o) => o.value !== 'will')} onChange=${(x) => set({ uses: x })} />${lab('pro')}<${Select} value=${f.rest || 'long'} options=${RESTS} onChange=${(x) => set({ rest: x })} />`)}`;
-    case 'aura': return html`<div class="rb-act"><div class="rb-act-row">${v(html`<${Select} value=${f.k || 'save'} options=${[{ value: 'save', label: 'Bonus auf Rettungswürfe' }, { value: 'saveAdv', label: 'Vorteil gegen Zauber' }, { value: 'heal', label: 'Heilung zu deinem Zugbeginn' }, { value: 'fx', label: 'eigene Wirkungen (Resistenz, Immunität, Schaden …)' }]} onChange=${(x) => set({ k: x, ...(x === 'fx' ? { v: undefined, fx: f.fx || [] } : { fx: undefined }) })} />`)}
-      ${f.k === 'saveAdv' || f.k === 'fx' ? null : v(html`<${ValIn} value=${f.v} onChange=${(x) => set({ v: x })} />`)}${v(html`${lab('Radius')}<${DistIn} value=${f.r || 10} onChange=${(x) => set({ r: x || 10 })} />`)}
-      ${f.k === 'fx' ? v(html`<${Check} checked=${f.self !== false} label="gilt auch für dich" onChange=${(x) => set({ self: x ? undefined : false })} />`) : null}</div>
+    case 'aura': return html`<div class="rb-act"><div class="rb-act-row">${v(html`<${Select} value=${f.k || 'save'} options=${[{ value: 'save', label: 'Bonus auf Rettungswürfe' }, { value: 'saveAdv', label: 'Vorteil gegen Zauber' }, { value: 'heal', label: 'Heilung zu deinem Zugbeginn' }, { value: 'fx', label: 'eigene Wirkungen (Resistenz, Immunität, Schaden …)' }, { value: 'dmg', label: 'Schaden für Gegner, die ihren Zug darin beginnen' }]} onChange=${(x) => set({ k: x, ...(x === 'fx' ? { v: undefined, fx: f.fx || [] } : { fx: undefined }), ...(x === 'dmg' ? { dice: f.dice || '1d6', type: f.type || 'fire', v: undefined } : {}) })} />`)}
+      ${f.k === 'saveAdv' || f.k === 'fx' || f.k === 'dmg' ? null : v(html`<${ValIn} value=${f.v} onChange=${(x) => set({ v: x })} />`)}${v(html`${lab('Radius')}<${DistIn} value=${f.r || 10} onChange=${(x) => set({ r: x || 10 })} />`)}
+      ${f.k === 'fx' ? v(html`<${Check} checked=${!!f.foe} label="wirkt auf Gegner statt Verbündete" onChange=${(x) => set({ foe: x || undefined })} />${f.foe ? null : html`<${Check} checked=${f.self !== false} label="gilt auch für dich" onChange=${(x) => set({ self: x ? undefined : false })} />`}`) : null}
+      ${f.k === 'dmg' ? html`${v(html`<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder="1W6 / LV" onChange=${(x) => set({ dice: x.replace(/[Ww](?=\d)/g, 'd') || undefined })} /><${Select} value=${f.type || 'fire'} options=${DMG} onChange=${(x) => set({ type: x })} />`)}
+        ${v(html`<${Select} value=${f.save || ''} options=${SAVE_OPTS} onChange=${(x) => set({ save: x || undefined })} />${f.save ? html`${lab('SG')}<${NumIn} value=${f.dc} placeholder="8+ÜB+Mod." onChange=${(x) => set({ dc: x || undefined })} /><${Select} value=${f.ab || 'con'} options=${AB_OPTS} onChange=${(x) => set({ ab: x })} /><${Check} checked=${!!f.half} label="Hälfte bei Erfolg" onChange=${(x) => set({ half: x || undefined })} />` : null}`)}` : null}</div>
       ${f.k === 'fx' ? html`<div class="rb-act-sub"><div class="small muted">Wirkungen für Verbündete im Radius (wirken im Kampf; die Aura endet, wenn du kampfunfähig bist):</div><${FxEditor} value=${f.fx} onChange=${(x) => set({ fx: x })} /></div>` : null}</div>`;
     case 'regen': return html`${v(html`<${ValIn} value=${f.dice || f.v} onChange=${(x) => set(/[dW]/.test(String(x)) ? { dice: x, v: undefined } : { v: x, dice: undefined })} />`)}
       ${v(html`<${Select} value=${f.only || ''} options=${[{ value: '', label: 'immer (ab 1 TP)' }, { value: 'bloodied', label: 'nur bei höchstens halben TP' }]} onChange=${(x) => set({ only: x || undefined })} />`)}`;
@@ -475,7 +496,8 @@ function FxParams({ f, set, spells }) {
     case 'dice': return v(html`<${Chips} options=${Object.entries(DICE_FX).map(([value, label]) => ({ value, label }))} value=${toArr(f.k)} onChange=${(x) => set({ k: x })} />`);
     case 'style': return v(html`<${Chips} options=${Object.entries(STYLE_FX).map(([value, label]) => ({ value, label }))} value=${toArr(f.k)} onChange=${(x) => set({ k: x })} />`);
     case 'bonusAct': return v(html`<${Chips} options=${Object.entries(BONUS_ACTS).map(([value, label]) => ({ value, label }))} value=${toArr(f.k)} onChange=${(x) => set({ k: x })} />`);
-    case 'skill': case 'expertise': return v(html`<${Chips} options=${SKILL_OPTS} value=${f.k} onChange=${(x) => set({ k: x })} />`);
+    case 'skill': case 'expertise': return html`${v(html`<${Chips} options=${SKILL_OPTS} value=${f.k} onChange=${(x) => set({ k: x })} />`)}
+      ${f.t === 'skill' ? v(html`<${Check} checked=${!!f.up} label="bist du schon geübt: Expertise" onChange=${(x) => set({ up: x || undefined })} />`) : null}`;
     case 'weapon': return html`${v(html`<${Chips} options=${[{ value: 'simple', label: 'einfache Waffen' }, { value: 'martial', label: 'Kriegswaffen' }]} value=${toArr(f.k).filter((x) => x === 'simple' || x === 'martial')} onChange=${(x) => set({ k: [...x, ...toArr(f.k).filter((y) => y !== 'simple' && y !== 'martial')] })} />`)}
       ${v(html`<${Select} value="" options=${[{ value: '', label: '+ einzelne Waffe' }, ...CG.WEAPONS.map((w) => ({ value: w.key, label: w.name }))]} onChange=${(k) => k && set({ k: [...new Set([...toArr(f.k), k])] })} />`)}
       ${toArr(f.k).filter((x) => x !== 'simple' && x !== 'martial').map((k) => html`<button type="button" class="rb-chip on" key=${k} onClick=${() => set({ k: toArr(f.k).filter((y) => y !== k) })}>${CG.findWeapon(k)?.name || k} ×</button>`)}`;
@@ -518,7 +540,7 @@ function FxParams({ f, set, spells }) {
       <${Filters} f=${f} set=${set} /></div>`;
     case 'unarmed': return html`${v(html`<${TextIn} cls="rb-dice" value=${f.dice} placeholder="1W6" onChange=${(x) => set({ dice: x.replace(/[Ww]/g, 'd') })} />`)}
       ${v(html`<${Select} value=${f.type || 'bludgeoning'} options=${DMG} onChange=${(x) => set({ type: x })} />`)}
-      ${v(html`<${Select} value=${f.ab || 'best'} options=${[{ value: 'best', label: 'STÄ oder GES' }, { value: 'str', label: 'STÄ' }, { value: 'dex', label: 'GES' }]} onChange=${(x) => set({ ab: x })} />`)}`;
+      ${v(html`<${Select} value=${f.ab || 'best'} options=${[{ value: 'best', label: 'STÄ oder GES' }, ...AB_OPTS]} onChange=${(x) => set({ ab: x })} />`)}`;
     case 'spell': return html`${v(html`<${TextIn} value=${f.k} placeholder="Name des Zaubers" list="rb-spellnames" onChange=${(x) => set({ k: x })} />`)}
       ${v(html`<${Select} value=${String(f.lv ?? 1)} options=${[{ value: '0', label: 'Zaubertrick' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}. Grad` }))]} onChange=${(x) => set({ lv: Number(x) })} />`)}
       ${v(html`<${Select} value=${f.uses || (f.lv === 0 ? 'will' : '1')} options=${[{ value: 'will', label: 'beliebig oft' }, { value: '1', label: '1×' }, { value: '2', label: '2×' }, { value: '3', label: '3×' }, { value: 'pb', label: 'Übungsbonus-mal' }, { value: 'charges', label: 'kostet Ladungen des Gegenstands' }, { value: 'pool', label: 'kostet Punkte einer Ressource (Ki …)' }, { value: 'always', label: 'immer vorbereitet (Zauberplatz)' }]} onChange=${(x) => set({ uses: x })} />`)}
@@ -526,6 +548,7 @@ function FxParams({ f, set, spells }) {
       ${['1', '2', '3', 'pb'].includes(String(f.uses || (f.lv === 0 ? '' : '1'))) ? v(html`${lab('pro')}<${Select} value=${f.rest || 'long'} options=${RESTS} onChange=${(x) => set({ rest: x })} />`) : null}
       ${f.uses === 'charges' ? v(html`${lab('Ladungen')}<${NumIn} value=${f.cost} min=${1} max=${20} placeholder="1" onChange=${(x) => set({ cost: x || undefined })} />`) : null}
       ${v(html`${lab('als Grad')}<${NumIn} value=${f.castLv} min=${1} max=${9} placeholder="–" onChange=${(x) => set({ castLv: x || undefined })} />`)}
+      ${v(html`${lab('Attribut')}<${Select} value=${f.ab || ''} options=${[{ value: '', label: 'wie Zauberklasse' }, ...AB_OPTS]} onChange=${(x) => set({ ab: x || undefined })} /><${Check} checked=${f.act === 'bonus'} label="als Bonusaktion" onChange=${(x) => set({ act: x ? 'bonus' : undefined })} />`)}
       ${v(html`${lab('fester SG')}<${NumIn} value=${f.dc} min=${8} max=${30} placeholder="–" onChange=${(x) => set({ dc: x || undefined })} /><${Info} text=${INFO.spellFx} />`)}
       ${spells && f.k && !spells.some((s) => s.name.toLowerCase() === String(f.k).toLowerCase()) ? html`<span class="tiny rb-warn">Zauber nicht gefunden – im Regelwerk anlegen oder Namen prüfen.</span>` : null}`;
     case 'spellDmg': return html`${v(html`<${ValIn} value=${f.v} dice=${false} spell onChange=${(x) => set({ v: x })} />`)}
@@ -540,13 +563,47 @@ function FxParams({ f, set, spells }) {
       return html`${v(html`<${TextIn} value=${f.k} placeholder="Name, z. B. Kampfschrei" onChange=${(x) => set({ k: x })} />`)}
         ${v(html`<${Select} value=${mode} options=${RES_V} onChange=${(x) => set({ v: x === 'num' ? 1 : x })} />`)}${mode === 'num' ? v(html`<${NumIn} value=${f.v} min=${1} onChange=${(x) => set({ v: x || 1 })} />`) : null}
         ${v(html`${lab('frischt auf')}<${Select} value=${f.rest || 'long'} options=${[...RESTS, { value: 'dawn', label: 'im Morgengrauen (Würfel)' }]} onChange=${(x) => set({ rest: x })} />`)}
-        ${f.rest === 'dawn' ? v(html`${lab('zurück')}<${TextIn} cls="rb-dice" value=${f.regain || ''} placeholder="1W6+1" onChange=${(x) => set({ regain: x.replace(/[Ww]/g, 'd') || undefined })} />`) : null}`;
+        ${f.rest === 'dawn' ? v(html`${lab('zurück')}<${TextIn} cls="rb-dice" value=${f.regain || ''} placeholder="1W6+1" onChange=${(x) => set({ regain: x.replace(/[Ww]/g, 'd') || undefined })} />`) : null}
+        ${v(html`${lab('bei Initiative +')}<${NumIn} value=${f.init} min=${0} max=${10} placeholder="–" onChange=${(x) => set({ init: x || undefined })} /><${Info} text=${INFO.resInit} />`)}`;
     }
     case 'resMax': return html`${v(html`<${TextIn} value=${f.k} placeholder="Ressource, z. B. Göttliche Macht" list="rb-resnames" onChange=${(x) => set({ k: x })} />`)}${v(html`${lab('+')}<${NumIn} value=${f.v} min=${1} max=${10} onChange=${(x) => set({ v: x || 1 })} />`)}`;
     case 'adv': return v(html`<${TextIn} value=${f.k} placeholder="z. B. Vorteil beim Aufspüren von Fallen" onChange=${(x) => set({ k: x })} />`);
     case 'action': return html`<${ActionParams} f=${f} set=${set} v=${v} lab=${lab} />`;
+    case 'heavyOk': case 'concDis': case 'cantripHalf': return null;
+    case 'healRecv': case 'summonHp': return v(html`<${ValIn} value=${f.v} dice=${false} onChange=${(x) => set({ v: x })} />${f.t === 'summonHp' ? lab('temporäre TP je Kreatur') : lab('zusätzliche TP je Heilung')}`);
+    case 'minRoll': return html`${v(html`<${Chips} options=${[{ value: 'all', label: 'alle Proben' }, { value: 'prof', label: 'geübte Proben' }, ...AB_OPTS, ...SKILL_OPTS]} value=${toArr(f.k)} onChange=${(x) => set({ k: x })} />`)}
+      ${v(html`${lab('W20 zählt mindestens als')}<${NumIn} value=${f.v ?? 10} min=${2} max=${20} onChange=${(x) => set({ v: x || 10 })} />`)}`;
+    case 'rangedOk': return html`${v(html`<${Chips} options=${[{ value: 'long', label: 'kein Nachteil auf große Entfernung' }, { value: 'close', label: 'kein Nachteil mit Gegnern in 1,5 m' }, { value: 'cover', label: 'ignoriert halbe/Dreivierteldeckung' }]} value=${toArr(f.k)} onChange=${(x) => set({ k: x })} />`)}
+      ${v(html`${lab('gilt für')}<${Select} value=${f.on || 'all'} options=${[{ value: 'all', label: 'alle Fernkampfangriffe' }, { value: 'weapon', label: 'Waffenangriffe' }, { value: 'ranged', label: 'Fernkampfwaffen' }, { value: 'spell', label: 'Zauberangriffe' }]} onChange=${(x) => set({ on: x })} />`)}`;
+    case 'autoCrit': return html`<div class="rb-act"><div class="rb-act-row">${v(html`${lab('gegen')}<${Select} value=${f.vsCond || ''} options=${[{ value: '', label: 'Ziele laut Bedingungen unten' }, { value: 'surprised', label: 'überraschte Kreaturen' }, ...condRefOpts().filter((o) => o.value)]} onChange=${(x) => set({ vsCond: x || undefined })} />`)}</div><${Filters} f=${{ ...f, vsCond: f.vsCond === 'surprised' ? undefined : f.vsCond }} set=${set} types=${false} /></div>`;
+    case 'hitOpt': return html`<${HitOptParams} f=${f} set=${set} v=${v} lab=${lab} />`;
+    case 'spellList': return html`${v(html`${lab('ganze Liste')}<${Select} value=${f.cls || ''} options=${[{ value: '', label: '– keine –' }, ...CG.CLASSES.map((c) => ({ value: c.key, label: c.name }))]} onChange=${(x) => set({ cls: x || undefined })} />`)}
+      ${v(html`${lab('+ einzelne Zauber')}<${TextIn} value=${toArr(f.k).join(', ')} placeholder="Feuerball, Nebelschritt" list="rb-spellnames" onChange=${(x) => set({ k: x.split(',').map((s) => s.trim()).filter(Boolean) })} />`)}`;
+    case 'sculpt': return v(html`${lab('nur Zauber der Schule')}<${Select} value=${f.school || ''} options=${[{ value: '', label: 'alle Zauber' }, ...Object.entries(SCHOOLS).map(([value, label]) => ({ value, label }))]} onChange=${(x) => set({ school: x || undefined })} />`);
+    case 'resInit': return v(html`<${TextIn} value=${f.k} placeholder="Ressource, z. B. Überlegenheitswürfel" list="rb-resnames" onChange=${(x) => set({ k: x })} />${lab('+')}<${NumIn} value=${f.v} min=${1} max=${10} onChange=${(x) => set({ v: x || 1 })} />`);
     default: return null;
   }
+}
+// Treffer-Option: Zusatzschaden und Reiter gegen Kosten – angeboten beim Schadenswurf nach einem Treffer
+function HitOptParams({ f, set, v, lab }) {
+  const cost = f.slot ? 'slot' : f.charge ? 'charge' : f.pool ? 'pool' : f.uses && f.uses !== 'will' ? 'uses' : 'free';
+  const setCost = (c) => set({ slot: c === 'slot' || undefined, charge: c === 'charge' ? f.charge || 1 : undefined, pool: c === 'pool' ? f.pool || 'Überlegenheitswürfel' : undefined, poolCost: c === 'pool' ? f.poolCost || 1 : undefined, uses: c === 'uses' ? f.uses || '1' : undefined, rest: c === 'uses' ? f.rest || 'short' : undefined, slotDice: c === 'slot' ? f.slotDice || '1d8' : undefined });
+  return html`<div class="rb-act">
+    <div class="rb-act-row">${v(html`<${TextIn} value=${f.k || ''} placeholder="Name, z. B. Stoßangriff" onChange=${(x) => set({ k: x })} />`)}
+      ${v(html`${lab('+ Schaden')}<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder="[Überlegenheitswürfel]" onChange=${(x) => set({ dice: x.replace(/[Ww](?=\d)/g, 'd') || undefined })} /><${Select} value=${f.type || ''} options=${DMG_ANY} onChange=${(x) => set({ type: x || undefined })} /><${Info} text=${INFO.hitOpt} />`)}</div>
+    <div class="rb-act-row">${v(html`${lab('kostet')}<${Select} value=${cost} options=${[{ value: 'free', label: 'nichts (nur Bedingungen)' }, { value: 'pool', label: 'Punkte einer Ressource' }, { value: 'uses', label: 'begrenzte Nutzungen' }, { value: 'charge', label: 'Ladungen des Gegenstands' }, { value: 'slot', label: 'einen Zauberplatz' }]} onChange=${setCost} />`)}
+      ${cost === 'pool' ? v(html`<${TextIn} value=${f.pool || ''} placeholder="Überlegenheitswürfel" list="rb-resnames" onChange=${(x) => set({ pool: x || undefined })} />${lab('×')}<${NumIn} value=${f.poolCost} min=${1} max=${10} placeholder="1" onChange=${(x) => set({ poolCost: x || undefined })} />`) : null}
+      ${cost === 'uses' ? v(html`<${Select} value=${f.uses || '1'} options=${ACT_USES.filter((o) => o.value !== 'will')} onChange=${(x) => set({ uses: x })} />${lab('pro')}<${Select} value=${f.rest || 'short'} options=${RESTS} onChange=${(x) => set({ rest: x })} />`) : null}
+      ${cost === 'charge' ? v(html`<${NumIn} value=${f.charge} min=${1} max=${10} onChange=${(x) => set({ charge: x || 1 })} />${lab('Ladung(en)')}`) : null}
+      ${cost === 'slot' ? v(html`${lab('+ je Grad')}<${TextIn} cls="rb-dice" value=${f.slotDice || ''} placeholder="1W8" onChange=${(x) => set({ slotDice: x.replace(/[Ww](?=\d)/g, 'd') || undefined })} />${lab('ab Grad')}<${NumIn} value=${f.slotMin} min=${1} max=${9} placeholder="1" onChange=${(x) => set({ slotMin: x || undefined })} />`) : null}</div>
+    <div class="rb-act-row">${v(html`${lab('Zustand')}<${Select} value=${f.inflict || ''} options=${condRefOpts()} onChange=${(x) => set({ inflict: x || undefined })} />`)}
+      ${v(html`<${Select} value=${f.save || ''} options=${SAVE_OPTS} onChange=${(x) => set({ save: x || undefined })} />`)}
+      ${f.save ? v(html`${lab('SG')}<${NumIn} value=${f.dc} placeholder="8+ÜB+STÄ/GES" onChange=${(x) => set({ dc: x || undefined })} /><${Select} value=${f.ab || ''} options=${[{ value: '', label: 'bestes aus STÄ/GES' }, ...AB_OPTS]} onChange=${(x) => set({ ab: x || undefined })} />`) : null}
+      ${f.inflict ? v(html`${lab('Runden')}<${NumIn} value=${f.condDur} min=${0} max=${100} placeholder="–" onChange=${(x) => set({ condDur: x || undefined })} />`) : null}
+      ${v(html`${lab('Stoß')}<${MIn} value=${f.push} onChange=${(x) => set({ push: x || undefined })} />`)}
+      ${v(html`<${Check} checked=${!!f.drain} label="du heilst in Höhe dieses Schadens" onChange=${(x) => set({ drain: x || undefined })} />`)}
+      ${v(html`${lab('temp. TP für dich')}<${TextIn} cls="rb-dice" value=${f.temp || ''} placeholder="–" onChange=${(x) => set({ temp: x || undefined })} />`)}</div>
+    <${Filters} f=${f} set=${set} /></div>`;
 }
 // Eigene Aktion: Art, Kosten, Würfel, Rettungswurf, Fläche, Reiter, Nutzungen, Stärkungen
 function ActionParams({ f, set, v, lab }) {
@@ -560,10 +617,16 @@ function ActionParams({ f, set, v, lab }) {
       ${v(html`<${Select} value=${kind} options=${ACT_KIND} onChange=${(x) => set({ kind: x })} />`)}
       ${kind === 'react' ? null : v(html`<${Select} value=${f.cost || 'action'} options=${ACT_COST} onChange=${(x) => set({ cost: x })} />`)}<${Info} text=${INFO.actKind} /></div>
     ${kind === 'react' ? html`<div class="rb-act-row">
-      ${v(html`${lab('wenn du')}<${Select} value=${f.trigger || 'hit'} options=${[{ value: 'hit', label: 'getroffen wirst' }, { value: 'melee', label: 'im Nahkampf getroffen wirst' }, { value: 'ranged', label: 'im Fernkampf getroffen wirst' }]} onChange=${(x) => set({ trigger: x })} />`)}
-      ${v(html`<${Select} value=${f.effect || 'reduce'} options=${[{ value: 'reduce', label: 'Schaden verringern' }, { value: 'ac', label: 'RK erhöhen (Angriff verfehlt evtl.)' }, { value: 'strike', label: 'Gegenschlag / Zustand' }]} onChange=${(x) => set({ effect: x })} />`)}
+      ${v(html`${lab('Auslöser')}<${Select} value=${f.trigger || 'hit'} options=${Object.entries(REACT_TRIG).map(([value, label]) => ({ value, label }))} onChange=${(x) => set({ trigger: x, ...(REACT_OK[x] && !REACT_OK[x].includes(f.effect || 'reduce') ? { effect: REACT_OK[x][0] } : {}) })} />`)}
+      ${v(html`<${Select} value=${f.effect || 'reduce'} options=${(REACT_OK[f.trigger || 'hit'] || Object.keys(REACT_EFF)).map((value) => ({ value, label: REACT_EFF[value] }))} onChange=${(x) => set({ effect: x })} />`)}
+      ${['ally', 'allyAttacked', 'allyFailSave'].includes(f.trigger) || f.effect === 'penalty' ? v(html`${lab(f.effect === 'penalty' ? 'Reichweite zum Angreifer' : 'Reichweite')}<${MIn} value=${f.range} placeholder=${f.effect === 'penalty' ? '18' : f.trigger === 'allyFailSave' ? '9' : '1,5'} onChange=${(x) => set({ range: x || undefined })} />`) : null}
+      ${['penalty', 'bonus'].includes(f.effect) ? v(html`${lab(f.effect === 'penalty' ? 'abziehen' : 'Würfel')}<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder=${f.effect === 'penalty' ? '[Inspiration]' : '1W4'} onChange=${(x) => set({ dice: x.replace(/[Ww](?=d)/g, 'd') || undefined })} />`) : null}
+      ${['bonus', 'reroll', 'success'].includes(f.effect) ? v(html`${lab('nur bei (leer = alle)')}<${Chips} options=${AB_OPTS} value=${toArr(f.saves)} onChange=${(x) => set({ saves: x.length ? x : undefined })} />`) : null}
+      ${f.effect === 'selfCond' ? v(html`${lab('Zustand')}<${Select} value=${f.inflict || ''} options=${condRefOpts()} onChange=${(x) => set({ inflict: x || undefined })} />${lab('Runden')}<${NumIn} value=${f.condDur} min=${1} max=${100} placeholder="1" onChange=${(x) => set({ condDur: x || undefined })} />`) : null}
+      ${v(html`<${Check} checked=${!!f.free} label="braucht keine Reaktion" onChange=${(x) => set({ free: x || undefined })} />`)}
+      ${f.effect === 'riposte' ? v(html`${lab('+ Zusatzwürfel')}<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder="–" onChange=${(x) => set({ dice: x.replace(/[Ww](?=\d)/g, 'd') || undefined })} />`) : null}
       ${(f.effect || 'reduce') === 'reduce' ? html`${v(html`<${Check} checked=${!!f.half} label="halbieren" onChange=${(x) => set({ half: x || undefined })} />`)}${f.half ? null : v(html`<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder="1W12" onChange=${(x) => set({ dice: x.replace(/[Ww]/g, 'd') })} />${lab('+')}<${Select} value=${f.addMod || ''} options=${[{ value: '', label: '–' }, ...AB_OPTS.map((o) => ({ ...o, label: `${o.label}-Mod.` }))]} onChange=${(x) => set({ addMod: x || undefined })} />`)}` : null}
-      ${f.effect === 'ac' ? v(html`${lab('RK +')}<${ValIn} value=${f.v ?? 'pb'} dice=${false} onChange=${(x) => set({ v: x })} />`) : null}
+      ${f.effect === 'ac' ? v(html`${lab('RK +')}<${ValIn} value=${f.v ?? 'pb'} dice=${false} onChange=${(x) => set({ v: x })} />${lab('oder Würfel')}<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder="–" onChange=${(x) => set({ dice: x.replace(/[Ww](?=d)/g, 'd') || undefined })} />`) : null}
       ${f.effect === 'strike' ? html`${v(html`<${TextIn} cls="rb-dice" value=${f.dice || ''} placeholder="2W4" onChange=${(x) => set({ dice: x.replace(/[Ww]/g, 'd') || undefined })} /><${Select} value=${f.type || 'force'} options=${DMG} onChange=${(x) => set({ type: x })} />`)}
         ${v(html`<${Select} value=${f.save || ''} options=${SAVE_OPTS} onChange=${(x) => set({ save: x || undefined })} />`)}${v(html`${lab('Zustand')}<${Select} value=${f.inflict || ''} options=${condRefOpts()} onChange=${(x) => set({ inflict: x || undefined })} />`)}` : null}
     </div>` : null}
@@ -589,6 +652,18 @@ function ActionParams({ f, set, v, lab }) {
       ${f.eff === 'rage' ? v(html`${lab('Schadensbonus')}<${ValIn} value=${f.effV ?? 2} dice=${false} onChange=${(x) => set({ effV: x })} />`) : null}</div>
       <div class="rb-act-sub"><div class="small muted">Wirkungen, solange die Stärkung anhält (z. B. Resistenz, +2 Schaden im Nahkampf, Bewegung verdoppelt):</div>
         <${FxEditor} value=${f.fx} onChange=${(x) => set({ fx: x.length ? x : undefined })} /></div>` : null}
+    ${kind === 'summon' ? html`<div class="rb-act-row">
+      ${v(html`${lab('Kreaturenart')}<${Chips} options=${['Tier', 'Elementar', 'Feenwesen', 'Unhold', 'Untoter', 'Himmlisch', 'Konstrukt', 'Pflanze', 'Drache', 'Monstrosität'].map((t) => ({ value: t, label: t }))} value=${toArr(f.types)} onChange=${(x) => set({ types: x.length ? x : undefined })} />`)}</div>
+      <div class="rb-act-row">${v(html`${lab('oder genau')}<${TextIn} value=${toArr(f.names).join(', ')} placeholder="z. B. Wolf, Schreckenswolf" onChange=${(x) => set({ names: x.split(/\s*,\s*/).filter(Boolean).length ? x.split(/\s*,\s*/).filter(Boolean) : undefined })} />`)}
+      ${v(html`${lab('bis HG')}<${ValIn} value=${f.cr ?? 1} dice=${false} onChange=${(x) => set({ cr: x })} />`)}
+      ${v(html`${lab('Anzahl')}<${NumIn} value=${f.n} min=${1} max=${8} placeholder="1" onChange=${(x) => set({ n: x || undefined })} />`)}
+      ${v(html`${lab('Dauer')}<${Select} value=${f.dur || 'perm'} options=${[{ value: 'perm', label: 'bis besiegt / entlassen' }, { value: 'conc', label: 'Konzentration' }]} onChange=${(x) => set({ dur: x === 'perm' ? undefined : x })} /><${Check} checked=${!!f.keep} label="bleibt bei 0 TP liegen" onChange=${(x) => set({ keep: x || undefined })} />`)}
+      ${v(html`${lab('Reichweite')}<${MIn} value=${f.range} placeholder="9" onChange=${(x) => set({ range: x || undefined })} />`)}</div>` : null}
+    ${kind === 'form' ? html`<div class="rb-act-row">
+      ${v(html`${lab('Gestalten')}<${Chips} options=${['Tier', 'Elementar', 'Pflanze', 'Monstrosität', 'Feenwesen'].map((t) => ({ value: t, label: t }))} value=${toArr(f.types).length ? toArr(f.types) : ['Tier']} onChange=${(x) => set({ types: x.length ? x : undefined })} />`)}</div>
+      <div class="rb-act-row">${v(html`${lab('bis HG')}<${ValIn} value=${f.cr ?? 1} dice=${false} onChange=${(x) => set({ cr: x, crDiv: undefined })} />${lab('oder Stufe ÷')}<${NumIn} value=${f.crDiv} min=${1} max=${6} placeholder="–" onChange=${(x) => set({ crDiv: x || undefined })} />`)}
+      ${v(html`${lab('Fliegen ab Stufe')}<${NumIn} value=${f.flyAt} min=${1} max=${20} placeholder="immer" onChange=${(x) => set({ flyAt: x || undefined })} />${lab('Schwimmen ab')}<${NumIn} value=${f.swimAt} min=${1} max=${20} placeholder="immer" onChange=${(x) => set({ swimAt: x || undefined })} />`)}
+      ${v(html`<${Select} value=${f.mode || 'replace'} options=${[{ value: 'replace', label: 'TP der Gestalt (Regeln 2014)' }, { value: 'temp', label: 'eigene TP + temporäre TP (Regeln 2024)' }]} onChange=${(x) => set({ mode: x === 'replace' ? undefined : x })} />${f.mode === 'temp' ? html`${lab('temp. TP')}<${ValIn} value=${f.temp ?? 'level'} dice=${false} level onChange=${(x) => set({ temp: x })} />` : null}`)}</div>` : null}
     ${kind === 'restore' ? html`<div class="rb-act-row">
       ${v(html`<${Select} value=${f.what || 'slot'} options=${[{ value: 'slot', label: 'einen Zauberplatz' }, { value: 'res', label: 'Nutzungen einer Ressource' }]} onChange=${(x) => set({ what: x })} />`)}
       ${f.what === 'res' ? v(html`<${TextIn} value=${f.res || ''} placeholder="z. B. Ki-Punkte" list="rb-resnames" onChange=${(x) => set({ res: x })} />${lab('+')}<${NumIn} value=${f.n} min=${1} placeholder="1" onChange=${(x) => set({ n: x || undefined })} />`)
@@ -601,7 +676,7 @@ function ActionParams({ f, set, v, lab }) {
       ${v(html`${lab('Rückschlag')}<${TextIn} cls="rb-dice" value=${f.selfDmg || ''} placeholder="–" onChange=${(x) => set({ selfDmg: x.replace(/[Ww]/g, 'd') || undefined })} />`)}
       ${v(html`${lab('du heilst')}<${TextIn} cls="rb-dice" value=${f.selfHeal || ''} placeholder="–" onChange=${(x) => set({ selfHeal: x.replace(/[Ww]/g, 'd') || undefined })} />`)}</div>` : null}
     <div class="rb-act-row">
-      ${['attack', 'save', 'heal', 'temp', 'mark'].includes(kind) ? v(html`${lab('Reichweite')}<${MIn} value=${f.range} placeholder=${kind === 'save' && f.area?.shape ? 'selbst' : '1,5'} onChange=${(x) => set({ range: x || undefined })} /><${Info} text=${INFO.actRange} />`) : null}
+      ${['attack', 'save', 'heal', 'temp', 'mark'].includes(kind) && kind !== 'summon' ? v(html`${lab('Reichweite')}<${MIn} value=${f.range} placeholder=${kind === 'save' && f.area?.shape ? 'selbst' : '1,5'} onChange=${(x) => set({ range: x || undefined })} /><${Info} text=${INFO.actRange} />`) : null}
       ${['attack', 'weapon', 'save'].includes(kind) ? v(html`${lab('Ziele')}<${NumIn} value=${f.n} min=${1} max=${10} placeholder="1" onChange=${(x) => set({ n: x || undefined })} />`) : null}
       ${kind === 'attack' ? v(html`${lab('fester Angriffsbonus')}<${NumIn} value=${f.atkFixed} placeholder="–" onChange=${(x) => set({ atkFixed: x || undefined })} />`) : null}
       ${kind === 'save' || kind === 'weapon' || (riders && f.inflict) ? v(html`${lab('fester SG')}<${NumIn} value=${f.dcFixed} min=${5} max=${30} placeholder="8+ÜB+Mod." onChange=${(x) => set({ dcFixed: x || undefined })} />`) : null}</div>
@@ -850,7 +925,8 @@ const FIELDS = {
   backgrounds: [
     nameField(), keyField, edField,
     { k: 'abilities', label: 'Attributswerte zur Auswahl (Regeln 2024)', type: 'abilities', max: 3, info: INFO.abilities, show: (o, c) => has24(o, c.pack) },
-    { k: 'feat', label: 'Herkunftstalent (Regeln 2024)', type: 'select', info: INFO.bgFeat, show: (o, c) => has24(o, c.pack), options: (o, c) => [{ value: '', label: '– keines –' }, ...c.featOpts('origin')] },
+    { k: 'feat', label: 'Talent des Hintergrunds', type: 'select', info: INFO.bgFeat, options: (o, c) => [{ value: '', label: '– keines –' }, ...c.featOpts(has24(o, c.pack) ? 'origin' : null)] },
+    { k: 'featChoice', label: 'Oder: Talent zur Wahl aus', type: 'chips', wide: true, info: INFO.bgFeatChoice, options: (o, c) => c.featOpts(null) },
     { k: 'skills', label: 'Fertigkeiten', type: 'skills', max: 4, info: INFO.skills },
     { k: 'skillAny', label: 'Frei wählbare Fertigkeiten', type: 'number', min: 0, max: 4, info: INFO.skillAny, suggest: 'skillAny' },
     { k: 'tool', label: 'Werkzeug', placeholder: 'z. B. Diebeswerkzeug', info: INFO.tool },
@@ -902,6 +978,7 @@ const FIELDS = {
     { k: 'ability', label: 'Angriffsattribut (abweichend)', type: 'select', info: INFO.wAbility, options: [{ value: '', label: 'üblich' }, ...AB_OPTS, { value: 'spell', label: 'Zauberattribut' }] },
     { k: 'rarity', label: 'Seltenheit', type: 'select', options: [{ value: '', label: '– nicht magisch –' }, ...CG.RARITIES.map((r) => ({ value: r, label: r }))] },
     { k: 'attune', label: 'Einstimmung', type: 'bool', toggle: 'Erfordert Einstimmung', info: INFO.attune },
+    { k: 'attuneBy', label: 'Einstimmung nur durch', type: 'chips', wide: true, info: INFO.attuneBy, show: (o) => !!o.attune, options: (o, c) => [...c.classOpts, ...c.speciesOpts] },
     { k: 'alwaysProf', label: 'Übung', type: 'bool', toggle: 'Träger gilt immer als geübt', info: INFO.alwaysProf },
     { k: 'weight', label: 'Gewicht (kg)', type: 'number', min: 0, step: 0.1, info: INFO.weight }, { k: 'cost', label: 'Preis (GM)', type: 'number', min: 0, info: INFO.cost },
     { k: 'special', label: 'Besonderheit', type: 'textarea', fx: true, rows: 2, wide: true, info: 'Alles, was die Waffe sonst noch kann – erscheint im Detail der Waffe. Erkannte Formulierungen wirken (z. B. „zusätzlich 1W6 Feuerschaden“).' },
@@ -917,6 +994,7 @@ const FIELDS = {
     { k: 'stealth', label: 'Heimlichkeit', type: 'bool', toggle: 'Nachteil auf Heimlichkeit' },
     { k: 'rarity', label: 'Seltenheit', type: 'select', options: [{ value: '', label: '– nicht magisch –' }, ...CG.RARITIES.map((r) => ({ value: r, label: r }))] },
     { k: 'attune', label: 'Einstimmung', type: 'bool', toggle: 'Erfordert Einstimmung', info: INFO.attune },
+    { k: 'attuneBy', label: 'Einstimmung nur durch', type: 'chips', wide: true, info: INFO.attuneBy, show: (o) => !!o.attune, options: (o, c) => [...c.classOpts, ...c.speciesOpts] },
     { k: 'alwaysProf', label: 'Übung', type: 'bool', toggle: 'Träger gilt immer als geübt', info: INFO.alwaysProf },
     { k: 'weight', label: 'Gewicht (kg)', type: 'number', min: 0, step: 0.1, info: INFO.weight }, { k: 'cost', label: 'Preis (GM)', type: 'number', min: 0, info: INFO.cost },
     { k: 'special', label: 'Besonderheit', type: 'textarea', fx: true, rows: 2, wide: true, info: 'Erkannte Formulierungen wirken, z. B. „Du erleidest 1 weniger Stichschaden“ oder „+1 auf GES-Rettungswürfe“.' },
@@ -929,6 +1007,7 @@ const FIELDS = {
     { k: 'slot', label: 'Art / Platz', type: 'select', info: INFO.itemSlot, options: Object.entries(CG.ITEM_SLOTS).map(([value, label]) => ({ value, label })) },
     { k: 'rarity', label: 'Seltenheit', type: 'select', options: CG.RARITIES.map((r) => ({ value: r, label: r })) },
     { k: 'attune', label: 'Einstimmung', type: 'bool', toggle: 'Erfordert Einstimmung', info: INFO.attune },
+    { k: 'attuneBy', label: 'Einstimmung nur durch', type: 'chips', wide: true, info: INFO.attuneBy, show: (o) => !!o.attune, options: (o, c) => [...c.classOpts, ...c.speciesOpts] },
     { k: 'consumable', label: 'Verbrauch', type: 'bool', toggle: 'Verbraucht sich beim Benutzen (Trank, Öl, Munition)', show: (o) => o.slot !== 'potion' },
     { k: 'weight', label: 'Gewicht (kg)', type: 'number', min: 0, step: 0.05, info: INFO.weight }, { k: 'cost', label: 'Preis (GM)', type: 'number', min: 0, info: INFO.cost },
     { k: 'desc', label: 'Beschreibung', type: 'textarea', fx: true, rows: 4, wide: true, info: 'Regeltext des Gegenstands. Erkannte Formulierungen wirken, z. B. „+1 RK“, „Vorteil bei Rettungswürfen gegen Zauber“, „Stärke wird auf 19 gesetzt“.' },

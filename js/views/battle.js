@@ -13,7 +13,7 @@ import { npcStat } from '../data/npcstat.js';
 import { sendEvent } from '../core/relay.js';
 import * as E from '../core/engine.js';
 import * as A from '../core/actions.js';
-import { classLevel } from '../data/chargen.js';
+import { classLevel, charMods } from '../data/chargen.js';
 import { DAMAGE_ART } from '../data/artmap.js';
 import { CONDITIONS } from '../data/rules5e.js';
 import {
@@ -496,22 +496,30 @@ function CreaturePicker({ list, close, hint, countFor }) {
     </div>
     ${sel && maxN > 1 ? html`<label class="row small">Anzahl <input class="input sm" type="number" min="1" max=${maxN} value=${n} style="width:80px" onInput=${(e) => setN(Math.max(1, Math.min(maxN, parseInt(e.target.value, 10) || 1)))} /> <span class="faint">höchstens ${maxN}</span></label>` : null}
   </div>
-  <div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" disabled=${!sel} onClick=${() => close({ id: sel.id, n })}>Wählen<//></div>`;
+  <div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" disabled=${!sel} onClick=${() => close({ id: sel.id, n, name: sel.name, ...(sel.src ? { src: sel.src } : {}) })}>Wählen<//></div>`;
 }
-async function pickCreature({ title, hint, filter, countFor }) {
+async function pickCreature({ title, hint, filter, countFor, extra = [] }) {
   const { MONSTERS } = await import('../data/monsters-srd.js');
-  const list = MONSTERS.filter(filter).sort((p, q) => A.crNum(q.cr) - A.crNum(p.cr) || p.name.localeCompare(q.name, 'de'));
+  const list = [...extra.filter(filter), ...MONSTERS.filter(filter).sort((p, q) => A.crNum(q.cr) - A.crNum(p.cr) || p.name.localeCompare(q.name, 'de'))];
   if (!list.length) { toast('Keine passende Kreatur gefunden.', 'error'); return null; }
   return openModal(({ close }) => html`<${CreaturePicker} list=${list} close=${close} hint=${hint} countFor=${countFor} />`, { title, icon: 'ghost' });
 }
-function pickSummon(a, slot) {
+async function pickSummon(a, slot) {
   const rule = A.summonRule(a, slot);
   if (!rule) return null;
   const re = rule.types ? new RegExp(rule.types.join('|'), 'i') : null;
-  return pickCreature({
-    title: `${a.name}: Kreatur wählen`, hint: rule.hint, countFor: rule.count,
-    filter: (m) => (rule.ids ? rule.ids.includes(m.id) : re.test(m.type || '')) && A.crNum(m.cr) <= rule.maxCr,
-  });
+  const filter = (m) => (rule.ids ? rule.ids.includes(m.id) : rule.names ? rule.names.includes(String(m.name).toLowerCase()) : re.test(m.type || '')) && (m.placeholder || A.crNum(m.cr) <= rule.maxCr);
+  // Begleiter mit eigenem Werteblock: aus dem Bestiarium der Kampagne (die SL sieht sie, Spieler bekommen einen Platzhalter mit dem Namen)
+  const extra = [];
+  if (!rule.ids) {
+    const own = await db.list(col('monsters')).catch(() => []);
+    for (const m of own) extra.push({ ...m, id: `bst:${m.id}`, src: 'bst' });
+    if (rule.names) {
+      const { MONSTERS } = await import('../data/monsters-srd.js');
+      for (const n of rule.names) if (!extra.some((m) => String(m.name).toLowerCase() === n) && !MONSTERS.some((m) => String(m.name).toLowerCase() === n)) extra.push({ id: `bst:?${n}`, name: n.replace(/(^|s)S/g, (s) => s.toUpperCase()), cr: '–', type: 'Werte aus dem Bestiarium der SL', src: 'bst', placeholder: true });
+    }
+  }
+  return pickCreature({ title: `${a.name}: Kreatur wählen`, hint: rule.hint, countFor: rule.count, filter, extra });
 }
 function pickForm(B, form, tgt) {
   const limit = tgt.isPC ? E.statsOf(tgt, B.ctx).level || 1 : A.crNum(tgt.statblock?.cr ?? tgt.art?.cr ?? 1);
@@ -564,6 +572,17 @@ async function execute(B) {
   if (spec.special === 'polymorph') {
     const tgt = spec.form?.self ? cb : cbById(B, p.targets[0]);
     const pick = tgt ? await pickForm(B, spec.form || {}, tgt) : null;
+    if (!pick) { cancel(); return; }
+    ev.form = pick;
+  }
+  // Eigene Aktion „Gestalt annehmen“ (Tiergestalt eigener Klassen)
+  if (a.kind === 'form') {
+    const r = a.formRule || {};
+    const re = new RegExp((r.types || ['Tier']).join('|'), 'i');
+    const pick = await pickCreature({
+      title: `${a.name}: Gestalt wählen`, hint: `${(r.types || ['Tier']).join(', ')} bis HG ${fmtCr(r.maxCr ?? 1)}${r.noFly ? ', ohne Fliegen' : ''}${r.noSwim ? ', ohne Schwimmen' : ''}.`,
+      filter: (m) => re.test(m.type || '') && A.crNum(m.cr) <= (r.maxCr ?? 1) && !(r.noFly && m.speeds?.fly) && !(r.noSwim && m.speeds?.swim),
+    });
     if (!pick) { cancel(); return; }
     ev.form = pick;
   }
@@ -1260,8 +1279,10 @@ function TurnStrip({ B, s }) {
   const rollMyInit = () => {
     const pe = B.party.find((p) => p.char?.id === myCb.charId);
     const bonus = pe ? E.statsOf(myCb, B.ctx).init ?? 0 : 0;
-    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: myCb.name, kind: 'init' });
+    const cm = pe?.char ? charMods(pe.char) : null;
+    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}${(cm?.initDice || []).map((d) => `+${d}`).join('')}`, { label: 'Initiative', character: myCb.name, kind: 'init', fx: cm?.initAdv ? { adv: true } : {} });
     if (r) sendEvent({ type: 'init', value: r.total, charId: myCb.charId || null });
+    if (pe?.char) A.regainOnInit(myCb, pe.char).then((got) => { if (got.length) toast(`Initiative: ${got.join(', ')} +1`, 'success'); });
   };
   // Beim Kampfbeginn würfelt jeder Spieler seine Initiative selbst – sichtbar auf dem eigenen Bildschirm
   const initRef = useRef('');
@@ -1387,6 +1408,7 @@ function PendingBar({ B }) {
 function ResultCard({ r, B }) {
   const [sneak, setSneak] = useState(true);
   const [smiteIdx, setSmiteIdx] = useState(-1);
+  const [optSel, setOptSel] = useState([]);
   const [busy, setBusy] = useState(false);
   const x = B.combat.x;
   const actor = cbById(B, r.actor);
@@ -1399,14 +1421,19 @@ function ResultCard({ r, B }) {
   const needDmg = r.stage === 'damage';
   const smites = needDmg && ctl ? A.smiteOptions(x, actor, r, B.ctx) : [];
   const smite = smites[smiteIdx] || null;
+  // Treffer-Optionen gegen Kosten (Manöver, Göttlicher Schlag …) – pro Option höchstens ein Zauberplatz-Grad
+  const hitOpts = needDmg && ctl ? A.hitOptions(x, actor, r, B.ctx) : [];
+  const chosen = hitOpts.filter((o) => optSel.includes(o.id));
+  const toggleOpt = (o, on) => { const base = o.id.split('@')[0]; setOptSel((s) => [...s.filter((id) => id.split('@')[0] !== base), ...(on ? [o.id] : [])]); };
   const pseudo = { attack: { weapon: r.weapon, finesse: r.finesse, kind: r.attKind } };
   const sneakOk = needDmg && ctl && r.kind === 'attack' && (r.targets || []).some((t) => t.hit && A.sneakEligible(x, actor, pseudo, t, B.ctx));
   const rollDmg = async () => {
     setBusy(true);
     try {
       const char = B.ctx.charOf(actor);
-      const ev = A.rollDamage(x, actor, r, B.ctx, { sneak: sneakOk && sneak, smite, doRoll });
+      const ev = A.rollDamage(x, actor, r, B.ctx, { sneak: sneakOk && sneak, smite, doRoll, opts: chosen });
       if (smite && char) await A.consumeSlot(actor, char, smite.slot, smite.pact);
+      if (chosen.length && char) await A.consumeHitOpts(actor, char, chosen);
       await sendEvent(ev);
     } finally { setBusy(false); }
   };
@@ -1428,6 +1455,7 @@ function ResultCard({ r, B }) {
     ${r.rolled?.length ? html`<div class="tiny muted">Schaden gewürfelt: ${r.rolled.join(' + ')}</div>` : null}
     ${needDmg && ctl ? html`<div class="bt-dmg">
       ${sneakOk ? html`<label class="check small"><input type="checkbox" checked=${sneak} onChange=${(e) => setSneak(e.target.checked)} /> Hinterhältiger Angriff</label>` : null}
+      ${hitOpts.length ? html`<div class="bt-hitopts">${hitOpts.map((o) => html`<label key=${o.id} class="check small" title=${o.f.desc || ''}><input type="checkbox" checked=${optSel.includes(o.id)} onChange=${(e) => toggleOpt(o, e.target.checked)} /> ${o.label}${o.dice ? html` <span class="faint">+${String(o.dice).replace(/d/g, 'W')}</span>` : null}</label>`)}</div>` : null}
       ${smites.length ? html`<select class="select sm" style="width:auto" value=${String(smiteIdx)} onChange=${(e) => setSmiteIdx(Number(e.target.value))}>
         <option value="-1">Kein Niederstrecken</option>${smites.map((o, i) => html`<option value=${String(i)}>${o.label}</option>`)}</select>` : null}
       <${Btn} size="sm" kind=${mine ? 'danger' : 'ghost'} icon="d20" loading=${busy} onClick=${rollDmg}>${mine ? 'Schaden würfeln' : 'Für den Spieler würfeln'}<//>

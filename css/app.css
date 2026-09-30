@@ -1535,6 +1535,7 @@ details.how-to[open] > summary::after { transform: rotate(90deg); }
 .bt-roll { font-variant-numeric: tabular-nums; color: var(--text-2); }
 .bt-crit { color: #d99a00; }
 .bt-dmg { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bt-hitopts { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 4px 6px; border-radius: 6px; background: color-mix(in srgb, var(--accent, #c9a55c) 8%, transparent); }
 @media (max-width: 700px) {
   .bt-results { left: 52px; top: 70px; width: calc(100% - 64px); max-height: 30%; }
   .bt-res { padding: 6px 8px; gap: 2px; }

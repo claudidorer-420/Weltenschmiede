@@ -15,7 +15,7 @@ import { CONDITIONS, XP_LEVELS, ALIGNMENTS } from '../data/rules5e.js';
 import {
   AB, AB_NAME, AB_SHORT, ALL_SKILLS, skillName, skillAbility, charMods, rollTraits, resourcesFor, classExtras, spellSlots, classFeatures, RULES, attacksPerAction as attacksPerActionCG,
   findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel, RES_INFO, FEATURE_SRC,
-  charWeapons, itemInfo, baseOptions, ITEMS, ITEM_SLOTS, WEAPONS, charPicks, attuneLimit, carryFactor,
+  charWeapons, itemInfo, baseOptions, ITEMS, ITEM_SLOTS, WEAPONS, charPicks, attuneLimit, carryFactor, attuneAllowed,
 } from '../data/chargen.js';
 import { PicksPanel, openPicks } from '../ui/picks.js';
 import { roll as rollExpr } from '../lib/dice.js';
@@ -238,7 +238,8 @@ export function CharacterSheet({ id, owner }) {
     }
     return fx;
   };
-  const roll20 = (bonus, label, kind, prof, mode = null) => doRoll(`1d20${sg(bonus)}`, { label: `${c.name}: ${label}`, character: c.name, kind, fx: { ...fxFor(kind, prof), ...(mode === 'adv' ? { adv: true } : mode === 'dis' ? { dis: true } : {}) }, edition: ed });
+  // extra: { dice: ['1d4'], min: 10 } – Zusatzwürfel und Mindestwurf aus Wirkungen
+  const roll20 = (bonus, label, kind, prof, mode = null, extra = {}) => doRoll(`1d20${sg(bonus)}${(extra.dice || []).map((d) => `+${d}`).join('')}`, { label: `${c.name}: ${label}`, character: c.name, kind, fx: { ...fxFor(kind, prof), ...(extra.min ? { minRoll: extra.min } : {}), ...(mode === 'adv' ? { adv: true } : mode === 'dis' ? { dis: true } : {}) }, edition: ed });
   const rollDmg = (expr, label, kind = 'damage') => doRoll(String(expr), { label: `${c.name}: ${label}`, character: c.name, kind, fx: kind === 'damage' ? fxFor('damage') : {}, edition: ed });
 
   const hpDelta = (d) => {
@@ -349,7 +350,7 @@ export function CharacterSheet({ id, owner }) {
 
     <div class="sh-strip">
       <div class="sh-stat ac" title=${cm.ac.parts.join(' · ')}><span class="l">RK</span><span class="v">${cm.ac.ac}</span></div>
-      <button type="button" class="sh-stat click" onClick=${() => roll20(cm.init, 'Initiative', 'init')}><span class="l">Initiative</span><span class="v">${fmtMod(cm.init)}</span></button>
+      <button type="button" class="sh-stat click" onClick=${() => roll20(cm.init, 'Initiative', 'init', false, cm.initAdv ? 'adv' : null, { dice: cm.initDice })}><span class="l">Initiative</span><span class="v">${fmtMod(cm.init)}</span></button>
       <div class="sh-stat"><span class="l">Bewegung</span><span class="v">${fmtDist(c.speed || 30, units)}</span></div>
       <div class="sh-stat"><span class="l">Übung</span><span class="v">+${cm.pb}</span></div>
       <button type="button" class=${`sh-stat hp click ${hpCls}`} onClick=${hpDialog}>
@@ -415,7 +416,7 @@ function CoreColumn(p) {
 function AbilityGrid({ c, cm, unlock, upd, roll20 }) {
   return html`<div class="ab-grid">${AB.map((k) => html`<div class="ab-box" key=${k}>
     <span class="l">${AB_NAME[k]}</span>
-    <button type="button" class="m" title=${`${AB_NAME[k]}-Probe würfeln`} onClick=${() => roll20(cm.mods[k], `${AB_NAME[k]}-Probe`, 'check', 0)}>${fmtMod(cm.mods[k])}</button>
+    <button type="button" class="m" title=${`${AB_NAME[k]}-Probe würfeln`} onClick=${() => roll20(cm.mods[k], `${AB_NAME[k]}-Probe`, 'check', 0, null, cm.checks?.[k])}>${fmtMod(cm.mods[k])}</button>
     <span class="s" title=${cm.fx.abil[k] ? `Grundwert ${c.abilities?.[k] ?? 10}, Merkmale ${cm.fx.abil[k] > 0 ? '+' : ''}${cm.fx.abil[k]}` : ''}>${unlock ? html`<input type="number" value=${c.abilities?.[k] ?? 10} onInput=${(e) => upd({ abilities: { ...c.abilities, [k]: Math.max(1, Math.min(30, Number(e.target.value) || 10)) } }, { rederive: true })} />` : cm.scores?.[k] ?? c.abilities?.[k] ?? 10}</span>
   </div>`)}</div>`;
 }
@@ -444,7 +445,7 @@ function SkillsBlock({ c, cm, unlock, upd, roll20 }) {
   return html`<div class="skill-rows">${ALL_SKILLS.map((k) => html`<div class="srow" key=${k}>
     <span class=${`dot${cm.skills[k].prof ? ` p${cm.skills[k].prof}` : ''}${unlock ? ' edit' : ''}`} onClick=${() => unlock && upd({ skills: { ...c.skills, [k]: ((Number(c.skills?.[k]) || 0) + 1) % 3 } })}></span>
     <span class="ab">${AB_SHORT[skillAbility(k)]}</span><span class="nm">${skillName(k)}</span>
-    <button type="button" class="rollbtn" title=${cm.skills[k].adv ? 'Vorteil (Wirkung)' : cm.skills[k].dis ? 'Nachteil (Wirkung)' : null} onClick=${() => roll20(cm.skills[k].bonus, skillName(k), 'check', cm.skills[k].prof, cm.skills[k].adv && !cm.skills[k].dis ? 'adv' : cm.skills[k].dis && !cm.skills[k].adv ? 'dis' : null)}>${fmtMod(cm.skills[k].bonus)}${cm.skills[k].adv ? ' ▲' : cm.skills[k].dis ? ' ▼' : ''}</button>
+    <button type="button" class="rollbtn" title=${cm.skills[k].adv ? 'Vorteil (Wirkung)' : cm.skills[k].dis ? 'Nachteil (Wirkung)' : null} onClick=${() => roll20(cm.skills[k].bonus, skillName(k), 'check', cm.skills[k].prof, cm.skills[k].adv && !cm.skills[k].dis ? 'adv' : cm.skills[k].dis && !cm.skills[k].adv ? 'dis' : null, cm.skills[k])}>${fmtMod(cm.skills[k].bonus)}${cm.skills[k].dice?.length ? `+${cm.skills[k].dice.map((d) => d.replace(/d/g, 'W')).join('+')}` : ''}${cm.skills[k].adv ? ' ▲' : cm.skills[k].dis ? ' ▼' : ''}</button>
   </div>`)}</div>
   ${cm.jack ? html`<div class="tiny faint" style="margin-top:6px">Alleskönner: +${cm.jack} auf ungeübte Attributswürfe.</div>` : null}`;
 }
@@ -1030,7 +1031,7 @@ function InventoryTab({ c, cm, canEdit, upd }) {
     <span class="small">×${r.it.qty}</span>
     <span class="small hide-sm">${fmtCost((r.it.cost ?? r.cat?.cost ?? 0) * (r.it.qty || 1))}</span>
     <span class="row nowrap" style="gap:4px" onClick=${(e) => e.stopPropagation()}>
-      ${r.it.attune && !r.it.stored ? html`<button type="button" class=${`equip-toggle${r.it.attuned ? ' on' : ''}`} title=${`Einstimmen${attMax < 99 ? ` (max. ${attMax})` : ''}`} disabled=${!canEdit || (!r.it.attuned && attuned.length >= attMax)} onClick=${() => setItem(r.it.id, { attuned: !r.it.attuned })}><${Icon} name="sparkles" size=${14} /></button>` : null}
+      ${r.it.attune && !r.it.stored ? html`<button type="button" class=${`equip-toggle${r.it.attuned ? ' on' : ''}`} title=${!attuneAllowed(c, itemInfo(r.it)) ? 'Einstimmung nur für bestimmte Klassen/Spezies möglich' : `Einstimmen${attMax < 99 ? ` (max. ${attMax})` : ''}`} disabled=${!canEdit || (!r.it.attuned && (attuned.length >= attMax || !attuneAllowed(c, itemInfo(r.it))))} onClick=${() => setItem(r.it.id, { attuned: !r.it.attuned })}><${Icon} name="sparkles" size=${14} /></button>` : null}
       ${r.it.stored ? null : html`<button type="button" class=${`equip-toggle${isEquipped(r) ? ' on' : ''}`} title=${isEquipped(r) ? 'Ablegen' : 'Ausrüsten'} disabled=${!canEdit} onClick=${() => toggleEquip(r)}><${Icon} name="check" size=${14} /></button>`}
       <button type="button" class="equip-toggle" title=${r.it.stored ? 'In den Rucksack legen (mitnehmen)' : 'In den Besitz legen (Truhe – nicht dabei)'} disabled=${!canEdit} onClick=${() => moveItem(r, !r.it.stored)}><${Icon} name=${r.it.stored ? 'backpack' : 'chest'} size=${14} /></button>
     </span>

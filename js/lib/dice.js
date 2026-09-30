@@ -222,9 +222,11 @@ export function rollDetailed(input, { kind = 'auto', fx = {}, label = '', editio
       }
       slots.forEach((d) => { if (d !== keep) d.dropped = true; });
       natural = keep.value;
-      if (f.reliable && kind === 'check' && keep.value < 10) {
-        keep.adj = 10;
-        notes.push(`Verlässliches Talent: ${keep.value} zählt als 10`);
+      // Mindestwurf: Verlässliches Talent (10) oder Wirkungen wie „9 oder weniger zählt als 10“
+      const minR = kind === 'check' ? Math.max(f.reliable ? 10 : 0, Number(f.minRoll) || 0) : 0;
+      if (minR && keep.value < minR) {
+        keep.adj = minR;
+        notes.push(`${f.reliable && minR === 10 && !(Number(f.minRoll) > 10) ? 'Verlässliches Talent' : 'Mindestwurf'}: ${keep.value} zählt als ${minR}`);
       }
       total += t.sign * dieVal(keep);
       const rs = slots.map((d) => `${d.from ? '~1~→' : ''}${d.dropped ? `~${d.value}~` : d.adj ? `${d.value}→${d.adj}` : d.value}`).join(', ');

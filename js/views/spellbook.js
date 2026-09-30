@@ -3,7 +3,7 @@
 // Eintrag: { id, ref (Zauber-ID), name, level, cls, prepared, book, always, arcanum, source }
 import { html, useState, useEffect, useRef } from '../lib/preact.js';
 import { uid } from '../lib/util.js';
-import { findClass, AB_NAME, AB_SHORT, charMods, edOf, totalLevel } from '../data/chargen.js';
+import { findClass, AB_NAME, AB_SHORT, charMods, charFx, edOf, totalLevel } from '../data/chargen.js';
 import {
   useSpells, levelName, schoolName, damageName, fmtDice, timeShort, rangeShort, areaShort, damageAt, healAt, healHasMod,
   spellNeeds, classSpells, listClassOf, KIND_TEXT, findSpell,
@@ -207,14 +207,24 @@ export function SpellManager({ c, entries, onChange, mode = 'sheet', baseline = 
   };
 
   const ql = q.trim().toLowerCase();
-  let pool = isExtra ? spells : classSpells(spells, n.listCls, { maxLevel: maxLvl });
+  // Erweiterte Zauberliste aus Wirkungen (Schutzpatron, Göttliche Seele …): ganze Listen und einzelne Zauber
+  const ext = charFx(c).spellList || [];
+  const extNames = new Set(ext.flatMap((e) => e.k).map((s) => String(s).toLowerCase()));
+  const extCls = ext.map((e) => e.cls).filter(Boolean);
+  const listFor = (maxLevel) => {
+    const base = classSpells(spells, n.listCls, { maxLevel });
+    if (!ext.length) return base;
+    const more = spells.filter((s) => (s.level === 0 || s.level <= maxLevel) && !base.includes(s) && (extCls.some((k) => s.classes.includes(k)) || extNames.has(s.name.toLowerCase()) || (s.en && extNames.has(s.en.toLowerCase()))));
+    return [...base, ...more];
+  };
+  let pool = isExtra ? spells : listFor(maxLvl);
   if (!isExtra && n.kind === 'book' && flag === 'book') pool = pool.filter((s) => entryOf(s) || s.level === 0);
   pool = pool.filter((s) => (lvl === 'all' || s.level === lvl)
     && (!school || s.school === school)
     && (!ql || s.name.toLowerCase().includes(ql) || s.en?.toLowerCase().includes(ql))
     && (flag !== 'mine' || entryOf(s))
     && (flag !== 'ritual' || s.ritual) && (flag !== 'conc' || s.conc) && (flag !== 'dmg' || s.damage) && (flag !== 'heal' || s.heal));
-  const levels = [...new Set((isExtra ? spells : classSpells(spells, n.listCls, { maxLevel: maxLvl })).map((s) => s.level))].sort((a, b) => a - b);
+  const levels = [...new Set((isExtra ? spells : listFor(maxLvl)).map((s) => s.level))].sort((a, b) => a - b);
   const groups = levels.filter((l) => lvl === 'all' || l === lvl).map((l) => ({ l, list: pool.filter((s) => s.level === l) })).filter((g) => g.list.length);
   const selSp = sel ? spells.find((s) => s.id === sel) : null;
 

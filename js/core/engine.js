@@ -154,7 +154,7 @@ function pcBase(char, ed) {
     saves: Object.fromEntries(Object.entries(cm.saves).map(([k, v]) => [k, v.bonus])), pb: cm.pb, level: cm.level, init: cm.init,
     spell: sp ? { dc: sp.dc, attack: sp.attack, ability: sp.ability } : null, spells: cm.spell,
     // Resistenzen & Co. aus Spezies und Wirkungen (Merkmale, Talente, Klassen aus Regelpaketen)
-    resist: { all: [...new Set([...speciesResist(char, ed), ...cm.fx.resist])], nm: [...cm.fx.resistNm] }, vuln: { all: [...cm.fx.vuln], nm: [] }, immune: { all: [...cm.fx.immune], nm: [] }, condImm: [...cm.fx.condImm],
+    resist: { all: [...new Set([...speciesResist(char, ed), ...cm.fx.resist])], nm: [...cm.fx.resistNm], spell: [...cm.fx.resistSpell] }, vuln: { all: [...cm.fx.vuln], nm: [] }, immune: { all: [...cm.fx.immune], nm: [] }, condImm: [...cm.fx.condImm],
     feats: new Set((char.feats || []).map((f) => f.key)), classes: char.classes || [], body: char.armor?.body || null, shield: !!char.armor?.shield,
     size: String(char.size || '').toLowerCase().includes('klein') ? 'small' : 'medium', multi: 1, reactions: [],
   };
@@ -168,7 +168,7 @@ export function statsOf(c, ctx = {}) {
   const sb = form || c?.statblock;
   const base = char ? pcBase(char, ctx.ed || '2014') : sb ? monsterBase(sb)
     : { ac: Number(c?.ac) || 10, mods: ZERO, dex: Math.floor(((Number(c?.initBonus) || 0))), speedM: 9, saves: ZERO, pb: 2, resist: EMPTY_DEF(), vuln: EMPTY_DEF(), immune: EMPTY_DEF(), condImm: [], multi: 1, reactions: [] };
-  const s = { ...base, resist: { all: [...base.resist.all], nm: [...base.resist.nm] }, immune: { all: [...base.immune.all], nm: [...base.immune.nm] }, vuln: { all: [...(base.vuln?.all || [])], nm: [...(base.vuln?.nm || [])] }, condImm: [...(base.condImm || [])] };
+  const s = { ...base, resist: { all: [...base.resist.all], nm: [...base.resist.nm], spell: [...(base.resist.spell || [])] }, immune: { all: [...base.immune.all], nm: [...base.immune.nm] }, vuln: { all: [...(base.vuln?.all || [])], nm: [...(base.vuln?.nm || [])] }, condImm: [...(base.condImm || [])] };
   if (!char && !sb && c?.ac != null) s.ac = Number(c.ac);
   if (sb) s.casting = sb.casting || null; // nicht aus dem Zwischenspeicher – Zauberlisten können nachträglich dazukommen
   let ac = s.ac;
@@ -188,6 +188,7 @@ export function statsOf(c, ctx = {}) {
     if (d.acMin) s.ac = Math.max(s.ac, d.acMin);
     for (const t of d.resist) if (!s.resist.all.includes(t)) s.resist.all.push(t);
     for (const t of d.resistNm) if (!s.resist.nm.includes(t)) s.resist.nm.push(t);
+    for (const t of d.resistSpell || []) if (!s.resist.spell.includes(t)) s.resist.spell.push(t);
     for (const t of d.immune) if (!s.immune.all.includes(t)) s.immune.all.push(t);
     for (const t of d.vuln) if (!s.vuln.all.includes(t)) s.vuln.all.push(t);
     s.condImm.push(...d.condImm);
@@ -258,10 +259,11 @@ function auraFxFor(c, ctx) {
   if (!ctx?.list?.length || !ctx.tokenOf || !c) return out;
   const tc = ctx.tokenOf(c);
   for (const o of ctx.list) {
-    if (!o?.isPC || o.form || sideOf(o) !== sideOf(c) || isDead(o) || (Number(o.hp) || 0) <= 0 || incapacitated(o)) continue;
+    if (!o?.isPC || o.form || isDead(o) || (Number(o.hp) || 0) <= 0 || incapacitated(o)) continue;
     const oc = ctx.charOf?.(o);
     if (!oc) continue;
-    const auras = (charFx(oc).aura || []).filter((au) => au.k === 'fx' && au.fx?.length && (o.id !== c.id || au.self !== false));
+    const same = sideOf(o) === sideOf(c);
+    const auras = (charFx(oc).aura || []).filter((au) => au.k === 'fx' && au.fx?.length && (au.foe ? !same : same && (o.id !== c.id || au.self !== false)));
     if (!auras.length) continue;
     const to = ctx.tokenOf(o);
     const dist = o.id === c.id ? 0 : to && tc ? cellDistance(to, tc) * CELL_M : 999;
@@ -283,7 +285,8 @@ export function attackInfo(x, att, tgt, a, ctx = {}, extra = {}) {
   return {
     on, weapon: !!at.weapon, thrown: !!at.thrown && at.kind === 'ranged', type: typeOf(tgt), name: tgt?.name || '', size: sizeOf(tgt), conds: condNames(tgt),
     hp: Number(tgt?.hp) || 0, maxHp: Number(tgt?.maxHp) || 0, selfHp: Number(att?.hp) || 0, selfMax: Number(att?.maxHp) || 0,
-    notActed: !!x?.active && !(tgt?.turnNo > 0), first: !!x?.active && (Number(x.round) || 1) === 1, cantrip: a?.kind === 'spell' && !a?.level, dmgTypes: (at.damage || []).map((q) => q.type).filter(Boolean), ...extra,
+    notActed: !!x?.active && !(tgt?.turnNo > 0), first: !!x?.active && (Number(x.round) || 1) === 1, cantrip: a?.kind === 'spell' && !a?.level, dmgTypes: (at.damage || []).map((q) => q.type).filter(Boolean),
+    selfSize: sizeOf(att), allyNear: !!(att && tgt && ctx.allyNear?.(att, tgt)), wkey: at.baseKey || at.itemKey || '', ...extra,
   };
 }
 // Eigenen Zustand (Regelpaket) setzen: stapelt bis zur Grenze, trägt Grundzustände mit (z. B. „zählt als Kampfunfähig“)
@@ -364,14 +367,15 @@ export function attackPlan(x, att, tgt, a, ctx = {}) {
   if (hasEff(tgt, 'recklessTarget')) adv.push('Ziel greift tollkühn an');
   if (hasEff(tgt, 'foresight')) dis.push('Voraussicht');
   if (hasEff(att, 'foresight')) adv.push('Voraussicht');
-  if (!melee && ctx.hostileNear?.(att)) dis.push('Gegner in 1,5 m');
-  if (!melee && distM > near + 1e-6) dis.push('große Reichweite');
-  if (sA.pack && ctx.allyNear?.(att, tgt)) adv.push('Rudeltaktik');
-  // Wirkungen: „Vorteil gegen Untote“, „Angriffe gegen dich im Nachteil“, markierte Ziele
   const fA = fxOf(att, ctx);
   const fT = fxOf(tgt, ctx);
   const info = attackInfo(x, att, tgt, a, ctx);
   const own = a.itemKey ? [...(fA.s.byItem[a.itemKey] || []), ...(fA.d.byItem[a.itemKey] || [])] : [];
+  const rOk = (k) => [...(fA.s.rangedOk || []), ...(fA.d.rangedOk || [])].some((f) => f.k.includes(k) && (f.on === 'all' || f.on === info.on || (f.on === 'weapon' && info.weapon)));
+  if (!melee && ctx.hostileNear?.(att) && !rOk('close')) dis.push('Gegner in 1,5 m');
+  if (!melee && distM > near + 1e-6 && !rOk('long')) dis.push('große Reichweite');
+  if (sA.pack && ctx.allyNear?.(att, tgt)) adv.push('Rudeltaktik');
+  // Wirkungen: „Vorteil gegen Untote“, „Angriffe gegen dich im Nachteil“, markierte Ziele
   for (const f of [...fA.s.advAtk, ...fA.d.advAtk, ...own.filter((q) => q.t === 'advAttack')]) if (fxMatches(f, info)) (f.dis ? dis : adv).push(f.src || 'Wirkung');
   for (const f of [...fT.s.atkAgainst, ...fT.d.atkAgainst]) {
     if (f.on !== 'all' && f.on !== info.on && !(f.on === 'ranged' && info.on === 'spell' && !melee)) continue;
@@ -385,8 +389,10 @@ export function attackPlan(x, att, tgt, a, ctx = {}) {
     if (f.on === 'all' || f.on === info.on || (f.on === 'weapon' && info.weapon)) critOn -= Number(f.v) || 1;
   }
   const mode = adv.length && dis.length ? null : adv.length ? 'adv' : dis.length ? 'dis' : null;
-  const cover = !melee && !a.ignoreCover && ctx.cover ? ctx.cover(tA, tT) : 0;
-  const autoCrit = melee && distM <= 1.5 && (has(tgt, COND.paralyzed) || has(tgt, COND.unconscious));
+  const cover = !melee && !a.ignoreCover && ctx.cover ? Math.min(ctx.cover(tA, tT), rOk('cover') ? 0 : 99) : 0;
+  // Treffer automatisch kritisch: gelähmt/bewusstlos im Nahkampf oder Wirkungen („gegen überraschte Kreaturen“)
+  const autoCrit = (melee && distM <= 1.5 && (has(tgt, COND.paralyzed) || has(tgt, COND.unconscious)))
+    || [...(fA.s.autoCrit || []), ...(fA.d.autoCrit || []), ...own.filter((q) => q.t === 'autoCrit')].some((f) => fxMatches({ ...f, vsCond: f.vsCond === 'surprised' ? '' : f.vsCond }, info) && (f.vsCond !== 'surprised' || !!tgt.surprised));
   return { ok: !problems.length, problems, adv, dis, mode, ac: sT.ac + cover, baseAc: sT.ac, cover, distM, long: !melee && distM > near + 1e-6, autoCrit, melee, bonus: Number(a.bonus) || 0, critOn: Math.max(2, critOn), noCrit: !!sT.critImmune };
 }
 // Trefferchance wie in BG3 (für die Anzeige)
@@ -507,16 +513,25 @@ export function savingThrow(x, c, ab, dc, opts = {}, ctx = {}) {
   for (const [, b] of auraBonus) add(b.v, b.why);
   const mode2 = adv.length && dis.length ? null : adv.length ? 'adv' : dis.length ? 'dis' : null;
   const r = rollD20(mode2);
-  const total = r.natural + bonus;
+  let total = r.natural + bonus;
+  const totalBase = total;
   let ok = total >= dc;
   let note = '';
+  // Merkmale nach einem misslungenen Rettungswurf (Glücksfuß +1W4, Unbezwingbar: neu würfeln, Ring des Entrinnens: gelingt)
+  if (!ok && c.isPC && ctx.saveRescue) {
+    const fix = ctx.saveRescue(x, c, { ab, dc, total, natural: r.natural });
+    const by = fix?.by ? ` von ${fix.by}` : '';
+    if (fix?.effect === 'success') { ok = true; note += ` · ${fix.name}${by}: gelingt stattdessen`; }
+    else if (fix?.effect === 'bonus') { const rr = roll(fix.dice || '1d4'); total += rr.total + (fix.mod || 0); ok = total >= dc; note += ` · ${fix.name}${by}: +${rr.total}${fix.mod ? fmtS(fix.mod) : ''} = ${total}`; }
+    else if (fix?.effect === 'reroll') { const r2 = rollD20(null); total = r2.natural + bonus; ok = total >= dc; note += ` · ${fix.name}${by}: neu gewürfelt W20 [${r2.natural}] = ${total}`; }
+  }
   if (!ok && !c.isPC && s.legendaryRes && (c.legResUsed || 0) < s.legendaryRes && opts.allowLegendary !== false) {
     c.legResUsed = (c.legResUsed || 0) + 1;
     ok = true;
     note = ` · Legendäre Resistenz (${c.legResUsed}/${s.legendaryRes})`;
   }
   const dieTxt = r.dice.length > 1 ? `W20 ${mode2 === 'adv' ? 'Vorteil' : 'Nachteil'} [${r.dice.join(', ')}]` : `W20 [${r.natural}]`;
-  const text = `${c.name}: ${label} ${dieTxt} ${parts.join(' ')} = ${total} gegen SG ${dc} → ${ok ? 'geschafft' : 'misslungen'}${note}`;
+  const text = `${c.name}: ${label} ${dieTxt} ${parts.join(' ')} = ${totalBase} gegen SG ${dc}${note} → ${ok ? 'geschafft' : 'misslungen'}`;
   const why = [...adv.map((w) => `▲ ${w}`), ...dis.map((w) => `▼ ${w}`)];
   log(x, text, '', '', {
     e: ev(ok ? 'ok' : 'fail'),
@@ -548,8 +563,10 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
       const v = isDice(r.v) ? roll(String(r.v)).total : Number(r.v) || 0;
       if (v > 0 && n > 0) { const cut = Math.min(n, v); n -= cut; steps.push(`${r.src || 'verringert'} −${cut}`); }
     }
-    if (t && ignore.has(t) && (s.resist.all.includes(t) || (phys && s.resist.nm.includes(t)))) steps.push('Resistenz ignoriert');
-    else if (t && (s.resist.all.includes(t) || (phys && s.resist.nm.includes(t)))) { n = Math.floor(n / 2); steps.push('Resistenz → halbiert'); }
+    // Resistenz „nur gegen Zauberschaden“ (Aura der Schutzwache, Zauberresistenz …)
+    const resSpell = !!opts.spell && (s.resist.spell || []).includes(t);
+    if (t && ignore.has(t) && (s.resist.all.includes(t) || resSpell || (phys && s.resist.nm.includes(t)))) steps.push('Resistenz ignoriert');
+    else if (t && (s.resist.all.includes(t) || resSpell || (phys && s.resist.nm.includes(t)))) { n = Math.floor(n / 2); steps.push(resSpell && !s.resist.all.includes(t) ? 'Resistenz gegen Zauber → halbiert' : 'Resistenz → halbiert'); }
     if (t && s.vuln.all.includes(t)) { n *= 2; steps.push('Anfälligkeit → verdoppelt'); }
     if (t && (s.immune.all.includes(t) || (phys && s.immune.nm.includes(t)))) { n = 0; steps.push('Immunität → 0'); }
     total += n;
@@ -663,7 +680,8 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
     if (c.hp <= 0 || incapacitated(c)) endConcentration(x, c, 'kampfunfähig');
     else {
       const dc = Math.min((ctx.ed || '2014') === '2024' ? 30 : 99, Math.max(10, Math.floor(total / 2)));
-      const r = savingThrow(x, c, 'con', dc, { conc: true, allowLegendary: false, what: `Konzentration (${conc.name})` }, ctx);
+      const cd = opts.attacker && (fxOf(opts.attacker, ctx).s.concDis || fxOf(opts.attacker, ctx).d.concDis) ? [`${opts.attacker.name} stört die Konzentration`] : [];
+      const r = savingThrow(x, c, 'con', dc, { conc: true, allowLegendary: false, dis: cd, what: `Konzentration (${conc.name})` }, ctx);
       if (!r.ok) endConcentration(x, c, 'Konzentrationswurf misslungen');
     }
   }
@@ -1188,6 +1206,27 @@ function fxTurnStart(x, c, ctx) {
   }
   for (const t of [...F.s.tempStart, ...F.d.tempStart]) if (Number(t.v) > 0 && c.hp > 0) addTempHp(x, c, Number(t.v), t.src || 'Wirkung');
   statusDot(x, c, 'start', ctx);
+  // Schadensaura eines Gegners (Strahlender Verzehr, Sporenhof, Aura der Eroberung …)
+  const tc0 = ctx.tokenOf?.(c);
+  for (const o of x.combatants || []) {
+    if (o.id === c.id || sideOf(o) === sideOf(c) || isDead(o) || o.hp <= 0 || incapacitated(o) || isDead(c)) continue;
+    const fo = fxOf(o, ctx);
+    const dmgAuras = [...fo.s.aura, ...fo.d.aura].filter((a) => a.k === 'dmg');
+    if (!dmgAuras.length) continue;
+    const to = ctx.tokenOf?.(o);
+    const dist = tc0 && to ? cellDistance(tc0, to) * CELL_M : 999;
+    for (const a of dmgAuras) {
+      if (dist > (Number(a.r) || 10) * CELL_M / 5 + 1e-6) continue;
+      let factor = 1;
+      if (a.save) {
+        const so = statsOf(o, ctx);
+        const sv = savingThrow(x, c, a.save, a.dc || 8 + (so.pb || 2) + (so.mods?.[a.ab] || 0), { src: o, what: a.src || 'Aura' }, ctx);
+        if (sv.ok) { if (!a.half) continue; factor = 0.5; }
+      }
+      const r = roll(String(a.dice || '1d6'));
+      applyDamage(x, c, [{ amount: Math.floor(r.total * factor), type: a.type || 'fire' }], { attacker: o, magical: true, source: a.src || 'Aura', roll: { x: r.input, n: r.total, t: a.type } }, ctx);
+    }
+  }
   // Heilaura: Verbündete in Reichweite (auch du) erhalten TP zurück
   const auras = [...F.s.aura, ...F.d.aura].filter((a) => a.k === 'heal');
   if (auras.length && !incapacitated(c)) {

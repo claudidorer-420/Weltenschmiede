@@ -352,6 +352,12 @@ export function itemInfo(it) {
 }
 // Wirkt der Gegenstand gerade? Ausgerüstet und – falls nötig – eingestimmt
 export const itemAttuned = (it, info) => !info?.attune || !!it.attuned;
+// „Erfordert Einstimmung durch einen Magier / Zwerg …“: Liste aus Klassen- und Spezies-Schlüsseln
+export function attuneAllowed(c, info) {
+  const by = [].concat(info?.def?.attuneBy || []).filter(Boolean);
+  if (!by.length) return true;
+  return by.some((k) => (c?.classes || []).some((x) => x.cls === k) || c?.speciesKey === k || c?.subspeciesKey === k);
+}
 // Waffe aus dem Bogen: Schlüssel des Katalogs (auch Regelpaket) oder 'i:<Inventar-Id>' für magische Einzelstücke
 export function charWeapon(c, k) {
   if (typeof k === 'string' && k.startsWith('i:')) {
@@ -876,10 +882,11 @@ export function charMods(c) {
   const skills = Object.fromEntries(ALL_SKILLS.map((k) => {
     let p = Number(c.skills?.[k]) || 0;
     if (fx.skill.has(k)) p = Math.max(p, 1);
+    if (fx.skillUp?.has(k)) p = p >= 1 ? 2 : 1;
     if (fx.exp.has(k) && p >= 1) p = 2;
     const ab = skillAbility(k);
     const bonus = mods[ab] + (p === 2 ? pbv * 2 : p === 1 ? pbv : Math.max(jack, fx.jackAb?.[ab] || 0)) + (cb[k] || 0) + (cb[ab] || 0) + (cb.all || 0);
-    return [k, { prof: p, bonus, adv: fx.checkAdv.has(k) || fx.checkAdv.has(ab) || fx.checkAdv.has('all'), dis: fx.checkDis.has(k) || fx.checkDis.has(ab) }];
+    return [k, { prof: p, bonus, adv: fx.checkAdv.has(k) || fx.checkAdv.has(ab) || fx.checkAdv.has('all'), dis: fx.checkDis.has(k) || fx.checkDis.has(ab), dice: checkDiceOf(fx, [k, ab, 'all']), min: minRollOf(fx, [k, ab, 'all', ...(p >= 1 ? ['prof'] : [])]) }];
   }));
   const feats = new Set((c.feats || []).map((f) => f.key));
   const init = mods.dex + (feats.has('alert') ? (ed === '2024' ? pbv : 5) : 0) + (jack && !feats.has('alert') ? jack : 0) + (Number(c.initAdj) || 0) + fx.init + (cb.init || 0) + (cb.dex || 0) + (cb.all || 0); // initBonus ist abgeleitet (derive) – nicht wieder einrechnen
@@ -891,9 +898,13 @@ export function charMods(c) {
   const casting = (c.classes || []).map((x) => ({ cls: x.cls, ...spellcasting(x, ed, mods) })).filter((x) => x.ability);
   const spell = casting.map((x) => ({ ...x, dc: 8 + pbv + mods[x.ability] + (fx.spellDc || 0), attack: pbv + mods[x.ability] + fx.atk.spell }));
   const ac = computeAC(c, mods, fx);
-  return { ed, level, pb: pbv, mods, scores, saves, skills, init, initAdv: fx.checkAdv.has('init'), passive, spell, ac, jack, fx };
+  const checks = Object.fromEntries(AB.map((k) => [k, { dice: checkDiceOf(fx, [k, 'all']), min: minRollOf(fx, [k, 'all']) }]));
+  return { ed, level, pb: pbv, mods, scores, saves, skills, checks, init, initDice: checkDiceOf(fx, ['init', 'dex', 'all']), initAdv: fx.checkAdv.has('init'), passive, spell, ac, jack, fx };
 }
 
+// Zusatzwürfel („+1W4 auf Heilkunde“) und Mindestwurf („9 oder weniger zählt als 10“) für eine Probe
+function checkDiceOf(fx, keys) { return keys.flatMap((k) => fx.checkDice?.[k] || []); }
+function minRollOf(fx, keys) { return Math.max(0, ...(fx.minRoll || []).filter((m) => m.k.some((k) => keys.includes(k))).map((m) => m.v)); }
 // Standard-Effekte für die Würfel aus Volk, Talenten, Klassen und Zustand
 export function rollTraits(c) {
   if (!c) return {};
@@ -983,12 +994,16 @@ export function resourcesFor(c) {
     const cls = findClass(x.cls);
     for (const r of cls?.resources || []) {
       if (lvlOf(r.from) > x.level) continue;
-      push({ key: `c:${cls.key}:${slug(r.name)}`, name: r.name, max: resMax(r.max, { level: x.level, total: totalLevel(c), pb: pbv, mods }), reset: r.reset || 'long', info: r.info || '' });
+      push({ key: `c:${cls.key}:${slug(r.name)}`, name: r.name, max: resMax(r.max, { level: x.level, total: totalLevel(c), pb: pbv, mods }), reset: r.reset || 'long', info: r.info || '', ...(Number(r.init) > 0 && lvlOf(r.initFrom) <= x.level ? { init: Number(r.init) } : {}) });
     }
   }
-  for (const r of charFx(c).res) push({ key: `fx:${slug(r.name)}`, name: r.name, max: resMax(r.v, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: r.rest || 'long', info: r.info || `Aus „${r.src || r.name}“.` });
+  for (const r of charFx(c).res) push({ key: `fx:${slug(r.name)}`, name: r.name, max: resMax(r.v, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: r.rest || 'long', info: r.info || `Aus „${r.src || r.name}“.`, ...(r.init ? { init: r.init } : {}) });
+  // Wirkungen „bei Initiative +1, falls leer“ auch für Klassenressourcen (Rastlos, Unermüdlicher Geist …)
+  for (const f of charFx(c).applied || []) if (f.t === 'resInit' && f.k) { const r = out.find((q) => q.key === f.k || q.name.toLowerCase().startsWith(String(f.k).toLowerCase())); if (r) r.init = Math.max(r.init || 0, Number(f.v) || 1); }
   // Zauber aus Merkmalen mit begrenzter Nutzung (ohne Zauberplatz)
   for (const s of charFx(c).spells) if (s.uses && !['will', 'always', 'charges', 'item'].includes(s.uses)) push({ key: `fs:${slug(s.name)}`, name: s.name, max: resMax(s.uses === 'pb' || String(s.uses).startsWith('mod:') ? s.uses : Number(s.uses) || 1, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: s.rest === 'short' ? 'short' : 'long', info: `Zauber aus „${s.src || s.name}“ – ohne Zauberplatz.` });
+  // Treffer-Optionen mit begrenzter Nutzung (z. B. 1× pro kurzer Rast)
+  for (const f of charFx(c).hitOpt || []) if (f.k && f.uses && f.uses !== 'will' && !f.pool && !f.charge && !f.slot) push({ key: `opt:${slug(f.k)}`, name: f.k, max: resMax(f.uses === 'pb' || String(f.uses).startsWith('mod:') ? f.uses : Number(f.uses) || 1, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: f.rest || 'long', info: f.desc || `Treffer-Option aus „${f.src || f.k}“.` });
   // Eigene Aktionen mit begrenzter Nutzung
   for (const a of charFx(c).actions) if (a.uses && a.uses !== 'will') push({ key: `act:${slug(a.k)}`, name: a.k, max: resMax(a.uses === 'pb' || String(a.uses).startsWith('mod:') ? a.uses : Number(a.uses) || 1, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: a.rest || 'long', info: a.desc || `Aus „${a.src || a.k}“.` });
   for (const t of RULES.trackers || []) push({ key: `r:${slug(t.name)}`, name: t.name, max: resMax(t.max, { level: totalLevel(c), total: totalLevel(c), pb: pbv, mods }), reset: t.reset === 'none' ? 'never' : t.reset, info: t.info || '' });
@@ -1304,7 +1319,9 @@ export function charFx(c, dyn = null) {
   if (hit) return hit;
   const level = totalLevel(c);
   const list = charFxList(c);
-  const ctx = { level, armor: armorKind(c), shield: !!c.armor?.shield || !!c.armor?.shieldKey, pb: profBonus(level), species: c.speciesKey || '', classes: (c.classes || []).map((x) => x.cls), dyn };
+  const shield = !!c.armor?.shield || !!c.armor?.shieldKey;
+  const melee = (c.weapons || []).map((k) => (String(k).startsWith('i:') ? findWeapon((c.inventory || []).find((x) => x.id === String(k).slice(2))?.base) : findWeapon(k))).filter((w) => w && !/a/.test(w.p || ''));
+  const ctx = { level, armor: armorKind(c), shield, dual: melee.length >= 2 && !shield, pb: profBonus(level), species: c.speciesKey || '', classes: (c.classes || []).map((x) => x.cls), dyn };
   // Zwei Durchgänge: erst die Attributswerte, dann alles, was Modifikatoren braucht („+ STÄ-Modifikator“)
   const pre = fxSummary(list, ctx);
   const scores = scoresOf(c, pre);
@@ -1326,7 +1343,9 @@ export function charMovement(c) {
   const opt = sp?.option?.list?.find((o) => o.key === c.speciesOption);
   const fx = charFx(c);
   const baseSpeed = sp ? (opt?.speed || sub?.speed || sp.speed || 30) : Number(c.speed) || 30;
-  const speed = Math.max(0, (fx.speedSet || baseSpeed) + fx.speed + (Number(c.speedAdj) || 0));
+  const arm = charArmor(c);
+  const slow = arm?.type === 'heavy' && Number(arm.str) > 0 && (fx.scores?.str || Number(c.abilities?.str) || 10) < Number(arm.str) && !fx.heavyOk ? 10 : 0;
+  const speed = Math.max(0, (fx.speedSet || baseSpeed) + fx.speed - slow + (Number(c.speedAdj) || 0));
   const dark = Math.max(Number(sp ? (opt?.dark ?? sub?.dark ?? sp.dark ?? 0) : c.darkvision) || 0, fx.sense.dark || 0);
   const speeds = {};
   for (const [k, v] of Object.entries({ ...(sp?.speeds || {}), ...(sub?.speeds || {}), ...(opt?.speeds || {}), ...fx.move })) {

@@ -84,9 +84,33 @@ export function makeCtx(x, extra = {}) {
     cover: (ta, tb) => coverBetween(grid, ta, tb, alive),
     hostileNear: (c) => { const t = tokenOf(c); return list.some((o) => o.id !== c.id && side(o) !== side(c) && !E.isOut(o) && !E.atZero(o) && !E.incapacitated(o) && near(tokenOf(o), t)); },
     allyNear: (att, tgt) => { const t = tokenOf(tgt); return list.some((o) => o.id !== att.id && o.id !== tgt.id && side(o) === side(att) && !E.isOut(o) && !E.atZero(o) && !E.incapacitated(o) && near(tokenOf(o), t)); },
+    saveRescue: (xx, c, s) => saveRescue(xx, c, s, ctx),
     reachOf: (c) => reachOf(c, ctx),
   });
   return ctx;
+}
+function saveRescue(x, c, s, ctx) {
+  const cands = [];
+  const own = reactFx(c, ctx, ['bonus', 'reroll', 'success'], 'failSave');
+  if (own) cands.push([c, own]);
+  for (const o of x?.combatants || []) {
+    if (!o.isPC || o.id === c.id || sideOf2(o) !== sideOf2(c) || E.isOut(o)) continue;
+    const r = reactFx(o, ctx, ['bonus', 'reroll', 'success'], 'allyFailSave');
+    if (!r) continue;
+    const to = ctx.tokenOf(o); const tc = ctx.tokenOf(c);
+    if (to && tc && cellDistance(to, tc) * CELL_M > (Number(r.f.range) || 9) + 1e-6) continue;
+    cands.push([o, r]);
+  }
+  for (const [who, ra] of cands) {
+    const f = ra.f;
+    if (f.saves?.length && !f.saves.includes(s.ab)) continue;
+    const dice = f.effect === 'bonus' ? fxDice(f.dice || '1d4', { pb: ra.pb, level: ra.level }) : '';
+    if (f.effect === 'bonus') { const mx = dice.split('+').reduce((n, t) => { const m = /^(\d*)d(\d+)$/.exec(t); return n + (m ? (Number(m[1]) || 1) * Number(m[2]) : Number(t) || 0); }, 0); if (s.total + mx + ra.mod < s.dc) continue; }
+    if (!f.free) who.reaction = false;
+    sideFx.push(() => spendReaction(who, { ...ra, f: { ...f, free: true } }, ctx));
+    return { effect: f.effect, dice, mod: ra.mod, name: f.k, by: who.id === c.id ? '' : who.name };
+  }
+  return null;
 }
 function reachOf(c, ctx) {
   const char = ctx.charOf(c);
@@ -175,7 +199,7 @@ function weaponAction(char, cm, w, c, ctx, opts = {}) {
   return {
     key: `${opts.offhand ? 'off' : 'w'}:${w.key}`, group: 'attack', kind: 'attack', name: opts.offhand ? `${w.name} (Zweitwaffe)` : w.name,
     art: { item: { name: w.name, ref: `w:${w.baseKey || w.key}`, magic: !!w.itemId } }, cost: opts.offhand ? 'bonus' : 'attack', hasteOk: true, offhand: !!opts.offhand,
-    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: (ranged ? 1.5 : weaponReach(w.baseKey ? findWeapon(w.baseKey) || w : w)) + (Number(cm.fx.reach) || 0) * 0.3, range, thrown, damage: [{ dice, flat, type }, ...(a.extraDmg ? [{ dice: a.extraDmg, flat: 0, type: dmgOf(a.extraType) || type }] : [])], magical: !!mw || shil || !!Number(w.magic) || !!w.itemId, weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged, itemKey: w.key },
+    attack: { kind: ranged ? 'ranged' : 'melee', bonus, parts: [...parts, ...(plus ? [[plus, mw.name]] : [])], reach: (ranged ? 1.5 : weaponReach(w.baseKey ? findWeapon(w.baseKey) || w : w)) + (Number(cm.fx.reach) || 0) * 0.3, range, thrown, damage: [{ dice, flat, type }, ...(a.extraDmg ? [{ dice: a.extraDmg, flat: 0, type: dmgOf(a.extraType) || type }] : [])], magical: !!mw || shil || !!Number(w.magic) || !!w.itemId, weapon: true, ability: abil, finesse: /f/.test(w.p) || ranged, strBased: abil === 'str' && !ranged, itemKey: w.key, baseKey: w.baseKey || w.key },
     needs: { target: 'enemy', n: 1, sight: true },
     desc: [a.props, opts.versatile && w.vers ? 'zweihändig geführt' : '', shil ? 'Shillelagh' : '', mw ? mw.name : ''].filter(Boolean).join(' · '),
   };
@@ -280,11 +304,15 @@ function pcCatalog(x, c, char, ctx, spells) {
   // Zauber aus Merkmalen und Gegenständen (angeboren, Zauberstäbe, Tränke): ohne Zauberplatz, mit eigenen Nutzungen
   if (spells) out.push(...innateSpells(char, cm, c, ctx, spells, res));
   // Standardaktionen als Bonusaktion („Raffinierte Aktion“ aus Regelwerken)
-  for (const k of cm.fx?.bonusAct || []) if (BONUS_ACTS[k] && !out.some((o) => o.std === k && o.cost === 'bonus')) out.push({ key: `fb:${k}`, group: 'class', kind: 'std', std: k, name: `${BONUS_ACTS[k]} (Bonusaktion)`, art: { gi: GI[k] || GI.dash }, cost: 'bonus', needs: k === 'help' ? { target: 'ally', n: 1, range: 1.5 } : { target: 'none' }, desc: `${BONUS_ACTS[k]} als Bonusaktion.` });
+  const dynFx = E.fxOf(c, ctx).d;
+  for (const k of [...(cm.fx?.bonusAct || []), ...(dynFx.bonusAct || [])]) if (BONUS_ACTS[k] && !out.some((o) => o.std === k && o.cost === 'bonus')) out.push({ key: `fb:${k}`, group: 'class', kind: 'std', std: k, name: `${BONUS_ACTS[k]} (Bonusaktion)`, art: { gi: GI[k] || GI.dash }, cost: 'bonus', needs: k === 'help' ? { target: 'ally', n: 1, range: 1.5 } : { target: 'none' }, desc: `${BONUS_ACTS[k]} als Bonusaktion.` });
   // Eigene Aktionen aus Regelwerken und Gegenständen – „ersetzt“ blendet die genannte Aktion aus
   const repl = [];
-  for (const f of cm.fx?.actions || []) {
+  const seenAct = new Set();
+  for (const f of [...(cm.fx?.actions || []), ...(dynFx.actions || [])]) {
     const a = customAction(char, cm, c, ctx, f, res, weapons);
+    if (a && seenAct.has(a.key)) continue;
+    if (a) seenAct.add(a.key);
     if (!a) continue;
     if (f.replaces) repl.push({ name: String(f.replaces).trim().toLowerCase(), key: a.key });
     out.push(a);
@@ -352,6 +380,20 @@ function customAction(char, cm, c, ctx, f, res, weapons) {
     case 'heal': return { ...base, kind: 'item', art: base.art || { gi: GI.secondwind }, heal: `${dice}${f.addMod === false ? '' : `+${Math.max(0, mod)}`}${f.addLevel ? `+${cm.level}` : ''}`, needs: { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } };
     case 'temp': return { ...base, kind: 'temp', art: base.art || { gi: GI.secondwind }, temp: `${dice}${f.addMod ? `+${Math.max(0, mod)}` : ''}`, needs: f.target === 'ally' ? { target: 'ally', n: 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
     case 'buff': return { ...base, kind: 'buff', art: base.art || { gi: GI.rage }, buffFx: f.fx || [], buffItem: f.item || null, eff: f.eff || '', effV: f.eff === 'rage' ? fxVal(f.effV ?? 2, { pb: cm.pb, level: cm.level, mods: cm.mods }) || 2 : 0, temp: f.temp ? fxDice(String(f.temp), { pb: cm.pb, level: cm.level, mod }) : 0, dur: f.dur || 'rounds', rounds: Number(f.rounds) || 10, conc: f.dur === 'conc', needs: f.target === 'ally' ? { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
+    case 'summon': {
+      // Kreaturen aus dem Kompendium (Art + höchster HG oder feste Namen) – nutzt dieselbe Auswahl wie Beschwörungszauber
+      const names = [].concat(f.names || []).map((x) => String(x).trim()).filter(Boolean);
+      const maxCr = crLimit(f, cm.level);
+      return { ...base, kind: 'summon', art: base.art || { gi: 'wolf-head' }, level: 0, conc: f.dur === 'conc', sp: { name: f.k, id: `x:${id}` },
+        spec: { use: 'summon', summon: { ...(names.length ? { names } : { types: [].concat(f.types || ['Tier']) }), cr: maxCr, n: Number(f.n) || 1, keep: !!f.keep } },
+        needs: { target: 'cell', range: Number(f.range) || 9, sight: true, summon: true } };
+    }
+    case 'form': {
+      // Gestalt annehmen (Tiergestalt für eigene Klassen): Kreaturen einer Art bis HG, Fliegen/Schwimmen erst ab Stufe …
+      const maxCr = crLimit(f, cm.level);
+      const temp = f.mode === 'temp' ? fxVal(f.temp ?? 'level', { pb: cm.pb, level: cm.level, mods: cm.mods }) : 0;
+      return { ...base, kind: 'form', art: base.art || { gi: 'wolf-head' }, formRule: { types: [].concat(f.types || ['Tier']), maxCr, noFly: !!f.flyAt && cm.level < Number(f.flyAt), noSwim: !!f.swimAt && cm.level < Number(f.swimAt), mode: f.mode === 'temp' ? 'temp' : 'replace', temp }, needs: { target: 'self' } };
+    }
     case 'restore': return { ...base, kind: 'restore', art: base.art || { gi: GI.magic }, what: f.what || 'slot', lvMax: Number(f.lvMax) || 9, resName: f.res || '', n: Number(f.n) || 1, needs: { target: 'self' } };
     case 'mark': return { ...base, kind: 'mark', art: base.art || { gi: GI.magic }, markDice: dice === '1d6' && !f.dice ? '' : dice, markFlat: f.flat ? fxVal(f.flat, { pb: cm.pb, level: cm.level, mods: cm.mods }) || 0 : 0, markAdv: !!f.adv, markCrit: Number(f.crit) || 0, rounds: Number(f.rounds) || 600, needs: needsOne(Number(f.range) || 27) };
     case 'save': {
@@ -378,6 +420,13 @@ function customAction(char, cm, c, ctx, f, res, weapons) {
         rider, needs: { target: 'enemy', n: Number(f.n) || 1, sight: true } };
     }
   }
+}
+// Höchster HG für Beschwören/Gestalt: fester Wert (auch aus einer Spalte), Stufe ÷ X oder je Stufe (crAt { 2: 0.25, 4: 0.5, 8: 1 })
+function crLimit(f, level) {
+  if (Number(f.crDiv) > 0) return Math.max(0.125, Math.floor(level / Number(f.crDiv)));
+  const at = Object.entries(f.crAt || {}).filter(([l]) => level >= Number(l)).map(([, v]) => Number(v));
+  if (at.length) return Math.max(...at);
+  return f.cr != null && f.cr !== '' ? Number(f.cr) : 1;
 }
 // Zauberschaden (+CHA auf Zaubertricks, +1 bei Kälte …) und Heilungsboni für eine Zauberaktion
 function spellBoni(cm, sp) {
@@ -420,6 +469,7 @@ function innateSpells(char, cm, c, ctx, spells, res) {
     } else if (s.uses !== 'will') {
       Object.assign(a, { res: `fs:${id}`, resCost: 1, uses: res[`fs:${id}`] || { left: 0, max: 0 }, desc: `Aus „${s.src}“ – ohne Zauberplatz.` });
     } else a.desc = `Aus „${s.src}“ – beliebig oft, ohne Zauberplatz.`;
+    if (s.act === 'bonus') { a.cost = 'bonus'; a.desc = `${a.desc} Als Bonusaktion.`; }
     out.push(a);
   }
   return out;
@@ -908,7 +958,11 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
       const sv = E.savingThrow(x, c, 'wis', effDc(x, tgt, 'sanctuary'), { spell: true, src: tgt, what: 'Heiligtum' }, ctx);
       if (!sv.ok) { rec.targets.push({ id: tgt.id, name: tgt.name, hit: false, note: 'Heiligtum – Angriff abgelenkt' }); return; }
     }
-    const rr = reconcile(ev.rolls?.[i], plan.mode);
+    const re0 = reacts?.[i] || {};
+    // Reaktion „Nachteil für den Angreifer“: Vorteil wird aufgehoben, sonst zählt der niedrigere von zwei W20
+    const mode = re0.dis ? (plan.mode === 'adv' ? null : 'dis') : plan.mode;
+    if (re0.dis) { plan.dis = [...(plan.dis || []), re0.dis]; plan.mode = mode; }
+    const rr = reconcile(ev.rolls?.[i], mode);
     const extras = [...attackBonusExtras(x, c), ...fxAttackBonus(x, c, a, tgt, ctx, plan)];
     const bonus = att.bonus + extras.reduce((s, [n]) => s + n, 0);
     const total = rr.natural + bonus;
@@ -917,6 +971,8 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
     let ac = plan.ac;
     if (re.shield) { ac += 5; j = E.judge({ ...plan, ac }, { natural: rr.natural, total }); }
     if (re.parry) { ac += re.parry; j = E.judge({ ...plan, ac }, { natural: rr.natural, total }); }
+    if (re.penalty) j = E.judge({ ...plan, ac: ac + re.penalty.n }, { natural: rr.natural, total });
+    if (re.uncrit && j.crit) j = { ...j, crit: false };
     // Spiegelbilder
     if (j.hit && E.hasEff(tgt, 'mirror')) {
       const mi = E.effs(tgt, 'mirror')[0];
@@ -933,19 +989,30 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
     }
     const dieTxt = rr.dice.length > 1 ? `W20 ${plan.mode === 'adv' ? 'Vorteil' : 'Nachteil'} [${rr.dice.join(', ')}]` : `W20 [${rr.natural}]`;
     // Die RK von Monstern sieht nur die SL im Protokoll
-    const head = `🎯 ${c.name} → ${tgt.name}: ${a.name} ${dieTxt} ${fmtS(att.bonus)}${extras.map(([n, t]) => ` ${fmtS(n)} (${t})`).join('')} = ${total}`;
+    const pen = re.penalty?.n || 0;
+    const head = `🎯 ${c.name} → ${tgt.name}: ${a.name} ${dieTxt} ${fmtS(att.bonus)}${extras.map(([n, t]) => ` ${fmtS(n)} (${t})`).join('')}${pen ? ` −${pen} (${re.penalty.why})` : ''} = ${total - pen}`;
     const tail = `${plan.adv.length || plan.dis.length ? ` · ${[...plan.adv.map((s) => `▲ ${s}`), ...plan.dis.map((s) => `▼ ${s}`)].join(', ')}` : ''} → ${j.crit ? 'KRITISCHER TREFFER' : j.hit ? 'Treffer' : j.fumble ? 'natürliche 1 – daneben' : j.image ? 'Spiegelbild' : 'verfehlt'}`;
     const acTxt = ` gegen RK ${ac}${plan.cover ? ` (inkl. Deckung +${plan.cover})` : ''}`;
     const why = [...plan.adv.map((s) => `▲ ${s}`), ...plan.dis.map((s) => `▼ ${s}`)];
-    const tipLines = [plan.cover ? `Ziel in Deckung (+${plan.cover} RK)` : '', re.shield ? 'Schild: RK +5' : '', re.parry ? `Parieren: RK +${re.parry}` : '', j.image ? 'Getroffen wurde nur ein Spiegelbild' : '', plan.long ? 'Große Entfernung' : ''].filter(Boolean);
+    const tipLines = [plan.cover ? `Ziel in Deckung (+${plan.cover} RK)` : '', re.shield ? 'Schild: RK +5' : '', re.parry ? `${re.parryWhy || 'Parieren'}: RK +${re.parry}` : '', re.penalty ? `${re.penalty.why}: −${re.penalty.n} auf den Angriff` : '', re.uncrit ? `${re.uncrit}: kein kritischer Treffer` : '', j.image ? 'Getroffen wurde nur ein Spiegelbild' : '', plan.long ? 'Große Entfernung' : ''].filter(Boolean);
     const data = {
       e: { t: 'atk', a: E.who(c), o: E.who(tgt), w: a.name, r: j.crit ? 'crit' : j.hit ? 'hit' : j.fumble ? 'fumble' : j.image ? 'image' : 'miss' },
-      tip: { ...(tgt.isPC ? { ac } : {}), rolls: [{ l: 'Angriffswurf', d: rr.dice, k: rr.natural, m: plan.mode, why, p: [...attackParts(att, a, c, ctx), ...extras.map(([n, t]) => [n, t])], sum: total, crit: j.crit, fumble: j.fumble }], lines: tipLines },
+      tip: { ...(tgt.isPC ? { ac } : {}), rolls: [{ l: 'Angriffswurf', d: rr.dice, k: rr.natural, m: plan.mode, why, p: [...attackParts(att, a, c, ctx), ...extras.map(([n, t]) => [n, t]), ...(pen ? [[-pen, re.penalty.why]] : [])], sum: total - pen, crit: j.crit, fumble: j.fumble }], lines: tipLines },
       ...(tgt.isPC ? {} : { gtip: { ac } }),
     };
     if (tgt.isPC) E.log(x, `${head}${acTxt}${tail}`, '', '', data);
     else E.log(x, `${head}${plan.cover ? ' (Ziel in Deckung)' : ''}${tail}`, '', `${head}${acTxt}${tail}`, data);
-    rec.targets.push({ id: tgt.id, name: tgt.name, natural: rr.natural, dice: rr.dice, total, ac, hit: j.hit, crit: j.crit, fumble: j.fumble, mode: plan.mode, adv: plan.adv, dis: plan.dis, melee: plan.melee, shield: !!re.shield, parry: !!re.parry, image: !!j.image, halfOnMiss: !j.hit && spec.special === 'acidArrow' });
+    if (!j.hit && tgt.isPC && plan.melee && tgt.reaction && !E.isOut(c) && reactFx(tgt, ctx, ['strike', 'riposte'], 'miss')) sideFx.push(() => offerStrike({ tgt: tgt.id, actor: c.id, melee: true, miss: true }));
+    for (const o of x.combatants || []) {
+      if (!o.isPC || o.id === tgt.id || o.id === c.id || sideOf2(o) === sideOf2(c) || E.isOut(o) || !o.reaction) continue;
+      const ro = reactFx(o, ctx, ['strike', 'riposte'], 'allyAttacked');
+      if (!ro) continue;
+      const to = ctx.tokenOf(o); const tc = ctx.tokenOf(c);
+      if (to && tc && cellDistance(to, tc) * CELL_M > (Number(ro.f.range) || 1.5) + 1e-6) continue;
+      sideFx.push(() => offerStrike({ tgt: o.id, actor: c.id, melee: true, ally: tgt.name }));
+      break;
+    }
+    rec.targets.push({ id: tgt.id, name: tgt.name, natural: rr.natural, dice: rr.dice, total: total - pen, ac, hit: j.hit, crit: j.crit, fumble: j.fumble, mode: plan.mode, adv: plan.adv, dis: plan.dis, melee: plan.melee, shield: !!re.shield, parry: !!re.parry, image: !!j.image, halfOnMiss: !j.hit && spec.special === 'acidArrow' });
     if (j.hit) {
       if (a.rider) applyRider(x, c, tgt, a.rider, ctx, rec);
       fxOnHit(x, c, tgt, a, ctx, { crit: j.crit, mode: plan.mode }, rec);
@@ -971,6 +1038,7 @@ function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
   rec.drain = spec.drain || a.grant?.drain || 0;
   rec.weapon = !!a.attack?.weapon;
   rec.itemKey = a.attack?.itemKey || null;
+  rec.baseKey = a.attack?.baseKey || null;
   rec.unarmed = !!a.attack?.unarmed;
   rec.strBased = !!a.attack?.strBased;
   rec.finesse = !!a.attack?.finesse;
@@ -1043,8 +1111,13 @@ function resolveSpellEffects(x, c, a, ev, ctx, reacts, side) {
   }
   if (spec.use === 'buff' || spec.use === 'mark' || spec.use === 'temp' || spec.use === 'heal') return resolveSupport(x, c, a, ev, ctx, targets, concId, rec);
   // Rettungswürfe
+  const Fc = E.fxOf(c, ctx);
+  if (!rec.half && !a.level && spec.save && (Fc.s.cantripHalf || Fc.d.cantripHalf)) { rec.half = true; rec.halfWhy = 'Mächtiger Zaubertrick'; }
+  const sculpt = Fc.s.sculpt || Fc.d.sculpt;
+  let sculptLeft = sculpt && tpl && (!sculpt.school || sculpt.school === sp?.school) ? 1 + (Number(ev.slot || a.level) || 0) : 0;
   for (const t of targets) {
     if (spec.only && !spec.only.test(t.statblock?.type || (t.isPC ? 'Humanoide' : ''))) { rec.targets.push({ id: t.id, name: t.name, note: 'nicht betroffen (Kreaturentyp)' }); continue; }
+    if (sculptLeft > 0 && t.id !== c.id && side(t) === side(c)) { sculptLeft--; rec.targets.push({ id: t.id, name: t.name, note: 'ausgespart (Zauber formen)' }); continue; }
     if (spec.use === 'special' && spec.special === 'hpPool') continue;
     const firstCond = [].concat(spec.cond || [])[0]?.n;
     const sv = spec.save ? E.savingThrow(x, t, spec.save, a.dc, { spell: true, src: c, what: a.name, cover: spec.ignoreCover ? 0 : ctx.cover && ctx.tokenOf(c) && ctx.tokenOf(t) ? ctx.cover(ctx.tokenOf(c), ctx.tokenOf(t)) : 0, immuneTo: firstCond }, ctx) : { ok: false, total: 0 };
@@ -1083,13 +1156,21 @@ function resolveSupport(x, c, a, ev, ctx, targets, concId, rec) {
     const entry = { id: t.id, name: t.name };
     if (spec.use === 'heal') {
       const amt = Number(ev.amounts?.[t.id] ?? ev.amount) || 0;
-      entry.healed = E.applyHealing(x, t, amt, { source: a.name, by: c, roll: ev.amountDet || null });
+      entry.healed = E.applyHealing(x, t, amt + (amt > 0 ? healRecvOf(t, ctx) : 0), { source: a.name, by: c, roll: ev.amountDet || null });
       for (const n of spec.cures || []) E.removeCondition(x, t, n, a.name);
     }
     if (spec.use === 'temp') { E.addTempHp(x, t, Number(ev.amount) || 0, a.name); entry.temp = Number(ev.amount) || 0; }
     for (const eff of [].concat(spec.eff || [])) applyEff(x, c, t, eff, a, concId, ev);
     for (const cond of [].concat(spec.cond || [])) applyCond(x, c, t, cond, a, concId, ev, ctx);
     rec.targets.push(entry);
+  }
+  if (spec.use === 'heal' && others.length && c.isPC) {
+    const lv = Number(ev.slot || a.level) || 0;
+    for (const h of E.fxOf(c, ctx).s.healSelfFx || []) {
+      if (lv < 1) continue;
+      const n = (Number(h.v) || 0) + (h.slot ? lv : 0);
+      if (n > 0) E.applyHealing(x, c, n, { source: h.src || 'Gesegneter Heiler' });
+    }
   }
   if (spec.grant) grantAction(x, c, a, ev, concId, null);
   if (spec.special === 'dashNow') { const eco = (c.eco ||= E.freshEco(c, ctx)); eco.moveM += E.statsOf(c, ctx).speedM; }
@@ -1364,9 +1445,11 @@ function resolveMonsterAbility(x, c, a, ev, ctx) {
   if (rec.damage.length && rec.targets.length) rec.stage = 'damage';
   return rec;
 }
+// „Mehr Heilung erhalten“ (+KON-Modifikator bei jeder Heilung durch Zauber, Trank oder Merkmal)
+function healRecvOf(t, ctx) { const F = E.fxOf(t, ctx); return Math.max(0, (Number(F.s.healRecv) || 0) + (Number(F.d.healRecv) || 0)); }
 function resolveItem(x, c, a, ev, ctx) {
   const t = targetsOf(x, ev)[0] || c;
-  const amt = Number(ev.amount) || roll(a.heal).total;
+  const amt = (Number(ev.amount) || roll(a.heal).total) + healRecvOf(t, ctx);
   E.applyHealing(x, t, amt, { source: a.name, by: c, roll: ev.amountDet || null });
   return { ...baseRec(ev, c, a), kind: 'heal', stage: 'done', targets: [{ id: t.id, name: t.name, healed: amt }] };
 }
@@ -1488,28 +1571,46 @@ function retaliate(x, tgt, att, on, ctx, { melee = false } = {}) {
   }
 }
 // Eigene Reaktion eines Charakters: { f, bonus, mod, pb, level } oder null (Auslöser: melee | ranged | hit)
+// Seite eines Kämpfers (Team schlägt Helden/Gegner) – für Reaktionen zugunsten Verbündeter
+const sideOf2 = (c) => c?.team || (c?.isPC || c?.ally ? 'pc' : 'npc');
+// effect: 'reduce' | 'ac' | 'strike' | 'riposte' | 'dis' (auch als Liste) · trigger: 'hit' | 'melee' | 'ranged' | 'miss' | 'attacked' | 'ally' | 'allyAttacked'
 function reactFx(c, ctx, effect, trigger) {
   const char = ctx.charOf?.(c);
-  if (!char || !c.reaction) return null;
+  if (!char || E.incapacitated(c)) return null;
   const cm = charMods(char);
   const res = Object.fromEntries(resourcesFor(char).map((r) => [r.key, r.max - (Number(char.resUsed?.[r.key]) || 0)]));
-  for (const f of cm.fx.actions || []) {
-    if (f.kind !== 'react' || (f.effect || 'reduce') !== effect) continue;
+  const effs = [].concat(effect);
+  const dyn = E.fxOf(c, ctx).d;
+  for (const f of [...(cm.fx.actions || []), ...(dyn.actions || [])]) {
+    if (f.kind !== 'react' || !effs.includes(f.effect || 'reduce')) continue;
+    if (!f.free && !c.reaction) continue;
     const trig = f.trigger || 'hit';
-    if (trig !== 'hit' && trig !== trigger) continue;
+    // „bei Treffer“ gilt für Nah- und Fernkampf, „Schaden erlitten“ für jeden Treffer; Verfehlen, Angegriffen und Verbündete nur für sich
+    if (trig !== trigger && !(trig === 'hit' && (trigger === 'melee' || trigger === 'ranged')) && !(trig === 'damaged' && ['hit', 'melee', 'ranged'].includes(trigger))) continue;
     const id = fxSlug(f.k);
     if (f.uses && f.uses !== 'will' && !((res[`act:${id}`] || 0) > 0)) continue;
+    // Reaktion, die Punkte einer Ressource kostet (Riposte mit Überlegenheitswürfel, Geisterschild …)
+    let poolKey = null;
+    if (f.pool) {
+      const want = String(f.pool).toLowerCase();
+      const r = resourcesFor(char).find((q) => q.key === f.pool || String(q.name).toLowerCase().startsWith(want));
+      if (!r || (res[r.key] || 0) < (Number(f.poolCost) || 1)) continue;
+      poolKey = r.key;
+    }
     const mod = f.addMod ? cm.mods[f.addMod] || 0 : 0;
-    const bonus = f.v === 'pb' ? cm.pb : Number(f.v) || (effect === 'ac' ? 2 : 0);
-    return { f, bonus, mod, pb: cm.pb, level: cm.level, id, owner: c.ownerUid || null, charId: char.id };
+    const bonus = f.v === 'pb' ? cm.pb : Number(f.v) || (f.effect === 'ac' ? 2 : 0);
+    return { f, bonus, mod, pb: cm.pb, level: cm.level, id, owner: c.ownerUid || null, charId: char.id, poolKey };
   }
   return null;
 }
 async function spendReaction(tgt, ra, ctx) {
-  await mutateCombat((x) => { const t = cbOf(x, tgt.id); if (t) t.reaction = false; return x; });
-  if (ra.f.uses && ra.f.uses !== 'will' && ra.owner) {
-    const char = ctx.charOf?.(tgt);
-    if (char) await db.update(`users/${ra.owner}/characters`, char.id, { resUsed: { ...(char.resUsed || {}), [`act:${ra.id}`]: (Number(char.resUsed?.[`act:${ra.id}`]) || 0) + 1 } }).catch(() => {});
+  if (!ra.f.free) await mutateCombat((x) => { const t = cbOf(x, tgt.id); if (t) t.reaction = false; return x; });
+  const key = ra.poolKey || (ra.f.uses && ra.f.uses !== 'will' ? `act:${ra.id}` : null);
+  const char = key ? ctx.charOf?.(tgt) : null;
+  if (char) {
+    const n = ra.poolKey ? Number(ra.f.poolCost) || 1 : 1;
+    const path = ra.owner ? `users/${ra.owner}/characters` : null;
+    if (path) await db.update(path, char.id, { resUsed: { ...(char.resUsed || {}), [key]: (Number(char.resUsed?.[key]) || 0) + n } }).catch(() => {});
   }
 }
 // Reaktion gegen den Angreifer (Schildstoß, Vergeltungsschlag): Rettungswurf, Zustand, Schaden
@@ -1519,10 +1620,10 @@ async function offerStrike(st) {
   const tgt = cbOf(x, st.tgt);
   const att = cbOf(x, st.actor);
   if (!tgt || !att || E.isOut(att)) return;
-  const ra = reactFx(tgt, ctx, 'strike', st.melee ? 'melee' : 'ranged');
+  const ra = reactFx(tgt, ctx, ['strike', 'riposte'], st.ally ? 'allyAttacked' : st.miss ? 'miss' : st.melee ? 'melee' : 'ranged');
   if (!ra) return;
   const owner = tgt.ownerUid || null;
-  const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'rebuke', title: `${ra.f.k}?`, text: `${att.name} hat dich getroffen. Als Reaktion: ${ra.f.desc || ra.f.k}`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
+  const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'rebuke', title: `${ra.f.k}?`, text: `${att.name} hat ${st.ally ? `${st.ally} angegriffen` : `dich ${st.miss ? 'verfehlt' : 'getroffen'}`}. Als Reaktion: ${ra.f.desc || (ra.f.effect === 'riposte' ? 'Gegenangriff mit deiner Waffe' : ra.f.k)}`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
   if (ans !== 'yes') return;
   await spendReaction(tgt, ra, ctx);
   await mutateCombat((xx) => {
@@ -1530,7 +1631,9 @@ async function offerStrike(st) {
     const t = cbOf(xx, tgt.id);
     const a = cbOf(xx, att.id);
     if (!t || !a) return xx;
-    const cm = charMods(ctx.charOf(t));
+    const char = ctx.charOf(t);
+    const cm = charMods(char);
+    if (ra.f.effect === 'riposte') { riposte(xx, t, a, char, cm, ra.f, cx); return xx; }
     const dc = Number(ra.f.dcFixed) || 8 + cm.pb + (cm.mods[ra.f.ab || 'str'] || 0);
     let ok = false;
     if (ra.f.save) ok = E.savingThrow(xx, a, ra.f.save, dc, { src: t, what: ra.f.k }, cx).ok;
@@ -1538,6 +1641,44 @@ async function offerStrike(st) {
     if (ra.f.inflict && !ok) applyCondRef(xx, t, a, ra.f.inflict, { rounds: Number(ra.f.condDur) || 0 }, cx);
     return xx;
   });
+}
+// Reaktion nach erlittenem Schaden: Zustand für dich (Verblassen: unsichtbar bis zum Ende deines nächsten Zuges …)
+async function offerSelfCond(sc) {
+  const x = await loadCombat();
+  const ctx = makeCtx(x);
+  const tgt = cbOf(x, sc.tgt);
+  if (!tgt || E.isOut(tgt)) return;
+  const ra = reactFx(tgt, ctx, 'selfCond', sc.trig);
+  if (!ra) return;
+  const cond = ra.f.inflict || 'Unsichtbar';
+  const owner = tgt.ownerUid || null;
+  const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'uncanny', title: `${ra.f.k}?`, text: `Du hast Schaden erlitten. Als Reaktion: ${ra.f.desc || `${condName(cond)}${Number(ra.f.condDur) ? ` für ${ra.f.condDur} Runde(n)` : ' bis zum Ende deines nächsten Zuges'}`}`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
+  if (ans !== 'yes') return;
+  await spendReaction(tgt, ra, ctx);
+  await mutateCombat((xx) => {
+    const cx = makeCtx(xx);
+    const t = cbOf(xx, tgt.id);
+    if (!t) return xx;
+    applyCondRef(xx, t, t, cond, { rounds: Number(ra.f.condDur) || 1 }, cx);
+    E.log(xx, `✨ ${t.name}: ${ra.f.k}`, '', '', { e: { t: 'use', a: E.who(t), w: ra.f.k } });
+    return xx;
+  });
+}
+// Gegenangriff als Reaktion (Riposte, Vergeltung): ein Nahkampfangriff mit der besten Waffe, auf Wunsch mit Zusatzwürfel
+function riposte(x, t, a, char, cm, f, ctx) {
+  const weapons = charWeapons(char).filter((w) => !/a/.test(w.p));
+  const w = weapons.sort((p, q) => weaponAttack(char, q, cm.mods, cm.pb).bonus - weaponAttack(char, p, cm.mods, cm.pb).bonus)[0];
+  const wa = w ? weaponAction(char, cm, w, t, ctx, {}) : unarmedAction(char, cm, t, ctx);
+  const plan = E.attackPlan(x, t, a, wa.attack, ctx);
+  if (!plan.ok) { E.log(x, `⚔️ ${t.name}: ${f.k} – ${plan.problems.join(', ')}`); return; }
+  const rr = reconcile(null, plan.mode);
+  const total = rr.natural + wa.attack.bonus;
+  const j = E.judge(plan, { natural: rr.natural, total });
+  E.log(x, `⚔️ ${t.name}: ${f.k} → ${a.name} W20 [${rr.dice.join(', ')}] ${fmtS(wa.attack.bonus)} = ${total} → ${j.crit ? 'KRITISCHER TREFFER' : j.hit ? 'Treffer' : 'verfehlt'}`, '', '', { e: { t: 'atk', a: E.who(t), o: E.who(a), w: f.k, r: j.crit ? 'crit' : j.hit ? 'hit' : 'miss' } });
+  if (!j.hit) return;
+  const parts = [...wa.attack.damage, ...(f.dice ? [{ ...parseDmg(fxDice(f.dice, { pb: cm.pb, level: cm.level })), type: f.type || wa.attack.damage[0]?.type }] : [])];
+  const dmg = parts.map((p) => { const r = roll(`${p.dice ? (j.crit ? p.dice.replace(/^(\d*)d/, (m0, n) => `${(Number(n) || 1) * 2}d`) : p.dice) : '0'}+${Number(p.flat) || 0}`); return { amount: Math.max(0, r.total), type: p.type }; });
+  E.applyDamage(x, a, dmg, { crit: j.crit, melee: true, weapon: true, magical: !!wa.attack.magical, attacker: t, source: f.k }, ctx);
 }
 // Kampfhaltungen und Stärkungen (Kampfrausch, Flammenzunge, Trank der Riesenstärke …)
 function resolveBuff(x, c, a, ev, ctx) {
@@ -1598,22 +1739,104 @@ async function gatherReactions(x0, actor, a, ev, ctx) {
       const rr = reconcile(ev.rolls?.[i], plan.mode);
       const total = rr.natural + att.bonus;
       const j = E.judge(plan, { natural: rr.natural, total });
-      if (!j.hit || j.crit) continue;
+      if (!j.hit) continue;
+      // Nachteil für den Angreifer: das Ziel selbst oder ein Verbündeter in Reichweite (nur, wenn nicht ohnehin im Nachteil)
+      if (plan.mode !== 'dis') {
+        const cand = [];
+        if (tgt.isPC) { const r0 = reactFx(tgt, ctx, 'dis', 'attacked'); if (r0) cand.push([tgt, r0]); }
+        for (const o of x0.combatants || []) {
+          if (!o.isPC || o.id === tgt.id || sideOf2(o) !== sideOf2(tgt)) continue;
+          const r1 = reactFx(o, ctx, 'dis', 'allyAttacked');
+          if (!r1) continue;
+          const to = ctx.tokenOf(o); const tt = ctx.tokenOf(tgt);
+          if (to && tt && cellDistance(to, tt) * CELL_M > (Number(r1.f.range) || 1.5) + 1e-6) continue;
+          cand.push([o, r1]);
+        }
+        let done = false;
+        for (const [who, rx] of cand) {
+          const owner = who.ownerUid || null;
+          const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${rx.f.k}?`, text: `${actor.name} greift ${tgt.name} mit ${a.name} an (${total} gegen RK ${plan.ac}). Mit deiner Reaktion hat der Angriff Nachteil – ein zweiter W20 wird gewürfelt, der niedrigere zählt.`, options: [{ id: 'yes', label: `${rx.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: who.id });
+          if (ans === 'yes') { reacts[i] = { ...(reacts[i] || {}), dis: rx.f.k }; if (!rx.f.free) who.reaction = false; sideFx.push(() => spendReaction(who, rx, ctx)); done = true; break; }
+        }
+        if (done) continue;
+      }
+      // „Kritischer Treffer wird normaler Treffer“ (für dich oder Verbündete in Reichweite)
+      if (j.crit) {
+        const cand = [];
+        if (tgt.isPC) { const r0 = reactFx(tgt, ctx, 'uncrit', plan.melee ? 'melee' : 'ranged'); if (r0) cand.push([tgt, r0]); }
+        for (const o of x0.combatants || []) {
+          if (!o.isPC || o.id === tgt.id || sideOf2(o) !== sideOf2(tgt)) continue;
+          const r1 = reactFx(o, ctx, 'uncrit', 'ally');
+          if (!r1) continue;
+          const to = ctx.tokenOf(o); const tt = ctx.tokenOf(tgt);
+          if (to && tt && cellDistance(to, tt) * CELL_M > (Number(r1.f.range) || 9) + 1e-6) continue;
+          cand.push([o, r1]);
+        }
+        for (const [who, rx] of cand) {
+          const owner = who.ownerUid || null;
+          const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${rx.f.k}?`, text: `${actor.name} trifft ${tgt.name} kritisch. Mit deiner Reaktion wird daraus ein normaler Treffer.`, options: [{ id: 'yes', label: `${rx.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: who.id });
+          if (ans === 'yes') { reacts[i] = { ...(reacts[i] || {}), uncrit: rx.f.k }; if (!rx.f.free) who.reaction = false; sideFx.push(() => spendReaction(who, rx, ctx)); break; }
+        }
+        continue;
+      }
+      // Würfel vom Angriffswurf abziehen (Schneidende Worte …): du selbst oder Verbündete in Reichweite des Angreifers
+      {
+        const cand = [];
+        if (tgt.isPC) { const r0 = reactFx(tgt, ctx, 'penalty', 'attacked'); if (r0) cand.push([tgt, r0]); }
+        for (const o of x0.combatants || []) {
+          if (!o.isPC || o.id === tgt.id || sideOf2(o) !== sideOf2(tgt)) continue;
+          const r1 = reactFx(o, ctx, 'penalty', 'allyAttacked');
+          if (!r1) continue;
+          const to = ctx.tokenOf(o); const ta = ctx.tokenOf(actor);
+          if (to && ta && cellDistance(to, ta) * CELL_M > (Number(r1.f.range) || 18) + 1e-6) continue;
+          cand.push([o, r1]);
+        }
+        let done = false;
+        for (const [who, rx] of cand) {
+          const dice = fxDice(rx.f.dice || '1d6', { pb: rx.pb, level: rx.level });
+          const mx = dice.split('+').reduce((n, t) => { const m = /^(\d*)d(\d+)$/.exec(t); return n + (m ? (Number(m[1]) || 1) * Number(m[2]) : Number(t) || 0); }, 0);
+          if (total - mx >= plan.ac) continue;
+          const owner = who.ownerUid || null;
+          const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${rx.f.k}?`, text: `${actor.name} trifft ${tgt.name} (${total} gegen RK ${plan.ac}). Mit deiner Reaktion ziehst du ${dice.replace(/d/g, 'W')} vom Angriffswurf ab.`, options: [{ id: 'yes', label: `${rx.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: who.id });
+          if (ans === 'yes') { const n = roll(dice).total; reacts[i] = { ...(reacts[i] || {}), penalty: { n, why: rx.f.k } }; if (!rx.f.free) who.reaction = false; sideFx.push(() => spendReaction(who, rx, ctx)); done = true; break; }
+        }
+        if (done && total - reacts[i].penalty.n < plan.ac) continue;
+      }
       if (!tgt.isPC) {
         const parry = E.statsOf(tgt, ctx).reactions?.find((r) => r.kind === 'parry');
         if (parry && plan.melee && total < plan.ac + parry.ac) { reacts[i] = { parry: parry.ac }; E.log(x0, `🛡 ${tgt.name} pariert (+${parry.ac} RK)`); }
         continue;
       }
       const ra = reactFx(tgt, ctx, 'ac', plan.melee ? 'melee' : 'ranged');
-      if (ra && total < plan.ac + ra.bonus) {
+      const raDice = ra?.f.dice ? fxDice(ra.f.dice, { pb: ra.pb, level: ra.level }) : '';
+      const raMax = raDice ? raDice.split('+').reduce((n, t) => { const m = /^(d*)d(d+)$/.exec(t); return n + (m ? (Number(m[1]) || 1) * Number(m[2]) : Number(t) || 0); }, 0) : ra?.bonus || 0;
+      if (ra && total < plan.ac + raMax) {
         const owner = tgt.ownerUid || null;
-        const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${ra.f.k}?`, text: `${actor.name} trifft ${tgt.name} (${total} gegen RK ${plan.ac}). Mit ${ra.f.k}: RK ${plan.ac + ra.bonus} – der Angriff verfehlt.`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
-        if (ans === 'yes') { reacts[i] = { parry: ra.bonus }; sideFx.push(() => spendReaction(tgt, ra, ctx)); continue; }
+        const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${ra.f.k}?`, text: `${actor.name} trifft ${tgt.name} (${total} gegen RK ${plan.ac}). Mit ${ra.f.k}: RK +${raDice ? raDice.replace(/d/g, 'W') : ra.bonus}${raDice ? '' : ` = ${plan.ac + ra.bonus} – der Angriff verfehlt`}.`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
+        if (ans === 'yes') { const b = raDice ? roll(raDice).total : ra.bonus; reacts[i] = { ...(reacts[i] || {}), parry: b, parryWhy: ra.f.k }; if (!ra.f.free) tgt.reaction = false; sideFx.push(() => spendReaction(tgt, ra, ctx)); if (total < plan.ac + b) continue; }
+      }
+      // RK-Bonus für einen Verbündeten in Reichweite (Abwehrmanöver, Schützende Schwingen …)
+      {
+        let done = false;
+        for (const o of x0.combatants || []) {
+          if (!o.isPC || o.id === tgt.id || sideOf2(o) !== sideOf2(tgt)) continue;
+          const ro = reactFx(o, ctx, 'ac', 'ally');
+          if (!ro) continue;
+          const to = ctx.tokenOf(o); const tt = ctx.tokenOf(tgt);
+          if (to && tt && cellDistance(to, tt) * CELL_M > (Number(ro.f.range) || 1.5) + 1e-6) continue;
+          const dice = ro.f.dice ? fxDice(ro.f.dice, { pb: ro.pb, level: ro.level }) : '';
+          const mx = dice ? dice.split('+').reduce((n, t) => { const m = /^(\d*)d(\d+)$/.exec(t); return n + (m ? (Number(m[1]) || 1) * Number(m[2]) : Number(t) || 0); }, 0) : ro.bonus;
+          if (total >= plan.ac + mx) continue;
+          const owner = o.ownerUid || null;
+          const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: `${ro.f.k}?`, text: `${actor.name} trifft ${tgt.name} (${total} gegen RK ${plan.ac}). Mit deiner Reaktion erhält ${tgt.name} RK +${dice ? dice.replace(/d/g, 'W') : ro.bonus} gegen diesen Angriff.`, options: [{ id: 'yes', label: `${ro.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: o.id });
+          if (ans === 'yes') { reacts[i] = { ...(reacts[i] || {}), parry: dice ? roll(dice).total : ro.bonus, parryWhy: ro.f.k }; if (!ro.f.free) o.reaction = false; sideFx.push(() => spendReaction(o, ro, ctx)); done = true; break; }
+        }
+        if (done) continue;
       }
       if (total >= plan.ac + 5 || !hasShield(tgt, ctx)) continue;
       const owner = tgt.ownerUid || null;
       const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'shield', title: 'Schild wirken?', text: `${actor.name} trifft ${tgt.name} mit ${a.name} (${total} gegen RK ${plan.ac}). Mit Schild: RK ${plan.ac + 5} – der Angriff verfehlt.`, options: [{ id: 'yes', label: 'Schild wirken (Reaktion, 1. Grad)', kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
-      if (ans === 'yes') { reacts[i] = { shield: true }; sideFx.push(() => useShield(tgt, ctx)); }
+      if (ans === 'yes') { reacts[i] = { ...(reacts[i] || {}), shield: true }; sideFx.push(() => useShield(tgt, ctx)); }
     }
   }
   if (a.spec?.use === 'auto') {
@@ -1691,19 +1914,30 @@ export function summonRule(a, slot) {
     };
   }
   if (sm.ids) return { ids: sm.ids, maxCr: 99, count: () => (sm.n || 1) + up * (sm.nUp || 0), hint: '' };
+  if (sm.names) return { names: sm.names.map((x) => String(x).toLowerCase()), maxCr: sm.cr ?? 99, count: () => sm.n || 1, hint: `${sm.names.join(', ')}${sm.cr != null ? ` (bis HG ${sm.cr})` : ''}` };
   const at = Object.entries(sm.crAt || {}).filter(([l]) => lvl >= Number(l)).map(([, v]) => v);
   const maxCr = at.length ? Math.max(...at) : (sm.cr || 1) + up * (sm.crUp || 0);
   return { types: sm.types, maxCr, count: () => sm.n || 1, hint: `Eine Kreatur bis HG ${maxCr}.` };
 }
+// Kreatur aus dem Kampagnen-Bestiarium (bst:<id>, Name) oder „Meine Kreaturen“ der SL (lib:<id>)
+async function campaignCreature(s) {
+  const id = String(s.id || '');
+  if (id.startsWith('lib:')) { const m = await db.get(`users/${myUid()}/monsters`, id.slice(4)); return m ? normalizeMonster(m) : null; }
+  if (id.startsWith('bst:') && !id.startsWith('bst:?')) { const m = await db.get(col('monsters'), id.slice(4)); if (m) return { ...normalizeMonster(m), name: m.name, bstId: m.id }; }
+  const want = String(s.name || id.replace(/^bst:\?/, '')).toLowerCase();
+  const list = await db.list(col('monsters')).catch(() => []);
+  const m = list.find((q) => String(q.name || '').toLowerCase() === want);
+  return m ? { ...normalizeMonster(m), name: m.name, bstId: m.id } : null;
+}
 // Beschworene Kreaturen als eigene Kämpfer: 2014 eine Initiative je Gruppe, 2024 direkt nach dem Wirker
 function resolveSummon(x, c, a, ev, ctx, summoned) {
   const rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' };
-  const m = monsterById(ev.summon.id);
+  const m = monsterById(ev.summon.id) || (ev.summonData ? { ...ev.summonData, id: ev.summonData.bstId ? `bst:${ev.summonData.bstId}` : ev.summon.id } : null);
   const rule = summonRule(a, ev.slot);
-  if (!m || !rule) return rec;
+  if (!m || !rule) { if (!m) rec.targets.push({ id: c.id, name: c.name, note: 'Kreatur nicht gefunden – im Bestiarium der Kampagne anlegen' }); return rec; }
   const n = Math.max(1, Math.min(Number(ev.summon.n) || 1, rule.count(m)));
   const keep = !!a.spec.summon.keep;
-  const concId = a.conc ? E.startConcentration(x, c, { name: a.sp.name, spellId: a.sp.id }) : null;
+  const concId = a.conc ? E.startConcentration(x, c, { name: a.sp?.name || a.name, spellId: a.sp?.id || a.key }) : null;
   const list = combatantsFromMonsters([{ ...m, qty: n }]);
   const groupInit = x.active && ctx.ed === '2014' ? rollDie(20) + (list[0]?.initBonus || 0) : null;
   const group = ev.id || uid(6);
@@ -1713,11 +1947,14 @@ function resolveSummon(x, c, a, ev, ctx, summoned) {
       summonOf: c.id, summonGroup: group, keep, hidden: !!c.hidden, ...(concId ? { conc: concId } : {}),
     });
     if (x.active) cb.init = ctx.ed === '2024' ? (Number(c.init) || 0) - 0.01 * (i + 1) : groupInit;
+    // „Beschworene Kreaturen stärken“ (temporäre TP)
+    const extra = (Number(E.fxOf(c, ctx).s.summonHp) || 0) + (Number(E.fxOf(c, ctx).d.summonHp) || 0);
+    if (extra > 0) cb.tempHp = Math.max(Number(cb.tempHp) || 0, extra);
     x.combatants.push(cb);
-    summoned.push({ id: cb.id, monster: m });
+    summoned.push({ id: cb.id, monster: m, src: ev.summon.src || null });
   });
   if (x.active) resort(x);
-  E.log(x, `🐾 ${c.name} wirkt ${a.name}: ${n}× ${m.name}${x.active ? (ctx.ed === '2024' ? ' – handeln direkt nach dem Wirker' : ` – Initiative ${groupInit}`) : ''}`);
+  E.log(x, `🐾 ${c.name} ${a.kind === 'spell' ? 'wirkt' : 'nutzt'} ${a.name}: ${n}× ${m.name}${x.active ? (ctx.ed === '2024' ? ' – handeln direkt nach dem Wirker' : ` – Initiative ${groupInit}`) : ''}`);
   rec.targets.push({ id: c.id, name: `${n}× ${m.name}`, note: keep ? 'dienen dir' : 'erscheinen' });
   return rec;
 }
@@ -1750,7 +1987,7 @@ async function placeSummonTokens(list, dest, caster) {
     const cb = cbOf(x, s.id);
     const tok = {
       mapId, x: spot.x, y: spot.y, size: n, label: cb?.name || s.monster.name, color: ty.color, art: { icon: monsterIconName(s.monster), color: ty.color },
-      mref: { src: 'srd', id: s.monster.id }, ownerUid: caster.ownerUid || null, visibility: casterTok?.visibility || 'players', combatantId: s.id, createdAt: now(),
+      ...(s.src === 'bst' ? { mref: { src: 'bst', id: String(s.monster.id).replace(/^bst:/, '') } } : s.src ? {} : { mref: { src: 'srd', id: s.monster.id } }), ownerUid: caster.ownerUid || null, visibility: casterTok?.visibility || 'players', combatantId: s.id, createdAt: now(),
     };
     const tid = await db.add(col('tokens'), tok).catch(() => null);
     if (tid) links.push([s.id, tid]);
@@ -1854,6 +2091,7 @@ export async function handleAct(ev) {
   if (ev.reaction && actor.reaction === false) { await reject(ev, actor, `${actor.name} hat keine Reaktion mehr.`); return; }
   if (!a.state.ok && !clientPaid && !(ev.reaction && (a.state.reaction || a.kind === 'attack'))) { await reject(ev, actor, a.state.why || 'Gerade nicht möglich'); return; }
   if (ev.summon || ev.form) await loadMonsters();
+  if (ev.summon && !monsterById(ev.summon.id)) ev.summonData = await campaignCreature(ev.summon).catch(() => null);
   // Gegenzauber: Spieler dürfen gegnerische Zauber aufheben (vor allen anderen Reaktionen)
   if (a.kind === 'spell' && x0.active) {
     const cs = await offerCounterspell(x0, actor, a, ev, ctx0);
@@ -1896,6 +2134,13 @@ export async function handleAct(ev) {
     else if (a.kind === 'buff') rec = resolveBuff(x, c, a, ev, ctx);
     else if (a.kind === 'temp') rec = resolveTemp(x, c, a, ev, ctx);
     else if (a.kind === 'mark') rec = resolveMark(x, c, a, ev, ctx);
+    else if (a.kind === 'summon') rec = ev.summon ? resolveSummon(x, c, a, ev, ctx, summoned) : { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' };
+    else if (a.kind === 'form') {
+      const m = ev.form ? monsterById(ev.form.id) : null;
+      const rule = a.formRule || {};
+      if (m) E.applyForm(x, c, formOf(m), rule.mode === 'temp' ? { mode: 'temp', src: 'wildshape', temp: Number(rule.temp) || 0, endOnIncap: true } : { mode: 'replace', src: 'wildshape' });
+      rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done', targets: [{ id: c.id, name: c.name, note: m ? `Gestalt: ${m.name}` : 'keine Gestalt gewählt' }] };
+    }
     else if (a.kind === 'restore') { rec = { ...baseRec(ev, c, a), kind: 'effect', stage: 'done', targets: [{ id: c.id, name: c.name, note: a.what === 'res' ? `${a.resName || 'Ressource'} +${a.n}` : 'Zauberplatz zurück' }] }; E.log(x, `✨ ${c.name}: ${a.name}`); }
     else if (a.kind === 'granted') {
       if (a.grant?.area) rec = resolveMonsterAbility(x, c, { ...a, save: a.grant.save, dc: a.dc, half: a.grant.half, damage: [{ ...parseDmg(a.grant.dice), type: a.grant.type }] }, ev, ctx);
@@ -1983,8 +2228,28 @@ export async function handleDamage(ev) {
     const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'uncanny', title: `${ra.f.k}?`, text: `${rec0.actorName} trifft ${tgt.name} – mit deiner Reaktion verringerst du den Schaden (${ra.f.half ? 'halbiert' : `um ${String(ra.f.dice || '').replace(/d/g, 'W')}${ra.mod ? ` + ${ra.mod}` : ''}`}).`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: tgt.id });
     if (ans === 'yes') { if (ra.f.half) halve[t.id] = ra.f.k; else reduce[t.id] = { n: roll(fxDice(ra.f.dice || '1d6', { pb: ra.pb, level: ra.level })).total + ra.mod, why: ra.f.k }; sideFx.push(() => spendReaction(tgt, ra, ctx0)); }
   }
+  for (const t of rec0.targets) {
+    const tgt = cbOf(x0, t.id);
+    if (!tgt || E.isOut(tgt) || !(t.hit || (rec0.kind !== 'attack' && !t.save?.ok))) continue;
+    for (const o of x0.combatants || []) {
+      if (!o.isPC || o.id === tgt.id || sideOf2(o) !== sideOf2(tgt)) continue;
+      const ra = reactFx(o, ctx0, 'reduce', 'ally');
+      if (!ra) continue;
+      const to = ctx0.tokenOf(o); const tt = ctx0.tokenOf(tgt);
+      if (to && tt && cellDistance(to, tt) * CELL_M > (Number(ra.f.range) || 1.5) + 1e-6) continue;
+      const owner = o.ownerUid || null;
+      const ans = await askPrompt({ to: owner, local: !owner || owner === myUid() || db.mode !== 'cloud', kind: 'uncanny', title: `${ra.f.k}?`, text: `${rec0.actorName} trifft ${tgt.name}. Mit deiner Reaktion verringerst du den Schaden (${ra.f.half ? 'halbiert' : `um ${String(ra.f.dice || '').replace(/d/g, 'W')}${ra.mod ? ` + ${ra.mod}` : ''}`}).`, options: [{ id: 'yes', label: `${ra.f.k} (Reaktion)`, kind: 'primary' }, { id: 'no', label: 'Nicht nutzen' }], cb: o.id });
+      if (ans !== 'yes') continue;
+      if (ra.f.half) halve[t.id] = ra.f.k;
+      else { const n = roll(fxDice(ra.f.dice || '1d6', { pb: ra.pb, level: ra.level })).total + ra.mod; reduce[t.id] = { n: (reduce[t.id]?.n || 0) + n, why: reduce[t.id] ? `${reduce[t.id].why} + ${ra.f.k}` : ra.f.k }; }
+      sideFx.push(() => spendReaction(o, ra, ctx0));
+      break;
+    }
+  }
   const rebukes = [];
   const strikes = [];
+  const optPush = { push: [] };
+  const selfConds = [];
   await mutateCombat((x) => {
     const ctx = makeCtx(x);
     const rec = E.resultOf(x, ev.resultId);
@@ -2022,11 +2287,12 @@ export async function handleDamage(ev) {
       if (halve[t.id] || reduce[t.id]) tgt.reaction = false;
       // Vergeltung (Feuerschild-artig aus Gegenständen): wer dich trifft, erleidet Schaden
       if (rec.kind === 'attack' && t.hit && actor && t.applied > 0) retaliate(x, tgt, actor, t.melee ? 'melee' : 'hit', ctx, { melee: t.melee });
-      if (rec.kind === 'attack' && t.hit && actor && tgt.isPC && tgt.reaction && !E.isOut(tgt) && reactFx(tgt, ctx, 'strike', t.melee ? 'melee' : 'ranged')) strikes.push({ tgt: tgt.id, actor: actor.id, melee: !!t.melee });
+      if (rec.kind === 'attack' && t.hit && actor && tgt.isPC && tgt.reaction && !E.isOut(tgt) && reactFx(tgt, ctx, ['strike', 'riposte'], t.melee ? 'melee' : 'ranged')) strikes.push({ tgt: tgt.id, actor: actor.id, melee: !!t.melee });
       t.hpState = tgt.isPC ? `${tgt.hp}/${tgt.maxHp}` : E.isDead(tgt) ? 'besiegt' : null;
       // Feuerschild: Nahkampfangreifer erleidet 2W8
       if (rec.kind === 'attack' && t.melee && actor) for (const fs of E.effs(tgt, 'fireShield')) { const rr = roll('2d8'); E.log(x, `🔥 Feuerschild von ${tgt.name}: ${rr.text} = ${rr.total}`); E.applyDamage(x, actor, [{ amount: rr.total, type: fs.data?.type || 'fire' }], { magical: true, attacker: tgt }, ctx); }
       if (tgt.isPC && tgt.reaction && t.applied > 0 && actor && !E.isOut(tgt)) rebukes.push({ tgt: tgt.id, actor: actor.id });
+      if (tgt.isPC && t.applied > 0 && !E.isOut(tgt) && reactFx(tgt, ctx, 'selfCond', rec.kind === 'attack' ? (t.melee ? 'melee' : 'ranged') : 'hit')) selfConds.push({ tgt: tgt.id, trig: rec.kind === 'attack' ? (t.melee ? 'melee' : 'ranged') : 'hit' });
     });
     // Niederstrecken: vorab gewirkt (2014) oder nach dem Treffer gewählt (2024 / Paladin 2014)
     const firstHit = rec.targets.find((t) => t.hit && !t.note);
@@ -2056,15 +2322,31 @@ export async function handleDamage(ev) {
     }
     if (rec.drain && actor && drained) E.applyHealing(x, actor, Math.floor(drained * rec.drain), { source: 'Lebensentzug' });
     if (actor && ev.sneak) actor.eco = { ...(actor.eco || {}), sneakUsed: true };
+    // Treffer-Optionen: Rettungswurf/Zustand, Stoß, Heilung in Höhe des Schadens, „einmal pro Zug“
+    for (const ho of ev.hitOpts || []) {
+      const tgt = cbOf(x, ho.target);
+      if (!actor) break;
+      if (ho.onceKey) actor.eco = { ...(actor.eco || {}), fxOnce: { ...(actor.eco?.fxOnce || {}), [ho.onceKey]: true } };
+      E.log(x, `⚔️ ${actor.name}: ${ho.k}${tgt ? ` → ${tgt.name}` : ''}`, '', '', { e: { t: 'use', a: E.who(actor), o: tgt ? E.who(tgt) : null, w: ho.k } });
+      const r = ho.rider || {};
+      if (tgt && !E.isDead(tgt) && (r.inflict || r.push || r.heal || r.temp)) {
+        const sa = E.statsOf(actor, ctx);
+        const dc = Number(r.dc) || 8 + (sa.pb || 2) + (r.ab ? sa.mods?.[r.ab] || 0 : Math.max(sa.mods?.str || 0, sa.mods?.dex || 0));
+        applyRider(x, actor, tgt, { cond: r.inflict || '', save: r.save || '', dc, rounds: r.rounds || 0, saveEnd: !!r.saveEnd, push: r.push || 0, heal: r.heal || '', temp: r.temp || '', saveAb: r.save || '', src: ho.k }, ctx, optPush);
+      }
+      if (ho.drain > 0) E.applyHealing(x, actor, ho.drain, { source: ho.k });
+    }
     rec.stage = 'done';
     rec.rolled = rolls.map((r) => r.total);
     E.pushResult(x, rec);
     return x;
   });
+  for (const p of optPush.push || []) await pushAway(rec0.actor, p.id, p.m);
   // Höllischer Tadel (Reaktion nach erlittenem Schaden)
   for (const rb of rebukes) await offerRebuke(rb, ctx0);
   // Eigene Reaktionen gegen den Angreifer (Schildstoß …)
   for (const st of strikes) await offerStrike(st);
+  for (const sc of selfConds) await offerSelfCond(sc);
   await flushSideFx();
 }
 async function offerRebuke(rb, ctx0) {
@@ -2251,6 +2533,62 @@ export function targetCount(a, slot, charLevel = 1) {
   if (spec.rays) return spec.rays + up * (spec.raysUp || 0);
   return (a.needs?.n || 1) + up * (a.needs?.up || 0);
 }
+// Treffer-Optionen gegen Kosten (Manöver, Göttlicher Schlag, Hände des Schadens, Arkaner Schuss …): Auswahl beim Schadenswurf
+export function hitOptions(x, c, rec, ctx) {
+  const char = ctx.charOf?.(c);
+  const tHit = rec?.kind === 'attack' ? (rec.targets || []).find((t) => t.hit && !t.note) : null;
+  if (!char || !tHit) return [];
+  const F = E.fxOf(c, ctx);
+  const own = rec.itemKey ? [...(F.s.byItem[rec.itemKey] || []), ...(F.d.byItem[rec.itemKey] || [])].filter((f) => f.t === 'hitOpt') : [];
+  const list = [...(F.s.hitOpt || []), ...(F.d.hitOpt || []), ...own];
+  if (!list.length) return [];
+  const cm = charMods(char);
+  const res = Object.fromEntries(resourcesFor(char).map((r) => [r.key, { ...r, left: r.max >= 99 ? 99 : Math.max(0, r.max - (Number(char.resUsed?.[r.key]) || 0)) }]));
+  const tgt = cbOf(x, tHit.id);
+  const pseudo = { kind: rec.spell ? 'spell' : 'attack', level: rec.level || 0, attack: { weapon: rec.weapon, kind: rec.attKind || 'melee', damage: rec.damage || [], itemKey: rec.itemKey || null, baseKey: rec.baseKey || null, unarmed: !!rec.unarmed, thrown: false } };
+  const info = E.attackInfo(x, c, tgt, pseudo, ctx, { crit: !!tHit.crit, adv: tHit.mode === 'adv' });
+  const out = [];
+  list.forEach((f, i) => {
+    if (!fxMatches(f, info)) return;
+    const slugId = `${fxSlug(f.k || f.src || 'option')}`;
+    const onceKey = `opt|${f.src || ''}|${f.k || ''}`;
+    if (f.once && c.eco?.fxOnce?.[onceKey]) return;
+    const raw = f.up ? actionDice({ dice: f.dice, up: f.up }, cm.level) : f.dice;
+    const dice = raw ? fxDice(raw, { pb: cm.pb, level: cm.level, mod: cm.mods[f.ab || 'str'] || 0 }) : '';
+    if (f.slot) {
+      for (const o of slotOptions(char, Number(f.slotMin) || 1)) out.push({ id: `${slugId}${i}@${o.level}${o.pact ? 'p' : ''}`, f, onceKey, slot: o.level, pact: !!o.pact, dice: f.slotDice ? addDice(dice, fxDice(f.slotDice, {}), o.level) : dice, label: `${f.k} · ${o.level}. Grad${o.pact ? ' (Pakt)' : ''}` });
+      return;
+    }
+    const u = f.charge || f.pool ? actionUses(f, res, slugId, 'opt') : f.uses && f.uses !== 'will' ? { res: `opt:${slugId}`, resCost: 1, uses: res[`opt:${slugId}`] || { left: 0, max: 0 } } : { res: null, resCost: 0, uses: null };
+    if (u.uses && !(u.uses.left >= (u.resCost || 1))) return;
+    out.push({ id: `${slugId}${i}`, f, onceKey, dice, res: u.res, resCost: u.resCost, left: u.uses?.left ?? null, label: `${f.k || 'Treffer-Option'}${u.uses ? ` (${u.uses.left}${u.uses.max && u.uses.max < 99 ? `/${u.uses.max}` : ''})` : ''}` });
+  });
+  return out;
+}
+// Initiative: leere Ressourcen mit „bei Initiative +1“ (Rastlos, Unermüdlicher Geist, Vollkommenes Selbst …) auffüllen
+export async function regainOnInit(cb, char) {
+  if (!char || !cb?.ownerUid) return [];
+  const used = { ...(char.resUsed || {}) };
+  const got = [];
+  for (const r of resourcesFor(char)) {
+    if (!(Number(r.init) > 0) || r.max >= 99 || (Number(used[r.key]) || 0) < r.max) continue;
+    used[r.key] = Math.max(0, r.max - Number(r.init));
+    got.push(r.name);
+  }
+  if (got.length) { char.resUsed = used; await db.update(`users/${cb.ownerUid}/characters`, char.id, { resUsed: used }).catch(() => {}); }
+  return got;
+}
+// Kosten gewählter Treffer-Optionen im eigenen Bogen verbuchen (Punkte, Nutzungen, Ladungen, Zauberplatz)
+export async function consumeHitOpts(cb, char, opts) {
+  if (!char || !opts?.length) return;
+  const used = { ...(char.resUsed || {}) };
+  let touched = false;
+  for (const o of opts) {
+    if (o.slot) { await consumeSlot(cb, char, o.slot, o.pact); continue; }
+    if (o.res) { used[o.res] = (Number(used[o.res]) || 0) + (Number(o.resCost) || 1); touched = true; }
+  }
+  if (touched) { char.resUsed = used; await db.update(`users/${cb.ownerUid}/characters`, char.id, { resUsed: used }).catch(() => {}); }
+}
 // Niederstrecken nach einem Nahkampftreffer: 2024 als Bonusaktions-Zauber, 2014 als Paladin-Merkmal
 export function smiteOptions(x, c, rec, ctx) {
   const char = ctx.charOf?.(c);
@@ -2281,10 +2619,11 @@ export function smiteParts(opt, tgt) {
   return parts;
 }
 // Welche Würfel für den Schadenswurf eines Ergebnisses? Kritisch verdoppelt nur die Würfel des jeweiligen Ziels.
-export function damagePlan(x, c, rec, ctx, { sneak = true, smite = null } = {}) {
+export function damagePlan(x, c, rec, ctx, { sneak = true, smite = null, opts = [] } = {}) {
   const out = [];
+  let optsLeft = [...(opts || [])];
   const base = (rec.damage || []).filter((p) => p.dice || p.flat);
-  const pseudo = { attack: { weapon: rec.weapon, strBased: rec.strBased, finesse: rec.finesse, kind: rec.attKind || 'melee', damage: rec.damage || [], itemKey: rec.itemKey || null, unarmed: !!rec.unarmed } };
+  const pseudo = { attack: { weapon: rec.weapon, strBased: rec.strBased, finesse: rec.finesse, kind: rec.attKind || 'melee', damage: rec.damage || [], itemKey: rec.itemKey || null, baseKey: rec.baseKey || null, unarmed: !!rec.unarmed } };
   if (rec.kind === 'attack') {
     let sneakLeft = !!sneak && !c.eco?.sneakUsed;
     let smiteLeft = smite;
@@ -2299,21 +2638,32 @@ export function damagePlan(x, c, rec, ctx, { sneak = true, smite = null } = {}) 
       const riders = t.hit ? riderParts(x, c, pseudo, tgt, ctx, { sneak: useSneak, smite: sm, crit: t.crit, mode: t.mode, once, onceUsed }) : [];
       if (useSneak) sneakLeft = false;
       if (sm) smiteLeft = null;
-      out.push({ i, label: `${rec.title} → ${t.name}${t.crit ? ' (kritisch)' : ''}`, parts: [...base, ...riders], crit: !!t.crit, sneak: useSneak, target: t.name });
+      // Treffer-Optionen (Manöver, Göttlicher Schlag …) gelten für das erste getroffene Ziel
+      const useOpts = t.hit && optsLeft.length ? optsLeft.splice(0) : [];
+      if (useOpts.length) out.optTarget = t.id;
+      const optParts = useOpts.filter((o) => o.dice || Number(o.f.flat)).map((o) => ({ dice: o.dice || '', flat: Number(o.f.flat) || 0, type: o.f.type || rec.damage?.[0]?.type || null, label: o.f.k || 'Treffer-Option', optId: o.id }));
+      out.push({ i, label: `${rec.title} → ${t.name}${t.crit ? ' (kritisch)' : ''}`, parts: [...base, ...riders, ...optParts], crit: !!t.crit, sneak: useSneak, target: t.name });
     });
   } else if (base.length) out.push({ i: 'all', label: `${rec.title} – Schaden`, parts: base, crit: false });
   if (rec.explode?.some((e) => !e.save.ok)) out.push({ i: 'explode', label: `${rec.title} – Splitter`, parts: [{ dice: addDice('2d6', '1d6', Math.max(0, (rec.level || 1) - 1)), flat: 0, type: 'cold' }], crit: false });
   return out;
 }
 // Schaden würfeln (3D-Würfel beim Handelnden) → Ereignis für die SL
-export function rollDamage(x, c, rec, ctx, { sneak = true, smite = null, doRoll } = {}) {
-  const plan = damagePlan(x, c, rec, ctx, { sneak, smite });
+export function rollDamage(x, c, rec, ctx, { sneak = true, smite = null, doRoll, opts = [] } = {}) {
+  const plan = damagePlan(x, c, rec, ctx, { sneak, smite, opts });
+  const optAmount = {};
   const rolls = plan.map((p) => {
     const r = rollParts(p.parts, { crit: p.crit, label: p.label, doRoll });
+    p.parts.forEach((q, k) => { if (q.optId) optAmount[q.optId] = (optAmount[q.optId] || 0) + (r.parts[k]?.amount || 0); });
     return { i: p.i, parts: r.parts, total: r.total, det: r.det, notes: r.notes };
   });
+  const hitOpts = (opts || []).map((o) => ({
+    id: o.id, k: o.f.k || 'Treffer-Option', target: plan.optTarget || null, onceKey: o.f.once ? o.onceKey : null,
+    rider: { save: o.f.save || '', dc: Number(o.f.dc) || 0, ab: o.f.ab || '', inflict: o.f.inflict || '', rounds: Number(o.f.condDur) || 0, saveEnd: o.f.condSave === 'end', push: Number(o.f.push) || 0, temp: o.f.temp || '', heal: o.f.heal || '' },
+    drain: o.f.drain ? optAmount[o.id] || 0 : 0,
+  }));
   return {
-    type: 'dmg', resultId: rec.id, rolls, sneak: plan.some((p) => p.sneak), mapId: rec.mapId || null, fxOnce: plan.onceUsed || [],
+    type: 'dmg', resultId: rec.id, rolls, sneak: plan.some((p) => p.sneak), mapId: rec.mapId || null, fxOnce: plan.onceUsed || [], hitOpts,
     smite: smite ? { spellId: smite.sp?.id || null, slot: smite.slot, pact: !!smite.pact, feature: !!smite.feature, label: smite.label } : null,
   };
 }

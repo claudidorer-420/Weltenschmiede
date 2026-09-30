@@ -29,13 +29,13 @@ const LIFE_DISCIPLE = { name: 'Jünger des Lebens', desc: 'Heilt ein Zauber des 
 const LIFE14 = {
   1: [{ name: 'Zusätzliche Übung', desc: 'Du erhältst Übung mit schwerer Rüstung.', fx: [{ t: 'armor', k: ['heavy'] }] }, LIFE_DISCIPLE],
   2: [{ name: 'Leben bewahren', desc: 'Göttliche Macht fokussieren: Du verteilst 5 × Klerikerstufe TP auf Kreaturen in 9 m (höchstens bis zur Hälfte ihrer TP).', fx: [hint('Leben bewahren: 5 × Klerikerstufe TP verteilen (Göttliche Macht)')] }],
-  6: [{ name: 'Gesegneter Heiler', desc: 'Heilst du mit einem Zauber eine andere Kreatur, erhältst du selbst 2 + Grad des Zaubers TP.', fx: [hint('Gesegneter Heiler: selbst 2 + Zaubergrad TP, wenn du andere heilst')] }],
+  6: [{ name: 'Gesegneter Heiler', desc: 'Heilst du mit einem Zauber eine andere Kreatur, erhältst du selbst 2 + Grad des Zaubers TP.', fx: [{ t: 'healSelf', v: 2 }] }],
   8: [{ name: 'Göttlicher Schlag', desc: 'Einmal in jedem deiner Züge verursacht ein Waffentreffer zusätzlich 1W8 gleißenden Schaden (ab Stufe 14 2W8).', fx: [{ t: 'dmgExtra', dice: '1d8', type: 'radiant', on: 'weapon', once: true }, { t: 'dmgExtra', dice: '1d8', type: 'radiant', on: 'weapon', once: true, lvl: 14 }] }],
   17: [{ name: 'Höchste Heilung', desc: 'Würfelst du Heilung aus, zählt jeder Würfel mit seinem Höchstwert.', fx: [{ t: 'healBonus', max: true }] }],
 };
 const LIFE24 = {
   3: [LIFE_DISCIPLE, { name: 'Leben bewahren', desc: 'Göttliche Macht fokussieren: Du verteilst 5 × Klerikerstufe TP auf Kreaturen in 9 m (höchstens bis zur Hälfte ihrer TP).', fx: [hint('Leben bewahren: 5 × Klerikerstufe TP verteilen (Göttliche Macht)')] }],
-  6: [{ name: 'Gesegneter Heiler', desc: 'Heilst du mit einem Zauberplatz eine andere Kreatur, erhältst du selbst 2 + Grad des Zaubers TP.', fx: [hint('Gesegneter Heiler: selbst 2 + Zaubergrad TP, wenn du andere heilst')] }],
+  6: [{ name: 'Gesegneter Heiler', desc: 'Heilst du mit einem Zauberplatz eine andere Kreatur, erhältst du selbst 2 + Grad des Zaubers TP.', fx: [{ t: 'healSelf', v: 2 }] }],
   17: [{ name: 'Höchste Heilung', desc: 'Würfelst du Heilung aus, zählt jeder Würfel mit seinem Höchstwert.', fx: [{ t: 'healBonus', max: true }] }],
 };
 
@@ -56,15 +56,15 @@ const LAND24 = {
 };
 
 const BERS14 = {
-  3: [{ name: 'Raserei', desc: 'Im Kampfrausch kannst du in Raserei verfallen: Bis zum Ende des Kampfrausches greifst du als Bonusaktion in jedem Zug einmal mit einer Nahkampfwaffe an. Danach erleidest du eine Stufe Erschöpfung.', fx: [{ t: 'action', k: 'Raserei-Angriff', kind: 'weapon', cost: 'bonus', desc: 'Nur in Raserei (Kampfrausch): ein Nahkampfangriff als Bonusaktion.' }] }],
+  3: [{ name: 'Raserei', desc: 'Im Kampfrausch kannst du in Raserei verfallen: Bis zum Ende des Kampfrausches greifst du als Bonusaktion in jedem Zug einmal mit einer Nahkampfwaffe an. Danach erleidest du eine Stufe Erschöpfung.', fx: [{ t: 'action', k: 'Raserei-Angriff', kind: 'weapon', cost: 'bonus', cond: 'raging', desc: 'In Raserei (Kampfrausch): ein Nahkampfangriff als Bonusaktion.' }] }],
   6: [{ name: 'Besinnungsloser Kampfrausch', desc: 'Im Kampfrausch kannst du weder bezaubert noch verängstigt werden.', fx: [{ t: 'condImm', k: ['Bezaubert', 'Verängstigt'], cond: 'raging' }] }],
   10: [{ name: 'Einschüchternde Präsenz', desc: 'Als Aktion verängstigst du eine Kreatur in 9 m bis zum Ende deines nächsten Zuges (WEI-Rettungswurf, SG 8 + Übungsbonus + CHA).', fx: [{ t: 'action', k: 'Einschüchternde Präsenz', kind: 'save', cost: 'action', save: 'wis', ab: 'cha', dice: '0', inflict: 'Verängstigt', condDur: 1, range: 9 }] }],
-  14: [{ name: 'Vergeltung', desc: 'Erleidest du Schaden durch eine Kreatur in 1,5 m, greifst du sie als Reaktion mit einer Nahkampfwaffe an.', fx: [hint('Vergeltung: Reaktion – Nahkampfangriff gegen den Angreifer')] }],
+  14: [{ name: 'Vergeltung', desc: 'Erleidest du Schaden durch eine Kreatur in 1,5 m, greifst du sie als Reaktion mit einer Nahkampfwaffe an.', fx: [{ t: 'action', k: 'Vergeltung', kind: 'react', trigger: 'melee', effect: 'riposte' }] }],
 };
 const BERS24 = {
   3: [{ name: 'Raserei', desc: 'Greifst du im Kampfrausch tollkühn an, verursacht dein erster Treffer im Zug zusätzlich so viele W6, wie dein Wutschaden beträgt.', fx: [{ t: 'dmgExtra', dice: '[Wutschaden]d6', on: 'melee', once: true, cond: 'raging' }] }],
   6: [{ name: 'Besinnungsloser Kampfrausch', desc: 'Im Kampfrausch bist du immun gegen Bezaubert und Verängstigt; beim Eintritt enden diese Zustände.', fx: [{ t: 'condImm', k: ['Bezaubert', 'Verängstigt'], cond: 'raging' }] }],
-  10: [{ name: 'Vergeltung', desc: 'Erleidest du Schaden durch eine Kreatur in 1,5 m, greifst du sie als Reaktion mit einer Waffe oder waffenlos an.', fx: [hint('Vergeltung: Reaktion – Nahkampfangriff gegen den Angreifer')] }],
+  10: [{ name: 'Vergeltung', desc: 'Erleidest du Schaden durch eine Kreatur in 1,5 m, greifst du sie als Reaktion mit einer Waffe oder waffenlos an.', fx: [{ t: 'action', k: 'Vergeltung', kind: 'react', trigger: 'melee', effect: 'riposte' }] }],
   14: [{ name: 'Einschüchternde Präsenz', desc: 'Als Bonusaktion verängstigst du Kreaturen deiner Wahl in 9 m für 1 Minute (WEI-Rettungswurf, SG 8 + STÄ + Übungsbonus).', fx: [{ t: 'action', k: 'Einschüchternde Präsenz', kind: 'save', cost: 'bonus', save: 'wis', ab: 'str', dice: '0', inflict: 'Verängstigt', condDur: 10, condSave: 'end', area: { shape: 'emanation', size: 9 }, uses: '1', rest: 'long' }] }],
 };
 
@@ -103,7 +103,7 @@ const DEVOTION = {
 const HUNTER14 = {
   3: [{ name: 'Beute des Jägers', desc: 'Du wählst eine Jagdtechnik.', fx: [{ t: 'pick', k: 'option', n: 1, label: 'Beute des Jägers', options: [
     { key: 'kolossbezwinger', name: 'Kolossbezwinger', desc: 'Einmal pro Zug +1W8 Schaden gegen ein Ziel, das bereits verletzt ist.', fx: [{ t: 'dmgExtra', dice: '1d8', on: 'weapon', hp: 'hurt', once: true }] },
-    { key: 'riesentoeter', name: 'Riesentöter', desc: 'Greift dich eine große oder größere Kreatur in 1,5 m an, darfst du sie als Reaktion sofort angreifen.', fx: [hint('Riesentöter: Reaktionsangriff gegen große Angreifer')] },
+    { key: 'riesentoeter', name: 'Riesentöter', desc: 'Greift dich eine große oder größere Kreatur in 1,5 m an, darfst du sie als Reaktion sofort angreifen.', fx: [{ t: 'action', k: 'Riesentöter', kind: 'react', trigger: 'melee', effect: 'riposte', desc: 'Nur gegen große oder größere Angreifer.' }] },
     { key: 'hordenbrecher', name: 'Hordenbrecher', desc: 'Einmal pro Zug darfst du eine zweite Kreatur in 1,5 m des ersten Ziels angreifen.', fx: [hint('Hordenbrecher: zusätzlicher Angriff gegen ein zweites Ziel daneben')] },
   ] }] }],
   7: [{ name: 'Verteidigungstaktik', desc: 'Du wählst eine Verteidigungstechnik.', fx: [{ t: 'pick', k: 'option', n: 1, label: 'Verteidigungstaktik', options: [
