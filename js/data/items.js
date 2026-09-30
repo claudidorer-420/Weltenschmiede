@@ -1,6 +1,7 @@
 // Gegenstandskatalog (Ausrüstung nach PHB, Preise in GM, Gewichte in kg) + Symbole und Nachschlagen für das Inventar.
 import { WEAPONS, ARMOR } from './chargen.js';
-import { WEAPON_ART, ARMOR_ART, ITEM_RULES, MAGIC_RULES, MAGIC_DEFAULT, rarityColor } from './artmap.js';
+import { MAGIC_FX, WEAPON_BASES } from './magicfx.js';
+import { WEAPON_ART, ARMOR_ART, ITEM_RULES, MAGIC_RULES, MAGIC_DEFAULT, MAGIC_ITEM_ART, rarityColor } from './artmap.js';
 
 const W = {
   knueppel: [0.1, 1], dolch: [2, 0.5], zweihandknueppel: [0.2, 5], handbeil: [5, 1], wurfspeer: [0.5, 1], leichterhammer: [2, 1], streitkolben: [5, 2], kampfstab: [0.2, 2],
@@ -74,6 +75,8 @@ export function iconForName(name) {
   return 'swap-bag';
 }
 export function magicIcon(item) {
+  const own = MAGIC_ITEM_ART[item?.mref] || MAGIC_ITEM_ART[item?.id];
+  if (own) return own;
   const hay = `${item.type || ''} ${item.name || ''}`;
   for (const [re, ic] of MAGIC_RULES) if (re.test(hay)) return ic;
   return MAGIC_DEFAULT;
@@ -94,6 +97,44 @@ export function fmtCost(gp) {
   return `${Math.round(v * 100)} KM`;
 }
 export const fmtWeight = (kg) => (kg ? `${String(Math.round(kg * 100) / 100).replace('.', ',')} kg` : '–');
+
+// Gewicht magischer Gegenstände: Das SRD nennt es nur selten – dann gilt das Gewicht des gewöhnlichen Gegenstands
+// (Grundwaffe/-rüstung, Trank, Stab, Buch …) aus der Ausrüstungsliste, sonst ein typischer Wert der Art.
+const MAGIC_WEIGHT_FIX = {
+  'nimmervoller-beutel': 7.5, 'praktischer-rucksack': 2.5, 'tragbares-loch': 0, 'apparat-der-krabbe': 250, faltboot: 2, 'flotte-festung': 0.05, 'fliegender-teppich': 10, flugbesen: 1.5,
+  kristallkugel: 1.5, 'kugel-der-drachen': 2.5, 'brunnen-der-vielen-welten': 0.1, 'sphaere-des-nichts': 0, 'wuerfel-der-ebenen': 0.1, 'wuerfel-der-kraft': 0.25, 'feuerschale-der-feuerelementar-herrschaft': 2.5,
+  'schale-der-wasserelementar-herrschaft': 1.5, 'rauchfass-der-luftelementar-herrschaft': 0.5, 'hufeisen-der-geschwindigkeit': 2, 'hufeisen-des-zephyrs': 2, 'karaffe-des-endlosen-wassers': 1, 'effizienter-koecher': 1,
+  'eisenbaender-des-bindens': 0.5, 'glocke-des-oeffnens': 0.5, windfaecher: 0.25,
+};
+const MAGIC_WEIGHT_RULES = [
+  [/trank|öl der|öl des|liebestrank|elixier/i, 0.25], [/^ring\b|\bring (der|des)\b/i, 0], [/amulett|talisman|medaillon|brosche|skarabäus|anhänger|halskette/i, 0.05],
+  [/edelstein|ionenstein|stein (der|des)|perle/i, 0.05], [/umhang|mantel/i, 0.5], [/robe/i, 2], [/panzerhandschuh|handschuh/i, 0.25], [/stiefel|schuhe/i, 0.5], [/armschienen/i, 0.5],
+  [/gürtel/i, 0.5], [/helm/i, 1.5], [/diadem|stirnreif|stirnband|krone/i, 0.1], [/hut\b/i, 0.25], [/brille|augen (der|des)/i, 0], [/zauberstab/i, 0.5], [/^stab\b|\bstab (der|des)\b/i, 2],
+  [/zepter/i, 1], [/handbuch|leitfaden|foliant|buch/i, 2.5], [/staub/i, 0.1], [/salbe|leim|lösungsmittel|farben/i, 0.25], [/flasche/i, 0.5], [/beutel|sack/i, 0.25], [/seil/i, 2.5],
+  [/laterne/i, 1], [/spiegel/i, 0.25], [/flöte|horn|harfe|laute|leier|trommel|instrument/i, 1], [/figur|statuette/i, 0.25], [/karten|würfel|kerze/i, 0.1], [/fessel|kette/i, 3],
+  [/schriftrolle/i, 0],
+];
+export function magicWeight(item) {
+  const id = item?.mref || item?.id;
+  if (id && MAGIC_WEIGHT_FIX[id] != null) return MAGIC_WEIGHT_FIX[id];
+  const m = MAGIC_FX[id] || {};
+  const name = `${item?.name || ''}`;
+  if (m.kind === 'weapon' || /^Waffe/i.test(item?.type || '')) {
+    const keys = [item?.base, ...String(m.base || 'any').split('|').flatMap((b) => WEAPON_BASES[b] || [b])].filter(Boolean);
+    for (const k of keys) if (W[k]) return W[k][1];
+    return /pfeil|geschoss/i.test(name) ? 0.025 : 1.5;
+  }
+  if (m.kind === 'shield' || /Schild/i.test(item?.type || '')) return 3;
+  if (m.kind === 'armor' || /^Rüstung/i.test(item?.type || '')) {
+    const keys = [item?.base, ...String(m.base || '').split('|')].filter(Boolean);
+    for (const k of keys) if (A[k]) return A[k][1];
+    return /heavy|schwer/.test(String(m.base)) ? 22.5 : 10;
+  }
+  for (const [re, w] of MAGIC_WEIGHT_RULES) if (re.test(name)) return w;
+  return 0.5;
+}
+// Gewicht eines Inventareintrags in kg (je Stück)
+export const itemWeight = (it, cat = null) => Number(it?.weight ?? cat?.weight ?? (it?.mref ? magicWeight(it) : 0)) || 0;
 
 // Traglast: Stärkewert × 7,5 kg (Größe klein/mittel)
 export const carryCapacity = (str) => (Number(str) || 10) * 7.5;

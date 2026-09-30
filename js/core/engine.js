@@ -238,9 +238,10 @@ export function fxOf(c, ctx = {}) {
   const char = c.isPC && !c.form ? ctx.charOf?.(c) : null;
   const s = char ? charFx(char) : EMPTY_FX;
   const dyn = dynOf(c);
-  const list = [...statusFxList(c), ...(s.dynamic || []).filter((f) => condOk(f.cond, { dyn }))];
+  const aura = auraFxFor(c, ctx);
+  const list = [...statusFxList(c), ...(s.dynamic || []).filter((f) => condOk(f.cond, { dyn })), ...aura];
   if (!list.length) return { s, d: EMPTY_FX };
-  const key = `${c.id}|${(c.effects || []).map((e) => `${e.id}:${e.data?.stacks || ''}`).join(',')}|${JSON.stringify(dyn)}|${s.applied.length}|${char ? JSON.stringify(s.mods) : ''}`;
+  const key = `${c.id}|${(c.effects || []).map((e) => `${e.id}:${e.data?.stacks || ''}`).join(',')}|${JSON.stringify(dyn)}|${s.applied.length}|${char ? JSON.stringify(s.mods) : ''}|${aura.map((f) => f.src).join(',')}`;
   let d = fxCacheC.get(key);
   if (!d) {
     const sb = c.form?.statblock || c.statblock;
@@ -250,6 +251,26 @@ export function fxOf(c, ctx = {}) {
     fxCacheC.set(key, d);
   }
   return { s, d };
+}
+// Wirkungen aus Auren verbündeter Spielercharaktere (Aura des Mutes, der Hingabe, des Schutzes vor Zaubern …)
+function auraFxFor(c, ctx) {
+  const out = [];
+  if (!ctx?.list?.length || !ctx.tokenOf || !c) return out;
+  const tc = ctx.tokenOf(c);
+  for (const o of ctx.list) {
+    if (!o?.isPC || o.form || sideOf(o) !== sideOf(c) || isDead(o) || (Number(o.hp) || 0) <= 0 || incapacitated(o)) continue;
+    const oc = ctx.charOf?.(o);
+    if (!oc) continue;
+    const auras = (charFx(oc).aura || []).filter((au) => au.k === 'fx' && au.fx?.length && (o.id !== c.id || au.self !== false));
+    if (!auras.length) continue;
+    const to = ctx.tokenOf(o);
+    const dist = o.id === c.id ? 0 : to && tc ? cellDistance(to, tc) * CELL_M : 999;
+    for (const au of auras) {
+      if (dist > (Number(au.r) || 10) * CELL_M / 5 + 1e-6) continue;
+      for (const f of au.fx) if (f?.t && f.t !== 'aura') out.push({ ...f, active: true, src: `${au.src || 'Aura'} (${o.name})` });
+    }
+  }
+  return out;
 }
 // Kreaturentyp, Größe und Zustände eines Kämpfers (für „gegen Untote“, „gegen große Kreaturen“, „gegen verängstigte Ziele“)
 export const typeOf = (c) => String(c?.form?.statblock?.type || c?.statblock?.type || (c?.isPC ? 'Humanoide' : c?.art?.type || ''));
@@ -262,7 +283,7 @@ export function attackInfo(x, att, tgt, a, ctx = {}, extra = {}) {
   return {
     on, weapon: !!at.weapon, thrown: !!at.thrown && at.kind === 'ranged', type: typeOf(tgt), name: tgt?.name || '', size: sizeOf(tgt), conds: condNames(tgt),
     hp: Number(tgt?.hp) || 0, maxHp: Number(tgt?.maxHp) || 0, selfHp: Number(att?.hp) || 0, selfMax: Number(att?.maxHp) || 0,
-    notActed: !!x?.active && !(tgt?.turnNo > 0), cantrip: a?.kind === 'spell' && !a?.level, dmgTypes: (at.damage || []).map((q) => q.type).filter(Boolean), ...extra,
+    notActed: !!x?.active && !(tgt?.turnNo > 0), first: !!x?.active && (Number(x.round) || 1) === 1, cantrip: a?.kind === 'spell' && !a?.level, dmgTypes: (at.damage || []).map((q) => q.type).filter(Boolean), ...extra,
   };
 }
 // Eigenen Zustand (Regelpaket) setzen: stapelt bis zur Grenze, trägt Grundzustände mit (z. B. „zählt als Kampfunfähig“)
@@ -359,6 +380,7 @@ export function attackPlan(x, att, tgt, a, ctx = {}) {
   }
   for (const e of effs(att, 'mark')) if (e.data?.adv && e.data.target === tgt.id) adv.push(e.name);
   let critOn = a.critOn || 20;
+  for (const e of att?.effects || []) if (e.key === 'mark' && Number(e.data?.crit) > 0 && e.data.target === tgt?.id) critOn -= Number(e.data.crit);
   for (const f of [...fA.s.crit, ...fA.d.crit, ...own.filter((q) => q.t === 'crit').map((q) => ({ v: Number(q.v) || 1, on: q.on || 'all' }))]) {
     if (f.on === 'all' || f.on === info.on || (f.on === 'weapon' && info.weapon)) critOn -= Number(f.v) || 1;
   }
@@ -609,6 +631,7 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
         }
       } else die(x, c, 'auf 0 TP');
       if (isDead(c) || out.dropped) out.died = isDead(c);
+      if ((isDead(c) || out.dropped) && opts.attacker && opts.attacker.id !== c.id) onKillFx(x, opts.attacker, c, opts, ctx);
     }
   } else if (c.isPC) {
     if (total >= (Number(c.maxHp) || 1)) die(x, c, `massiver Schaden bei 0 TP (${total} ≥ ${c.maxHp})`);
@@ -645,6 +668,25 @@ export function applyDamage(x, c, parts, opts = {}, ctx = {}) {
     }
   }
   return out;
+}
+// „Segen des Dunklen“, „Grimmige Ernte“ & Co.: wer eine Kreatur auf 0 TP bringt, erhält temporäre TP oder heilt
+function onKillFx(x, att, victim, opts, ctx) {
+  if (!att || isDead(att) || (Number(att.hp) || 0) <= 0) return;
+  const F = fxOf(att, ctx);
+  const list = [...(F.s.onKill || []), ...(F.d.onKill || [])];
+  if (!list.length) return;
+  const s = statsOf(att, ctx);
+  const spellMod = s.spell?.ability ? s.mods?.[s.spell.ability] || 0 : Math.max(s.mods?.cha || 0, s.mods?.wis || 0, s.mods?.int || 0);
+  for (const f of list) {
+    if (f.on === 'melee' && !opts.melee) continue;
+    if (f.on === 'weapon' && !opts.weapon) continue;
+    if (f.on === 'spell' && !opts.spell && !opts.magical) continue;
+    const key = `kill|${f.src || ''}`;
+    if (f.once) { att.eco ||= {}; att.eco.fxOnce ||= {}; if (att.eco.fxOnce[key]) continue; att.eco.fxOnce[key] = true; }
+    const dctx = { pb: s.pb, level: s.level, mod: spellMod };
+    if (f.temp) { const n = typeof f.temp === 'number' ? f.temp : roll(fxDice(String(f.temp), dctx)).total; if (n > 0) addTempHp(x, att, n, f.src || 'Wirkung'); }
+    if (f.heal) { let n = roll(fxDice(String(f.heal), dctx)).total; if (f.slot) n *= Math.max(1, Number(opts.slot) || 1); if (n > 0) applyHealing(x, att, n, { source: f.src || 'Wirkung' }); }
+  }
 }
 export function die(x, c, why) {
   c.dead = true;

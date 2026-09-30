@@ -6,7 +6,7 @@ import { db } from './db.js';
 import { roll, rollDie, rollDetailed } from '../lib/dice.js';
 import { now, uid } from '../lib/util.js';
 import { charMods, findWeapon, weaponAttack, spellSlots, resourcesFor, classLevel, attacksPerAction, actionDice, fxSlug, charWeapons, itemInfo, spellAbilityOf } from '../data/chargen.js';
-import { dmgOf, fxMatches, fxDice, condName, vsMatch, ENGINE_EFFECTS, isDice, BONUS_ACTS, fxSummary, hasFilter } from './effects.js';
+import { dmgOf, fxMatches, fxDice, condName, vsMatch, ENGINE_EFFECTS, isDice, BONUS_ACTS, fxSummary, hasFilter, fxVal } from './effects.js';
 import { WEAPON_RANGE, weaponReach } from '../data/items.js';
 import { loadSpells, damageAt, healAt, healHasMod, fmtDice, levelName, schoolName, rangeShort, SPELL_OVERLAY } from '../data/spells.js';
 import { specFor } from '../data/spellfx.js';
@@ -281,12 +281,19 @@ function pcCatalog(x, c, char, ctx, spells) {
   if (spells) out.push(...innateSpells(char, cm, c, ctx, spells, res));
   // Standardaktionen als Bonusaktion („Raffinierte Aktion“ aus Regelwerken)
   for (const k of cm.fx?.bonusAct || []) if (BONUS_ACTS[k] && !out.some((o) => o.std === k && o.cost === 'bonus')) out.push({ key: `fb:${k}`, group: 'class', kind: 'std', std: k, name: `${BONUS_ACTS[k]} (Bonusaktion)`, art: { gi: GI[k] || GI.dash }, cost: 'bonus', needs: k === 'help' ? { target: 'ally', n: 1, range: 1.5 } : { target: 'none' }, desc: `${BONUS_ACTS[k]} als Bonusaktion.` });
-  // Eigene Aktionen aus Regelwerken und Gegenständen
-  for (const f of cm.fx?.actions || []) { const a = customAction(char, cm, c, ctx, f, res, weapons); if (a) out.push(a); }
+  // Eigene Aktionen aus Regelwerken und Gegenständen – „ersetzt“ blendet die genannte Aktion aus
+  const repl = [];
+  for (const f of cm.fx?.actions || []) {
+    const a = customAction(char, cm, c, ctx, f, res, weapons);
+    if (!a) continue;
+    if (f.replaces) repl.push({ name: String(f.replaces).trim().toLowerCase(), key: a.key });
+    out.push(a);
+  }
+  for (const r of repl) for (let i = out.length - 1; i >= 0; i--) if (out[i].key !== r.key && String(out[i].name || '').toLowerCase() === r.name) out.splice(i, 1);
   // Zauberschriftrollen: wirken den Zauber ohne Zauberplatz und zerfallen danach
   if (spells) {
     for (const it of char.inventory || []) {
-      const ref = scrollRef(it);
+      const ref = it.stored ? null : scrollRef(it);
       if (!ref) continue;
       const sp = spells.find((s) => s.id === ref) || spells.find((s) => s.name.toLowerCase() === String(ref).toLowerCase());
       if (!sp) continue;
@@ -303,7 +310,7 @@ function pcCatalog(x, c, char, ctx, spells) {
   }
   const POT = [[/überragend|superior/i, '8d4+8'], [/vorzüglich|supreme/i, '10d4+20'], [/groß|greater/i, '4d4+4'], [/heiltrank|healing/i, '2d4+2']];
   for (const it of char.inventory || []) {
-    const m = POT.find(([re]) => re.test(it.name || ''));
+    const m = it.stored ? null : POT.find(([re]) => re.test(it.name || ''));
     if (!m) continue;
     out.push({ key: `it:${it.id}`, group: 'item', kind: 'item', name: it.name, art: { item: it }, cost: ed === '2024' ? 'bonus' : 'action', heal: m[1], uses: { left: Math.max(0, Number(it.qty) || 0), max: Math.max(1, Number(it.qty) || 0) }, consumed: !(Number(it.qty) > 0), needs: { target: 'ally', n: 1, range: 1.5, selfOk: true }, desc: `Heilt ${fmtDice(m[1])} TP.`, itemId: it.id });
   }
@@ -344,9 +351,9 @@ function customAction(char, cm, c, ctx, f, res, weapons) {
   switch (f.kind) {
     case 'heal': return { ...base, kind: 'item', art: base.art || { gi: GI.secondwind }, heal: `${dice}${f.addMod === false ? '' : `+${Math.max(0, mod)}`}${f.addLevel ? `+${cm.level}` : ''}`, needs: { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } };
     case 'temp': return { ...base, kind: 'temp', art: base.art || { gi: GI.secondwind }, temp: `${dice}${f.addMod ? `+${Math.max(0, mod)}` : ''}`, needs: f.target === 'ally' ? { target: 'ally', n: 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
-    case 'buff': return { ...base, kind: 'buff', art: base.art || { gi: GI.rage }, buffFx: f.fx || [], buffItem: f.item || null, eff: f.eff || '', temp: f.temp || 0, dur: f.dur || 'rounds', rounds: Number(f.rounds) || 10, conc: f.dur === 'conc', needs: f.target === 'ally' ? { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
+    case 'buff': return { ...base, kind: 'buff', art: base.art || { gi: GI.rage }, buffFx: f.fx || [], buffItem: f.item || null, eff: f.eff || '', effV: f.eff === 'rage' ? fxVal(f.effV ?? 2, { pb: cm.pb, level: cm.level, mods: cm.mods }) || 2 : 0, temp: f.temp ? fxDice(String(f.temp), { pb: cm.pb, level: cm.level, mod }) : 0, dur: f.dur || 'rounds', rounds: Number(f.rounds) || 10, conc: f.dur === 'conc', needs: f.target === 'ally' ? { target: 'ally', n: Number(f.n) || 1, range: Number(f.range) || 1.5, selfOk: true } : { target: 'self' } };
     case 'restore': return { ...base, kind: 'restore', art: base.art || { gi: GI.magic }, what: f.what || 'slot', lvMax: Number(f.lvMax) || 9, resName: f.res || '', n: Number(f.n) || 1, needs: { target: 'self' } };
-    case 'mark': return { ...base, kind: 'mark', art: base.art || { gi: GI.magic }, markDice: dice === '1d6' && !f.dice ? '' : dice, markFlat: f.flat ? Number(f.flat) || 0 : 0, markAdv: !!f.adv, rounds: Number(f.rounds) || 600, needs: needsOne(Number(f.range) || 27) };
+    case 'mark': return { ...base, kind: 'mark', art: base.art || { gi: GI.magic }, markDice: dice === '1d6' && !f.dice ? '' : dice, markFlat: f.flat ? fxVal(f.flat, { pb: cm.pb, level: cm.level, mods: cm.mods }) || 0 : 0, markAdv: !!f.adv, markCrit: Number(f.crit) || 0, rounds: Number(f.rounds) || 600, needs: needsOne(Number(f.range) || 27) };
     case 'save': {
       const area = f.area?.shape ? { shape: f.area.shape, size: Number(f.area.size) || 4.5 } : null;
       const dmg = !f.dice || f.dice === '0' ? [] : [{ ...parseDmg(dice), flat: parseDmg(dice).flat + (f.addPb ? cm.pb : 0), type }];
@@ -375,9 +382,10 @@ function customAction(char, cm, c, ctx, f, res, weapons) {
 // Zauberschaden (+CHA auf Zaubertricks, +1 bei Kälte …) und Heilungsboni für eine Zauberaktion
 function spellBoni(cm, sp) {
   const out = {};
-  const dmg = (cm.fx.spellDmg || []).filter((f) => (!f.on || f.on === 'all' || (f.on === 'cantrip' && sp.level === 0) || String(f.on).toLowerCase() === sp.name.toLowerCase()));
+  const dmg = (cm.fx.spellDmg || []).filter((f) => (!f.on || f.on === 'all' || (f.on === 'cantrip' && sp.level === 0) || (f.on === 'school' && (!f.school || f.school === sp.school)) || String(f.on).toLowerCase() === sp.name.toLowerCase()));
   if (dmg.length) out.dmgBonus = dmg.map((f) => ({ v: Number(f.v) || 0, types: [].concat(f.ifType || []), src: f.src || 'Wirkung' }));
   if (cm.fx.healBonus) out.healBonus = cm.fx.healBonus;
+  if (cm.fx.healSlot && sp.level > 0) out.healSlot = true;
   if (cm.fx.healMax) out.healMax = true;
   return out;
 }
@@ -406,6 +414,9 @@ function innateSpells(char, cm, c, ctx, spells, res) {
       const r = res[`it:${s.item}`];
       const n = s.cost || 1;
       Object.assign(a, { res: `it:${s.item}`, resCost: n, uses: r ? { ...r, left: r.left >= n ? r.left : 0 } : { left: 0, max: 0 }, desc: `${n} Ladung${n > 1 ? 'en' : ''} aus „${s.src}“${s.dc ? ` – SG ${s.dc}` : ''}.` });
+    } else if (s.uses === 'pool') {
+      const u = actionUses({ pool: s.pool || 'Ki', poolCost: s.cost || 1 }, res, id);
+      Object.assign(a, { res: u.res, resCost: u.resCost, uses: u.uses, desc: `Aus „${s.src}“ – kostet ${s.cost || 1} ${s.pool || 'Punkte'}, kein Zauberplatz.` });
     } else if (s.uses !== 'will') {
       Object.assign(a, { res: `fs:${id}`, resCost: 1, uses: res[`fs:${id}`] || { left: 0, max: 0 }, desc: `Aus „${s.src}“ – ohne Zauberplatz.` });
     } else a.desc = `Aus „${s.src}“ – beliebig oft, ohne Zauberplatz.`;
@@ -648,7 +659,7 @@ export function healOf(a, slot) {
   const h = healOfBase(a, slot);
   if (!h) return h;
   // Heilung verstärken: +X je Zauber, „immer maximal“ = Würfel werden zum Höchstwert
-  let out = { ...h, flat: (Number(h.flat) || 0) + (Number(a.healBonus) || 0) };
+  let out = { ...h, flat: (Number(h.flat) || 0) + (Number(a.healBonus) || 0) + (a.healSlot ? Number(slot) || Number(a.sp?.level) || 0 : 0) };
   if (a.healMax && out.dice) { const m = /^(\d*)d(\d+)$/.exec(out.dice); if (m) out = { dice: '', flat: out.flat + (Number(m[1]) || 1) * Number(m[2]) }; }
   return out;
 }
@@ -874,7 +885,7 @@ function applyCond(x, c, tgt, cond, a, concId, ev, ctx) {
 function pushResultRec(x, rec) {
   return E.pushResult(x, rec);
 }
-const baseRec = (ev, c, a) => ({ id: ev.id, mapId: ev.mapId || null, uid: ev.uid || null, actor: c.id, actorName: c.name, title: a.name, art: a.art || null, level: ev.slot || a.level || 0, targets: [], lines: [] });
+const baseRec = (ev, c, a) => ({ id: ev.id, mapId: ev.mapId || null, uid: ev.uid || null, actor: c.id, actorName: c.name, title: a.name, art: a.art || null, level: ev.slot || a.level || 0, targets: [], lines: [], ...(a.attack?.weapon ? { weapon: true } : {}), ...(a.kind === 'spell' ? { spell: true } : {}) });
 
 // Angriffe (Waffen, Monster, Zauberangriffe, verliehene Angriffe)
 function resolveAttacks(x, c, a, ev, ctx, reacts, side) {
@@ -1538,7 +1549,12 @@ function resolveBuff(x, c, a, ev, ctx) {
     if (a.dur === 'toggle' && old) { E.removeEffect(x, t, old.id, 'beendet'); rec.targets.push({ id: t.id, name: t.name, note: 'beendet' }); continue; }
     if (old) E.removeEffect(x, t, old.id);
     E.addEffect(x, t, { key: 'fxbuff', name: a.name, src: c.id, data: { fx: a.buffFx || [], item: a.buffItem || null }, ...(a.dur === 'toggle' ? {} : concId ? { conc: concId, rounds: a.rounds || 10 } : { rounds: a.rounds || 10 }) });
-    if (a.eff) E.addEffect(x, t, { key: a.eff, name: `${a.name} (${String(ENGINE_EFFECTS[a.eff] || a.eff).replace(/\s*\(.*$/, '')})`, src: c.id, rounds: a.rounds || 10, data: {} });
+    if (a.eff === 'rage') {
+      // Kampfrausch einer eigenen Klasse: wie der eingebaute (Resistenz, Schadensbonus, Vorteil auf STÄ, kein Zaubern)
+      E.addEffect(x, t, { key: 'rage', name: a.name, src: c.id, unique: 'any', rounds: a.rounds || 10, data: { bonus: Number(a.effV) || 2 } });
+      E.addEffect(x, t, { key: 'resist', name: `${a.name} (Resistenz)`, src: c.id, rounds: a.rounds || 10, silent: true, data: { types: ['bludgeoning', 'piercing', 'slashing'] } });
+      if (E.concOf(t)) E.endConcentration(x, t, a.name);
+    } else if (a.eff) E.addEffect(x, t, { key: a.eff, name: `${a.name} (${String(ENGINE_EFFECTS[a.eff] || a.eff).replace(/\s*\(.*$/, '')})`, src: c.id, rounds: a.rounds || 10, data: {} });
     if (a.temp) E.addTempHp(x, t, isDice(a.temp) ? roll(String(a.temp)).total : Number(a.temp) || 0, a.name);
     E.log(x, `✨ ${t.name}: ${a.name}`, '', '', { e: { t: 'eff', a: E.who(c), o: E.who(t), w: a.name } });
     rec.targets.push({ id: t.id, name: t.name, note: a.name });
@@ -1556,7 +1572,7 @@ function resolveMark(x, c, a, ev, ctx) {
   const t = targetsOf(x, ev)[0];
   if (!t) return { ...baseRec(ev, c, a), kind: 'effect', stage: 'done' };
   for (const e of [...(c.effects || [])]) if (e.key === 'mark' && e.name.startsWith(`${a.name} →`)) E.removeEffect(x, c, e.id);
-  E.addEffect(x, c, { key: 'mark', name: `${a.name} → ${t.name}`, src: c.id, rounds: a.rounds || 600, data: { target: t.id, dice: a.markDice || '', flat: a.markFlat || 0, adv: !!a.markAdv, type: null } });
+  E.addEffect(x, c, { key: 'mark', name: `${a.name} → ${t.name}`, src: c.id, rounds: a.rounds || 600, data: { target: t.id, dice: a.markDice || '', flat: a.markFlat || 0, adv: !!a.markAdv, crit: a.markCrit || 0, type: null } });
   E.log(x, `🎯 ${c.name}: ${a.name} → ${t.name}`, '', '', { e: { t: 'eff', a: E.who(c), o: E.who(t), w: a.name } });
   void ctx;
   return { ...baseRec(ev, c, a), kind: 'effect', stage: 'done', targets: [{ id: t.id, name: t.name, note: 'markiert' }] };
@@ -1998,7 +2014,7 @@ export async function handleDamage(ev) {
         const parts = r.parts.map((p) => ({ amount: Math.floor(p.amount * factor), type: p.type }));
         if (rec.disintegrate) parts.forEach((p) => { p.type = 'force'; });
         const rollNote = factor < 1 ? (t.halfOnMiss && !t.hit ? 'Verfehlt – halber Schaden' : 'Rettungswurf geschafft – halber Schaden') : '';
-        const res = E.applyDamage(x, tgt, parts, { crit: t.crit, melee: t.melee, magical: rec.magical || !!ev.magical, attacker: actor, floorOne: rec.floorOne, halve: halve[t.id] ? (typeof halve[t.id] === 'string' ? halve[t.id] : 'Unglaubliches Ausweichen') : null, reduceBy: reduce[t.id] || null, ignoreResist, source: rec.title, roll: r.det || null, rollNotes: [rollNote, evade ? 'Entrinnen' : '', ...(r.notes || [])].filter(Boolean) }, ctx);
+        const res = E.applyDamage(x, tgt, parts, { crit: t.crit, melee: t.melee, weapon: !!rec.weapon, spell: !!rec.spell, slot: rec.level || 0, magical: rec.magical || !!ev.magical, attacker: actor, floorOne: rec.floorOne, halve: halve[t.id] ? (typeof halve[t.id] === 'string' ? halve[t.id] : 'Unglaubliches Ausweichen') : null, reduceBy: reduce[t.id] || null, ignoreResist, source: rec.title, roll: r.det || null, rollNotes: [rollNote, evade ? 'Entrinnen' : '', ...(r.notes || [])].filter(Boolean) }, ctx);
         t.applied = (t.applied || 0) + res.taken;
         drained += res.taken;
         if (rec.disintegrate && tgt.hp <= 0) { E.die(x, tgt, 'zu Staub zerfallen'); t.note = 'zu Staub zerfallen'; }

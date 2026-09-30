@@ -42,6 +42,8 @@ export const FX_TYPES = [
   { t: 'sense', label: 'Sinn', group: 'Bewegung & Sinne', ex: 'Dunkelsicht 18 m · Blindsicht 3 m · Erschütterungssinn 9 m · Wahrer Blick 18 m', k: ['dark', 'blind', 'tremor', 'true'], v: 'm' },
   { t: 'speedMul', label: 'Bewegungsrate vervielfachen', group: 'Bewegung & Sinne', ex: 'Bewegungsrate verdoppelt (Stiefel der Geschwindigkeit)', v: 'n' },
   { t: 'reach', label: 'Nahkampfreichweite (+)', group: 'Bewegung & Sinne', ex: 'Reichweite +1,5 m (lange Gliedmaßen)', v: 'm' },
+  { t: 'ignoreTerrain', label: 'Schwieriges Gelände ignorieren', group: 'Bewegung & Sinne', ex: 'Schwieriges Gelände kostet dich keine zusätzliche Bewegung (Leichtfüßigkeit)' },
+  { t: 'carry', label: 'Traglast erhöhen', group: 'Bewegung & Sinne', ex: 'Du zählst beim Tragen als eine Größe größer (+100 %) · +25 % Traglast', v: 'n' },
   { t: 'ac', label: 'Rüstungsklasse (+/−)', group: 'Verteidigung', ex: '+1 RK · +1 auf die Rüstungsklasse, solange du eine Rüstung trägst', v: 'n' },
   { t: 'acFormula', label: 'Rüstungsklasse ohne Rüstung (Formel)', group: 'Verteidigung', ex: 'RK = 13 + GES · RK = 10 + GES + KON · RK 17 (Panzer, ohne GES)', v: 'n', k: 'ab' },
   { t: 'acMin', label: 'Rüstungsklasse mindestens', group: 'Verteidigung', ex: 'RK mindestens 16 (wie Rindenhaut)', v: 'n' },
@@ -62,7 +64,8 @@ export const FX_TYPES = [
   { t: 'hp', label: 'Trefferpunkte (einmalig)', group: 'Trefferpunkte & Heilung', ex: '+5 TP-Maximum', v: 'n' },
   { t: 'regen', label: 'Regeneration zu Zugbeginn', group: 'Trefferpunkte & Heilung', ex: 'Zu Beginn deines Zuges erhältst du 1W4 TP zurück', v: 'n' },
   { t: 'tempStart', label: 'Temporäre TP zu Zugbeginn', group: 'Trefferpunkte & Heilung', ex: 'Zu Beginn deines Zuges temporäre TP in Höhe deines CHA-Modifikators', v: 'n' },
-  { t: 'healBonus', label: 'Heilung verstärken', group: 'Trefferpunkte & Heilung', ex: 'Deine Heilzauber heilen 2 TP mehr · Heilung wird immer maximal gewürfelt', v: 'n' },
+  { t: 'healBonus', label: 'Heilung verstärken', group: 'Trefferpunkte & Heilung', ex: 'Deine Heilzauber heilen 2 TP mehr · 2 + Grad des Zaubers · Heilung wird immer maximal gewürfelt', v: 'n' },
+  { t: 'onKill', label: 'Wenn du eine Kreatur auf 0 TP bringst', group: 'Trefferpunkte & Heilung', ex: 'Temporäre TP = CHA-Mod. + Stufe (Segen des Dunklen) · du heilst 2 × Zaubergrad (Grimmige Ernte)' },
   { t: 'abil', label: 'Attributswert (+/−)', group: 'Attribute & Würfe', ex: '+1 Weisheit · STÄ +2 · Charisma +2 (höchstens 22)', k: 'ab', v: 'n' },
   { t: 'abilSet', label: 'Attributswert festsetzen', group: 'Attribute & Würfe', ex: 'Stärke wird auf 19 gesetzt (wirkt nur, wenn der Wert niedriger ist)', k: 'ab', v: 'n' },
   { t: 'init', label: 'Initiative', group: 'Attribute & Würfe', ex: '+5 Initiative · Übungsbonus auf die Initiative', v: 'n' },
@@ -79,7 +82,7 @@ export const FX_TYPES = [
   { t: 'armor', label: 'Rüstungsübung', group: 'Übungen & Auswahl', ex: 'Übung mit leichter und mittelschwerer Rüstung sowie Schilden', k: 'armor' },
   { t: 'tool', label: 'Werkzeug', group: 'Übungen & Auswahl', ex: 'Übung mit Diebeswerkzeug', k: 'text' },
   { t: 'lang', label: 'Sprache', group: 'Übungen & Auswahl', ex: 'Du sprichst Elfisch und Zwergisch · eine weitere Sprache deiner Wahl', k: 'lang' },
-  { t: 'pick', label: 'Auswahl für Spieler (Fertigkeit, Attribut, Zauber …)', group: 'Übungen & Auswahl', ex: '3 Fertigkeiten nach Wahl · +1 auf ein Attribut und Übung in dessen Rettungswurf · 2 Zaubertricks der Magierliste' },
+  { t: 'pick', label: 'Auswahl für Spieler (Fertigkeit, Attribut, Zauber, eigene Optionen …)', group: 'Übungen & Auswahl', ex: '3 Fertigkeiten nach Wahl · +1 auf ein Attribut und Übung in dessen Rettungswurf · 2 Zaubertricks der Magierliste · Manöver, Anrufungen, Totemtiere, Erzfeinde als eigene Optionen mit Wirkungen' },
   { t: 'attack', label: 'Angriffsbonus', group: 'Angriff', ex: '+2 auf Angriffswürfe mit Fernkampfwaffen · +1W4 gegen Untote', v: 'n', k: ['all', 'melee', 'ranged', 'spell', 'weapon', 'unarmed', 'thrown'] },
   { t: 'damage', label: 'Schadensbonus (fest)', group: 'Angriff', ex: '+2 Schaden mit Nahkampfwaffen · + STÄ-Modifikator zusätzlich', v: 'n', k: ['all', 'melee', 'ranged', 'weapon', 'unarmed', 'thrown'] },
   { t: 'dmgExtra', label: 'Zusatzschaden (Würfel)', group: 'Angriff', ex: 'Zusätzlich 1W6 Feuerschaden · 1W8 gegen Untote · 2W6 bei kritischen Treffern · einmal pro Zug', v: 'n' },
@@ -88,7 +91,8 @@ export const FX_TYPES = [
   { t: 'onHit', label: 'Bei Treffer: Zustand, Heilung …', group: 'Angriff', ex: 'Bei einem Treffer KON-Rettungswurf (SG 12) oder Vergiftet für 2 Runden · du heilst 1W6 TP' },
   { t: 'ignoreResist', label: 'Resistenz ignorieren', group: 'Angriff', ex: 'Deine Angriffe ignorieren Resistenz gegen Hiebschaden', k: 'dmg' },
   { t: 'attacks', label: 'Angriffe pro Angriffsaktion', group: 'Angriff', ex: 'greifst du zweimal an', v: 'n' },
-  { t: 'unarmed', label: 'Waffenloser Schlag (Würfel)', group: 'Angriff', ex: 'Waffenlose Schläge verursachen 1W6 + GES (wie Kampfkunst)' },
+  { t: 'unarmed', label: 'Waffenloser Schlag (Würfel)', group: 'Angriff', ex: 'Waffenlose Schläge verursachen 1W6 + GES (wie Kampfkunst) · Würfel aus einer Tabellenspalte: [Kampfkunst]' },
+  { t: 'wAbility', label: 'Attribut für Waffenangriffe', group: 'Angriff', ex: 'CHA statt STÄ/GES für Waffenangriffe (Paktwaffe, Hexkrieger) · GES für einfache Waffen (Mönch)', k: 'ab' },
   { t: 'style', label: 'Kampfstil', group: 'Angriff', ex: 'Bogenschießen · Duellieren · Kampf mit zwei Waffen · Verteidigung · Kampf mit großen Waffen' },
   { t: 'spell', label: 'Zauber (angeboren / aus Gegenstand)', group: 'Zauber', ex: 'Du kennst den Zaubertrick Thaumaturgie · St. 3 Höllischer Tadel · Nebelschritt 1× pro kurzer Rast', k: 'text' },
   { t: 'spellDc', label: 'Zauber-SG (+/−)', group: 'Zauber', ex: '+1 auf den SG deiner Zauber', v: 'n' },
@@ -97,6 +101,7 @@ export const FX_TYPES = [
   { t: 'res', label: 'Begrenzte Nutzung / Ladungen', group: 'Ressourcen & Aktionen', ex: '1× pro langer Rast · Übungsbonus-mal pro kurzer Rast · 7 Ladungen, 1W6+1 neu im Morgengrauen', v: 'n' },
   { t: 'resMax', label: 'Ressource erhöhen', group: 'Ressourcen & Aktionen', ex: 'Eine zusätzliche Nutzung von Göttliche Macht / Bardische Inspiration', v: 'n' },
   { t: 'bonusAct', label: 'Standardaktion als Bonusaktion', group: 'Ressourcen & Aktionen', ex: 'Spurt, Rückzug oder Verstecken als Bonusaktion (wie Raffinierte Aktion)' },
+  { t: 'attune', label: 'Mehr Einstimmungsplätze', group: 'Ressourcen & Aktionen', ex: 'Du kannst dich auf einen weiteren magischen Gegenstand einstimmen', v: 'n' },
   { t: 'action', label: 'Eigene Aktion (Angriff, Odem, Heilung, Kampfhaltung …)', group: 'Ressourcen & Aktionen', ex: 'Odemwaffe · Klauen · Heilende Hände · Kampfrausch · Waffenaktion mit Zustand · Zauberplatz zurückholen', k: 'text' },
   { t: 'adv', label: 'Hinweis (wirkt nicht automatisch)', group: 'Hinweise', ex: 'Vorteil beim Aufspüren von Fallen', k: 'text' },
 ];
@@ -106,12 +111,15 @@ export const SENSE_DE = { dark: 'Dunkelsicht', blind: 'Blindsicht', tremor: 'Ers
 // Worauf sich Angriffswirkungen beziehen
 export const FX_ON = { all: 'alle Angriffe', weapon: 'Waffenangriffe', melee: 'Nahkampf', ranged: 'Fernkampf', unarmed: 'waffenlos', thrown: 'Wurfwaffen', spell: 'Zauber', cantrip: 'Zaubertricks', any: 'jeder Schaden', sneak: 'Hinterhältiger Angriff' };
 export const FX_HP = { full: 'Ziel mit vollen TP', hurt: 'Ziel bereits verletzt', half: 'Ziel höchstens halbe TP' };
+// Zauberschulen (für „+INT auf Hervorrufungszauber“ und Ähnliches)
+export const SCHOOLS = { abjuration: 'Bannmagie', conjuration: 'Beschwörung', divination: 'Erkenntnismagie', enchantment: 'Verzauberung', evocation: 'Hervorrufung', illusion: 'Illusion', necromancy: 'Nekromantie', transmutation: 'Verwandlung' };
 export const FX_SELFHP = { hurt: 'wenn du verletzt bist', half: 'wenn du höchstens halbe TP hast' };
 // Wirkungen, die der Kampf als Effekt kennt (für „Bei Treffer“ und Kampfhaltungen)
 export const ENGINE_EFFECTS = {
   bane: 'Fluch (−1W4 auf Angriffe und Rettungswürfe)', bless: 'Segen (+1W4 auf Angriffe und Rettungswürfe)', slow: 'Verlangsamt',
   noHeal: 'Kann nicht geheilt werden', advAgainst: 'Angriffe gegen das Ziel im Vorteil', noReactions: 'Keine Reaktionen',
   speedZero: 'Bewegungsrate 0', dodge: 'Ausweichen', disNext: 'Nachteil beim nächsten Angriff', guided: 'Nächster Angriff gegen das Ziel im Vorteil',
+  rage: 'Kampfrausch (Resistenz gegen Hieb/Stich/Wucht, Schadensbonus im Nahkampf, Vorteil auf STÄ, kein Zaubern)', reckless: 'Tollkühn (Vorteil auf STÄ-Nahkampfangriffe, Angriffe gegen dich im Vorteil)',
 };
 // Bedingungen, die sich nur im Kampf prüfen lassen
 export const DYN_CONDS = ['conc', 'bloodied', 'raging'];
@@ -298,6 +306,9 @@ export function parseFx(text, vocab = {}, opts = {}) {
     });
     // Kritische Treffer, Zusatzschaden, Resistenz ignorieren
     each(/kritische[rn]?\s+Treffer\s+(?:schon\s+|bereits\s+)?(?:bei|ab)\s+(?:einer\s+)?(?:gewürfelten\s+)?(1[5-9])/gi, (m) => add('crit', m, { v: 20 - Number(m[1]) }));
+    each(/(?:bei\s+(?:einem\s+)?(?:Wurf|Würfelergebnis|Ergebnis)\s+(?:von\s+)?|bei\s+(?:einer\s+)?(?:gewürfelten\s+)?)(1[5-9])\s*(?:oder|bis|–|-)\s*20\b[^.;·]{0,80}?kritische[nrs]?\s+Treffer/gi, (m) => add('crit', m, { v: 20 - Number(m[1]) }, { kind: 'fx' }));
+    each(/kritische[rnm]?\s+Treffer(?:bereich|chance)?\s*(?:schon\s+)?(?:bei|ab|von)?\s*(1[5-9])\s*[–-]\s*20/gi, (m) => add('crit', m, { v: 20 - Number(m[1]) }, { kind: 'fx' }));
+    each(/(?:Chance|Bereich)\s+(?:auf|für)\s+(?:einen\s+)?kritische[nr]?\s+Treffer\s+(?:steigt\s+|erhöht\s+sich\s+)?(?:um\s+)?([12])|([−–-][12])\s+auf\s+(?:die\s+)?(?:Chance|Schwelle)\s+(?:für\s+|auf\s+)?(?:einen\s+)?kritische/gi, (m) => add('crit', m, { v: Math.abs(num(m[1] || m[2])) }, { kind: 'fx' }));
     each(/(?:zusätzlich(?:e[nr]?)?|weitere[nr]?|extra)\s+(\d*\s*W\s*\d+(?:\s*[+]\s*\d+)?|\d+)\s+(?:Punkte?\s+)?(?:([A-Za-zÄÖÜäöüß]+?)-?schaden|([A-Za-zÄÖÜäöüß]+?)(?:e[nrs]?)?\s+Schaden)/gi, (m) => {
       const type = dmgOf(m[2] || m[3]);
       if (!type) return;
@@ -414,6 +425,7 @@ export function fxFilterText(f) {
   if (f.adv) out.push('mit Vorteil');
   if (f.crit) out.push('nur bei kritischen Treffern');
   if (f.notActed) out.push('gegen Ziele, die noch nicht am Zug waren');
+  if (f.first) out.push('in der ersten Kampfrunde');
   if (f.ifType) out.push(`wenn du ${[].concat(f.ifType).map((k) => FX_DMG[k] || k).join('/')}schaden verursachst`);
   if (f.once) out.push('einmal pro Zug');
   return out.join(', ');
@@ -446,6 +458,11 @@ export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgNam
     case 'move': return `${MOVE_DE[f.k] || f.k} ${f.v === 'walk' ? '= Bewegungsrate' : m(f.v)}${tail}`;
     case 'sense': return `${SENSE_DE[f.k] || f.k} ${m(f.v)}${tail}`;
     case 'reach': return `Nahkampfreichweite +${m(f.v || 5)}${tail}`;
+    case 'ignoreTerrain': return `Schwieriges Gelände kostet keine zusätzliche Bewegung${tail}`;
+    case 'carry': return `Traglast +${fxValText(f.v || 100, { sign: false })} %${tail}`;
+    case 'wAbility': return `${f.k === 'spell' ? 'Zauberattribut' : ab(f.k)} für Waffenangriffe${f.on && f.on !== 'all' ? ` (${{ melee: 'Nahkampf', ranged: 'Fernkampf', simple: 'einfache Waffen', monk: 'Mönchswaffen' }[f.on] || f.on})` : ''}${f.item ? ' (diese Waffe)' : ''}${tail}`;
+    case 'attune': return `+${f.v || 1} Einstimmungsplatz${Number(f.v) > 1 ? 'plätze' : ''}${tail}`;
+    case 'onKill': return `Kreatur auf 0 TP gebracht: ${[f.temp ? `${fxValText(f.temp, { sign: false })} temporäre TP` : '', f.heal ? `du heilst ${fxValText(f.heal, { sign: false })}${f.slot ? ' (× Zaubergrad)' : ''}` : ''].filter(Boolean).join(' · ') || 'Hinweis'}${f.on && f.on !== 'all' ? ` (${FX_ON[f.on] || f.on})` : ''}${f.once ? ', einmal pro Zug' : ''}${tail}`;
     case 'speedMul': return `Bewegungsrate ×${f.v || 2}${tail}`;
     case 'ac': return `RK ${sg(f.v)}${tail}`;
     case 'acFormula': return `RK ohne Rüstung = ${f.v}${arr(f.k).length ? ` + ${list(f.k, (k) => ({ str: 'STÄ', dex: 'GES', con: 'KON', int: 'INT', wis: 'WEI', cha: 'CHA' }[k] || k)).replace(/, /g, ' + ')}` : ''}${tail}`;
@@ -462,12 +479,12 @@ export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgNam
     case 'retaliate': return `Vergeltung: ${f.on === 'hit' ? 'wer dich trifft' : f.on === 'miss' ? 'wer dich verfehlt' : 'wer dich im Nahkampf trifft'}${f.dice || f.v ? ` erleidet ${fxValText(f.dice || f.v, { sign: false })} ${dmgName(f.type || 'force')}` : ''}${f.inflict ? ` · ${condName(f.inflict)}` : ''}${f.save ? ` (${abS(f.save)}-Rettungswurf${f.dc ? `, SG ${f.dc}` : ''})` : ''}${tail}`;
     case 'evasion': return `Entrinnen${tail}`;
     case 'endure': return `Bei 0 TP: ${f.dice ? `${fxValText(f.dice, { sign: false })} TP zurück` : 'stattdessen 1 TP'}, ${f.uses === 'pb' ? 'Übungsbonus-mal' : `${f.uses || 1}×`} pro ${rest(f.rest)} Rast${tail}`;
-    case 'aura': return f.k === 'saveAdv' ? `Aura ${m(f.r || 10)}: Vorteil bei Rettungswürfen gegen Zauber für Verbündete${tail}` : `Aura ${m(f.r || 10)}: ${f.k === 'ac' ? 'RK' : f.k === 'heal' ? 'Heilung zu Zugbeginn' : 'Rettungswürfe'} ${fxValText(f.v)} für Verbündete${tail}`;
+    case 'aura': return f.k === 'fx' ? `Aura ${m(f.r || 10)}${f.self === false ? '' : ' (auch du)'}: ${arr(f.fx).map((g) => fxLabel(g)).join(' · ') || 'keine Wirkung'} für Verbündete${tail}` : f.k === 'saveAdv' ? `Aura ${m(f.r || 10)}: Vorteil bei Rettungswürfen gegen Zauber für Verbündete${tail}` : `Aura ${m(f.r || 10)}: ${f.k === 'ac' ? 'RK' : f.k === 'heal' ? 'Heilung zu Zugbeginn' : 'Rettungswürfe'} ${fxValText(f.v)} für Verbündete${tail}`;
     case 'hpLevel': return `${sg(f.v)} TP pro Stufe${tail}`;
     case 'hp': return `${sg(f.v)} TP-Maximum${tail}`;
     case 'regen': return `Zugbeginn: ${fxValText(f.dice || f.v, { sign: false })} TP zurück${f.only === 'bloodied' ? ' (nur bei höchstens halben TP)' : ''}${tail}`;
     case 'tempStart': return `Zugbeginn: ${fxValText(f.v, { sign: false })} temporäre TP${tail}`;
-    case 'healBonus': return f.max ? `Heilung immer maximal${tail}` : `Heilung ${sg(f.v)}${tail}`;
+    case 'healBonus': return f.max ? `Heilung immer maximal${tail}` : `Heilung ${sg(f.v)}${f.slot ? ' + Grad des Zaubers' : ''}${f.self ? ' (auch du, wenn du andere heilst)' : ''}${tail}`;
     case 'abil': return `${ab(f.k)} ${sg(f.v)}${f.max ? ` (höchstens ${f.max})` : ''}${tail}`;
     case 'abilSet': return `${ab(f.k)} = ${f.v} (falls niedriger)${tail}`;
     case 'init': return `Initiative ${f.v === 'pb' ? '+ Übungsbonus' : sg(f.v)}${tail}`;
@@ -476,7 +493,7 @@ export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgNam
     case 'saveAdv': return `${f.dis ? 'Nachteil' : 'Vorteil'} bei ${arr(f.k).length ? `${list(f.k, (k) => (k === 'death' ? 'Todes' : k === 'conc' ? 'Konzentrations' : abS(k)))}-Rettungswürfen` : 'Rettungswürfen'}${f.vs ? ` gegen ${f.vs === 'spell' ? 'Zauber' : f.vs === 'conc' ? 'Konzentrationsverlust' : condName(f.vs)}` : ''}${tail}`;
     case 'checkBonus': return `${list(f.k, (k) => (k === 'all' ? 'alle Attributswürfe' : k === 'init' ? 'Initiative' : FX_AB[k] ? `${ab(k)}-Würfe` : skillName(k)))} ${sg(f.v)}${tail}`;
     case 'checkAdv': return `${f.dis ? 'Nachteil' : 'Vorteil'}: ${list(f.k, (k) => (k === 'all' ? 'alle Attributswürfe' : k === 'init' ? 'Initiative' : FX_AB[k] ? `${ab(k)}-Würfe` : skillName(k)))}${tail}`;
-    case 'jack': return `Halber Übungsbonus auf ungeübte Attributswürfe${tail}`;
+    case 'jack': return `Halber Übungsbonus${f.up ? ' (aufgerundet)' : ''} auf ungeübte ${arr(f.k).length ? `${list(f.k, abS)}-Würfe` : 'Attributswürfe'}${tail}`;
     case 'dice': return `${list(f.k, (k) => DICE_FX[k] || k)}${tail}`;
     case 'skill': return `Übung: ${list(f.k, skillName)}${tail}`;
     case 'expertise': return `Expertise: ${list(f.k, skillName)}${tail}`;
@@ -484,7 +501,8 @@ export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgNam
     case 'armor': return `Rüstungsübung: ${list(f.k, (k) => ({ light: 'leicht', medium: 'mittelschwer', heavy: 'schwer', shield: 'Schilde' }[k] || k))}${tail}`;
     case 'tool': return `Werkzeug: ${f.k}${tail}`;
     case 'lang': return f.n ? `${f.n} Sprache(n) nach Wahl` : `Sprachen: ${list(f.k)}${tail}`;
-    case 'pick': return `Auswahl: ${f.n || 1}× ${PICK_DE[f.k] || f.k}${f.v ? ` (${sg(f.v)})` : ''}${arr(f.from).length ? ` aus ${arr(f.from).length} Möglichkeiten` : ''}${tail}`;
+    case 'pick': return f.k === 'option' ? `Auswahl: ${f.n || 1}× ${f.label || 'Option'} aus ${arr(f.options).length} (${arr(f.options).map((o) => o.name).filter(Boolean).slice(0, 4).join(', ')}${arr(f.options).length > 4 ? ' …' : ''})${tail}`
+      : `Auswahl: ${f.n || 1}× ${PICK_DE[f.k] || f.k}${f.v ? ` (${sg(f.v)})` : ''}${toArr(f.into).includes('skillsOf') ? ' + Übung in allen Fertigkeiten des Attributs' : ''}${arr(f.from).length ? ` aus ${arr(f.from).length} Möglichkeiten` : ''}${tail}`;
     case 'attack': return `${sg(f.v)} auf Angriffe${f.k && f.k !== 'all' ? ` (${FX_ON[f.k] || f.k})` : ''}${ft}${tail}`;
     case 'damage': return `${sg(f.v)} Schaden${f.k && f.k !== 'all' ? ` (${FX_ON[f.k] || f.k})` : ''}${ft}${tail}`;
     case 'dmgExtra': return f.dice === 'weapon' ? `+${f.n || 1} Waffenwürfel${ft}${tail}` : `Zusatzschaden ${fxValText(f.dice || f.v, { sign: false })}${f.dice && f.v ? ` ${fxValText(f.v)}` : ''} ${f.type ? dmgName(f.type) : '(Waffenschaden)'}${ft}${tail}`;
@@ -495,9 +513,9 @@ export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgNam
     case 'attacks': return `${f.v} Angriffe pro Angriffsaktion${tail}`;
     case 'unarmed': return `Waffenloser Schlag ${String(f.dice || '1d4').replace(/d/g, 'W')}${f.type ? ` ${dmgName(f.type)}` : ''}${f.ab === 'dex' ? ' (GES)' : f.ab === 'str' ? ' (STÄ)' : ' (STÄ oder GES)'}${tail}`;
     case 'style': return `Kampfstil: ${list(f.k, (k) => STYLE_FX[k] || k)}${tail}`;
-    case 'spell': return `Zauber: ${f.k}${f.lv === 0 ? ' (Zaubertrick)' : ''}${f.castLv ? ` (als ${f.castLv}. Grad)` : ''}${f.uses && f.uses !== 'will' && f.uses !== 'always' ? ` – ${f.uses === 'pb' ? 'Übungsbonus-mal' : f.uses === 'charges' ? `${f.cost || 1} Ladung(en)` : `${f.uses}×`}${f.uses === 'charges' ? '' : ` pro ${rest(f.rest)} Rast`}` : f.uses === 'always' ? ' (immer vorbereitet)' : ''}${tail}`;
+    case 'spell': return `Zauber: ${f.k}${f.lv === 0 ? ' (Zaubertrick)' : ''}${f.castLv ? ` (als ${f.castLv}. Grad)` : ''}${f.uses === 'pool' ? ` – kostet ${f.cost || 1} ${f.pool || 'Punkte'}` : f.uses && f.uses !== 'will' && f.uses !== 'always' ? ` – ${f.uses === 'pb' ? 'Übungsbonus-mal' : f.uses === 'charges' ? `${f.cost || 1} Ladung(en)` : `${f.uses}×`}${f.uses === 'charges' ? '' : ` pro ${rest(f.rest)} Rast`}` : f.uses === 'always' ? ' (immer vorbereitet)' : ''}${tail}`;
     case 'spellDc': return `Zauber-SG ${sg(f.v)}${tail}`;
-    case 'spellDmg': return `Zauberschaden ${sg(f.v)}${f.on === 'cantrip' ? ' (Zaubertricks)' : f.on && f.on !== 'all' ? ` (${f.on})` : ''}${f.ifType ? ` bei ${[].concat(f.ifType).map((k) => FX_DMG[k] || k).join('/')}schaden` : ''}${f.once ? ', einmal pro Zug' : ''}${tail}`;
+    case 'spellDmg': return `Zauberschaden ${sg(f.v)}${f.on === 'cantrip' ? ' (Zaubertricks)' : f.on === 'school' ? ` (${SCHOOLS[f.school] || f.school || 'Schule'})` : f.on && f.on !== 'all' ? ` (${f.on})` : ''}${f.ifType ? ` bei ${[].concat(f.ifType).map((k) => FX_DMG[k] || k).join('/')}schaden` : ''}${f.once ? ', einmal pro Zug' : ''}${tail}`;
     case 'slots': return `+${f.n || 1} Zauberplatz ${f.lv || 1}. Grad${tail}`;
     case 'res': return `${f.k || 'Fähigkeit'}: ${f.v === 'pb' ? 'Übungsbonus' : String(f.v).startsWith('mod:') ? `${FX_AB[String(f.v).slice(4)]}-Mod.` : f.v}× ${f.rest === 'dawn' ? `– ${f.regain ? `${String(f.regain).replace(/d/g, 'W')} neu` : 'neu'} im Morgengrauen` : `pro ${rest(f.rest)} Rast`}${tail}`;
     case 'resMax': return `${f.k || 'Ressource'} ${sg(f.v || 1)}${tail}`;
@@ -506,15 +524,18 @@ export function fxLabel(f, { skillName = (k) => k, weaponName = (k) => k, dmgNam
       const w = String(f.dice || '').replace(/d/g, 'W');
       const n = f.uses === 'pb' ? 'Übungsbonus-mal' : String(f.uses).startsWith('mod:') ? `${FX_AB[String(f.uses).slice(4)]}-Mod.-mal` : `${f.uses}×`;
       const what = f.kind === 'heal' ? `Heilung ${w}` : f.kind === 'save' ? `Rettungswurf auf ${FX_AB[f.save] || 'Geschicklichkeit'}, ${w} ${dmgName(f.type)}` : f.kind === 'weapon' ? `Waffenangriff${w ? ` +${w} ${f.type ? dmgName(f.type) : ''}` : ''}` : f.kind === 'buff' ? `Wirkung für ${f.dur === 'toggle' ? 'beliebig lange' : f.dur === 'conc' ? 'Konzentration' : durText(f.rounds || 10)}` : f.kind === 'temp' ? `temporäre TP ${w}` : f.kind === 'restore' ? (f.what === 'res' ? `${f.res || 'Ressource'} +${f.n || 1}` : `Zauberplatz bis ${f.lvMax || 9}. Grad zurück`) : f.kind === 'mark' ? `Markieren${w ? ` (+${w})` : ''}` : f.kind === 'react' ? `Reaktion bei Treffer` : `Angriff ${w} ${dmgName(f.type)}`;
-      return `Aktion: ${f.k || 'ohne Namen'} (${what}${f.inflict ? `, ${condName(f.inflict)}` : ''}${f.pool ? `, kostet ${f.poolCost || 1} ${f.pool}` : f.uses && f.uses !== 'will' ? `, ${n} pro ${rest(f.rest)} Rast` : ''})${tail}`;
+      return `Aktion: ${f.k || 'ohne Namen'}${f.replaces ? ` (ersetzt „${f.replaces}“)` : ''} (${what}${f.inflict ? `, ${condName(f.inflict)}` : ''}${f.pool ? `, kostet ${f.poolCost || 1} ${f.pool}` : f.uses && f.uses !== 'will' ? `, ${n} pro ${rest(f.rest)} Rast` : ''})${tail}`;
     }
     case 'adv': return String(f.k || 'Vorteil');
     case 'money': return `${f.v} ${({ gp: 'GM', sp: 'SM', cp: 'KM', ep: 'EM', pp: 'PM' })[f.k] || 'GM'}`;
     default: return f.t;
   }
 }
-export const PICK_DE = { skill: 'Fertigkeit', expertise: 'Expertise', ability: 'Attribut', save: 'Rettungswurf-Übung', weapon: 'Waffenübung', armor: 'Rüstungsübung', tool: 'Werkzeug', lang: 'Sprache', dmg: 'Schadensart', spell: 'Zauber', cantrip: 'Zaubertrick', style: 'Kampfstil' };
+// Schlüssel einer eigenen Option (wie slugify: „Präzisionsangriff“ → „praezisionsangriff“)
+export const optKey = (o) => String(o?.key || String(o?.name || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''));
+export const PICK_DE = { option: 'eigene Optionen (Manöver, Anrufungen …)', skill: 'Fertigkeit', expertise: 'Expertise', ability: 'Attribut', save: 'Rettungswurf-Übung', weapon: 'Waffenübung', armor: 'Rüstungsübung', tool: 'Werkzeug', lang: 'Sprache', dmg: 'Schadensart', spell: 'Zauber', cantrip: 'Zaubertrick', style: 'Kampfstil' };
 function arr(v) { return Array.isArray(v) ? v : v == null || v === '' ? [] : [v]; }
+const toArr = arr;
 
 // ───────────────────────── Zusammenfassen ─────────────────────────
 // Zahlenwert einer Wirkung: Zahl, 'pb', 'level', 'half', 'mod:str' … 'mod:spell'. Würfel bleiben Text (isDice).
@@ -527,14 +548,26 @@ export function fxVal(v, ctx = {}) {
   if (t === 'level') return Number(ctx.level) || 1;
   if (t === 'half') return Math.floor((Number(ctx.level) || 1) / 2);
   if (t.startsWith('mod:')) { const k = t.slice(4); return k === 'spell' ? Number(ctx.spellMod) || 0 : Number(ctx.mods?.[k]) || 0; }
+  if (t.startsWith('col:')) return colNum(ctx.cols?.[t.slice(4)]);
   const n = Number(t.replace(',', '.').replace(/^\+/, ''));
   return Number.isFinite(n) ? n : 0;
 }
+// Wert einer Tabellenspalte als Zahl („+2“ → 2) bzw. als Würfel („W8“ → „1d8“, „3W6“ → „3d6“)
+export const colNum = (v) => { const n = Number(String(v ?? '').replace(',', '.').replace(/^\+/, '').replace(/[^\d.-].*$/, '')); return Number.isFinite(n) ? n : 0; };
+export const colDice = (v) => { const t = String(v ?? '').trim().replace(/^[+]/, '').replace(/[Ww]/g, 'd'); return /^d\d/.test(t) ? `1${t}` : t || '0'; };
+// Spaltenverweise in Text ersetzen: „[Kampfkunst]“ → Würfel/Zahl der Spalte, 'col:Wutschaden' → Zahl
+export function withCols(v, cols) {
+  if (typeof v !== 'string' || !cols) return v;
+  if (v.startsWith('col:')) return colNum(cols[v.slice(4)]);
+  if (!v.includes('[')) return v;
+  return v.replace(/\[([^\]]+)\]/g, (m, name) => (name in cols ? colDice(cols[name]) : m));
+}
 // Würfel-Platzhalter: „PBd4“, „LVd6“, „HLd6“ (halbe Stufe, aufgerundet), „2d6+MOD“ → echte Würfel
 export function fxDice(d, ctx = {}) {
-  return String(d || '').replace(/\s+/g, '').replace(/[Ww](?=\d)/g, 'd')
+  return String(withCols(String(d || ''), ctx.cols)).replace(/\s+/g, '').replace(/[Ww](?=\d)/g, 'd')
     .replace(/\bHL/gi, String(Math.ceil((Number(ctx.level) || 1) / 2))).replace(/\bPB|ÜB/gi, String(Number(ctx.pb) || 2)).replace(/\bLV|STUFE/gi, String(Number(ctx.level) || 1))
-    .replace(/MOD/gi, String(Number(ctx.mod) || 0)).replace(/\+-/g, '-');
+    .replace(/MOD/gi, String(Number(ctx.mod) || 0)).replace(/\+-/g, '-')
+    .replace(/(\d+)\*(\d+)/g, (m, a, b) => String(Number(a) * Number(b))); // „4*LV“ → 20
 }
 // Bedingungen: ctx { armor: 'none'|'clothing'|'light'|'medium'|'heavy', shield, species, classes, dyn: { conc, bloodied, raging } }
 export function condOk(cond, ctx = {}) {
@@ -554,14 +587,14 @@ export function condOk(cond, ctx = {}) {
   return true;
 }
 // Wirkungen, die nur für Angriffe mit einer bestimmten Waffe gelten, wenn sie an dieser Waffe hängen
-export const ATTACK_SCOPED = new Set(['attack', 'damage', 'dmgExtra', 'crit', 'advAttack', 'onHit', 'ignoreResist']);
-const FILTERS = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed'];
+export const ATTACK_SCOPED = new Set(['attack', 'damage', 'dmgExtra', 'crit', 'advAttack', 'onHit', 'ignoreResist', 'wAbility']);
+const FILTERS = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed', 'first'];
 export const hasFilter = (f) => FILTERS.some((k) => f[k]);
 export function emptySummary() {
   return {
     speed: 0, speedSet: 0, speedMul: 1, move: {}, sense: {}, reach: 0, resistNm: new Set(), ac: 0, acF: [], acMin: 0, dexCap: 0, stealthOk: false,
     hpLevel: 0, hp: 0, init: 0, abil: {}, abilCapped: [], abilSet: {}, saveProf: new Set(), saveBonus: 0, saveBonusAb: {}, saveCond: [], saveAdv: [],
-    checkBonus: {}, checkAdv: new Set(), checkDis: new Set(), jack: false, diceFx: new Set(),
+    checkBonus: {}, checkAdv: new Set(), checkDis: new Set(), jack: false, jackUp: false, jackAb: {}, diceFx: new Set(), ignoreTerrain: false, carry: 0, attune: 0, wAb: [], onKill: [], healSlot: false, healSelf: false,
     skill: new Set(), exp: new Set(), tools: [], weapons: new Set(), armor: new Set(), lang: new Set(), langChoice: 0,
     resist: new Set(), immune: new Set(), vuln: new Set(), condImm: new Set(), dmgRed: [], critImmune: false, atkAgainst: [], retaliate: [], evasion: false, endure: [], aura: [],
     adv: [], atk: { all: 0, melee: 0, ranged: 0, spell: 0, weapon: 0, unarmed: 0, thrown: 0 }, dmg: { all: 0, melee: 0, ranged: 0, weapon: 0, unarmed: 0, thrown: 0 },
@@ -592,6 +625,11 @@ export function fxSummary(list, ctx = {}) {
       case 'move': if (f.k) s.move[f.k] = f.v === 'walk' ? 'walk' : Math.max(Number(s.move[f.k]) || 0, V(f.v)); break;
       case 'sense': if (f.k) s.sense[f.k] = Math.max(s.sense[f.k] || 0, V(f.v)); break;
       case 'reach': s.reach = Math.max(s.reach, V(f.v || 5)); break;
+      case 'ignoreTerrain': s.ignoreTerrain = true; break;
+      case 'carry': s.carry += V(f.v || 100); break;
+      case 'attune': s.attune += V(f.v || 1); break;
+      case 'wAbility': if (f.k) s.wAb.push({ k: f.k, on: f.on || 'all' }); break;
+      case 'onKill': s.onKill.push({ ...f, temp: isDice(f.temp) || /[A-Z[]/.test(String(f.temp || '')) ? f.temp : f.temp ? V(f.temp) : 0 }); break;
       case 'speedMul': s.speedMul = Math.max(s.speedMul, Number(f.v) || 2); break;
       case 'ac': s.ac += V(f.v); break;
       case 'acFormula': s.acF.push({ base: Number(f.v) || 10, abs: arr(f.k), shield: f.shield !== false, name: f.src || '' }); break;
@@ -602,7 +640,7 @@ export function fxSummary(list, ctx = {}) {
       case 'hp': s.hp += V(f.v); break;
       case 'regen': s.regen.push({ ...f, dice: isDice(f.dice || f.v) ? String(f.dice || f.v) : '', v: isDice(f.v) ? 0 : V(f.v) }); break;
       case 'tempStart': s.tempStart.push({ ...f, v: V(f.v) }); break;
-      case 'healBonus': if (f.max) s.healMax = true; else s.healBonus += V(f.v); break;
+      case 'healBonus': if (f.max) s.healMax = true; else { s.healBonus += V(f.v); if (f.slot) s.healSlot = true; if (f.self) s.healSelf = true; } break;
       case 'abil': if (f.k) { if (f.max) s.abilCapped.push({ k: f.k, v: V(f.v), max: Number(f.max) }); else s.abil[f.k] = (s.abil[f.k] || 0) + V(f.v); } break;
       case 'abilSet': if (f.k) s.abilSet[f.k] = Math.max(s.abilSet[f.k] || 0, V(f.v)); break;
       case 'init': s.init += V(f.v); break;
@@ -615,7 +653,13 @@ export function fxSummary(list, ctx = {}) {
       case 'saveAdv': s.saveAdv.push({ k: arr(f.k), vs: f.vs || '', dis: !!f.dis, src: f.src || '' }); break;
       case 'checkBonus': arr(f.k).forEach((k) => { s.checkBonus[k] = (s.checkBonus[k] || 0) + V(f.v); }); break;
       case 'checkAdv': arr(f.k).forEach((k) => (f.dis ? s.checkDis : s.checkAdv).add(k)); break;
-      case 'jack': s.jack = true; break;
+      case 'jack': {
+        const ks = arr(f.k);
+        if (!ks.length) { s.jack = true; if (f.up) s.jackUp = true; break; }
+        const pb = Number(ctx.pb) || 2;
+        for (const k of ks) s.jackAb[k] = Math.max(s.jackAb[k] || 0, f.up ? Math.ceil(pb / 2) : Math.floor(pb / 2));
+        break;
+      }
       case 'dice': arr(f.k).forEach((k) => s.diceFx.add(k)); break;
       case 'skill': arr(f.k).forEach((k) => s.skill.add(k)); break;
       case 'expertise': arr(f.k).forEach((k) => s.exp.add(k)); break;
@@ -634,7 +678,7 @@ export function fxSummary(list, ctx = {}) {
       case 'retaliate': s.retaliate.push({ ...f, v: isDice(f.v) ? f.v : V(f.v) }); break;
       case 'evasion': s.evasion = true; break;
       case 'endure': s.endure.push({ ...f }); break;
-      case 'aura': s.aura.push({ k: f.k || 'save', v: isDice(f.v) ? f.v : Math.max(Number(f.min) || -99, V(f.v)), min: Number(f.min) || 0, r: Number(f.r) || 10, src: f.src || '' }); break;
+      case 'aura': s.aura.push({ k: f.k || 'save', v: isDice(f.v) ? f.v : Math.max(Number(f.min) || -99, V(f.v)), min: Number(f.min) || 0, r: Number(f.r) || 10, src: f.src || '', ...(f.k === 'fx' ? { fx: arr(f.fx), self: f.self !== false } : {}) }); break;
       case 'attack':
         if (hasFilter(f) || isDice(f.v)) s.atkCond.push({ ...f, v: isDice(f.v) ? String(f.v) : V(f.v) });
         else s.atk[f.k || 'all'] = (s.atk[f.k || 'all'] || 0) + V(f.v);
@@ -692,6 +736,7 @@ export function fxMatches(f, info = {}) {
   if (f.adv && info.adv !== true) return false;
   if (f.crit && !info.crit) return false;
   if (f.notActed && !info.notActed) return false;
+  if (f.first && !info.first) return false;
   if (f.ifType && ![].concat(f.ifType).some((t) => (info.dmgTypes || []).includes(t))) return false;
   return true;
 }

@@ -5,12 +5,12 @@ import { GameClock } from './clock.js';
 import { app, vault, noteById, col } from '../core/app.js';
 import { settings, updateSettings } from '../core/settings.js';
 import {
-  ws, currentOf, openView, closeTab, setActive, newTab, toggleLeft, toggleRight, restoreTabs,
+  ws, currentOf, openView, closeTab, setActive, newTab, toggleLeft, toggleRight, restoreTabs, startHistory,
   showLeftPanel, closeOtherTabs, moveTab, isMobile, setSidebarWidth, resetSidebarWidth,
 } from '../core/workspace.js';
 import { panels, panelContent } from '../core/panels.js';
 import { useCol } from '../core/hooks.js';
-import { Icon, IconBtn, OverlayHost, ErrorBoundary, openMenu, useMedia, Spinner, Empty, Avatar } from './components.js';
+import { Icon, IconBtn, OverlayHost, ErrorBoundary, openMenu, useMedia, Spinner, Empty, Avatar, overlay } from './components.js';
 import { ViewFrame } from './frame.js';
 import { Palette, registerShortcuts, openPalette } from './palette.js';
 import { LeftSidebar, RightSidebar } from '../views/codex.js';
@@ -166,6 +166,16 @@ function Workspace() {
     if (cid && restored !== cid) {
       restoreTabs(cid);
       setRestored(cid);
+      // Zurück-Taste: erst Fenster/Menüs/Schubladen schließen, dann in der App zurück
+      startHistory(() => {
+        const o = overlay.get();
+        if (o.lightbox) { overlay.set({ lightbox: null }); return true; }
+        if (o.menu) { overlay.set({ menu: null }); return true; }
+        if (o.modals.length) { o.modals[o.modals.length - 1].close(undefined); return true; }
+        if (ws.get().drawer) { ws.set({ drawer: null }); return true; }
+        if (ws.get().palette) { ws.set({ palette: null }); return true; }
+        return false;
+      });
     }
   }, [cid]);
   useEffect(() => registerShortcuts(), []);

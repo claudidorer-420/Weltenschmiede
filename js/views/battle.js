@@ -209,8 +209,13 @@ export function moveInfo(B, t, W, H) {
   const prone = !!cb && E.has(cb, E.COND.prone);
   let cells = Math.floor(remainingM / CELL_M + 1e-6);
   if (prone) cells = Math.floor(cells / 2);
-  const grid = moveGrid(B);
-  const key = `${t.id}|${t.x}|${t.y}|${t.size || 1}|${B.gridKey}|${cells}|${B.combat.turnKey}|${B.tokens.map((o) => `${o.x},${o.y}`).join(';')}|${B._mg?.key || ''}`;
+  let grid = moveGrid(B);
+  const leicht = !!cb && !!B.ctx && !!E.fxOf(cb, B.ctx)?.s?.ignoreTerrain;
+  if (leicht && grid?.cost) {
+    if (B._mgLeicht?.src !== grid) B._mgLeicht = { src: grid, grid: { ...grid, cost: new Uint8Array(grid.cost.length).fill(1) } };
+    grid = B._mgLeicht.grid;
+  }
+  const key = `${t.id}|${t.x}|${t.y}|${t.size || 1}|${B.gridKey}|${cells}|${B.combat.turnKey}|${B.tokens.map((o) => `${o.x},${o.y}`).join(';')}|${B._mg?.key || ''}|${leicht ? 'L' : ''}`;
   if (B._reach?.key === key) return B._reach;
   const r = reachable(grid, { x: t.x, y: t.y }, cells, { size: t.size || 1, blocked: blockedFor(B, t, W), W, H });
   B._reach = { key, r, remaining: cells, remainingM, totalM, turn, prone, cb };

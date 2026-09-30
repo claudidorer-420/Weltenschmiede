@@ -492,7 +492,7 @@ function StepKlasse({ d, set }) {
       ${d.level >= subLvl ? html`<${Field} label=${`${cls.subLabel} (ab Stufe ${subLvl})`}>
         <${BG3Pick} compact value=${d.subclass || ''} onChange=${(v) => set({ subclass: v })}
           empty=${`Wähle links ${cls.subLabel === 'Eid' ? 'einen Eid' : `eine ${cls.subLabel}`} – hier steht, was sie ausmacht.`}
-          items=${(cls.subclasses[d.edition] || cls.subclasses[2014] || []).map((s) => ({ key: s, name: s, desc: subclassText(cls.key, s) }))} />
+          items=${(cls.subclasses[d.edition] || cls.subclasses[2014] || []).map((s) => ({ key: s, name: s, desc: subclassText(cls.key, s, d.edition) }))} />
       <//>` : html`<div class="small faint">${cls.subLabel} wählst du auf Stufe ${subLvl}.</div>`}
       ${cls.style && d.level >= cls.style ? html`<${Field} label="Kampfstil">
         <${BG3Pick} compact value=${d.style || ''} onChange=${(v) => set({ style: v })} empty="Wähle links einen Kampfstil – hier steht, was er bewirkt."
@@ -980,7 +980,7 @@ function LevelUp({ c, close }) {
   const entry = c.classes?.find((x) => x.cls === clsKey);
   const newLvl = (entry?.level || 0) + 1;
   const isNew = !entry;
-  const feats = cls ? classFeatures(clsKey, ed, newLvl, newLvl, entry?.subclass) : [];
+  const feats = cls ? classFeatures(clsKey, ed, newLvl, newLvl, entry?.subclass || sub) : [];
   const needSub = cls && newLvl === subclassLevel(clsKey, ed) && !entry?.subclass;
   const asiF = feats.find((f) => f.kind === 'asi' || f.kind === 'boon');
   const needStyle = cls?.style && newLvl === cls.style && !(c.feats || []).some((f) => f.key.startsWith('style-'));
@@ -1000,8 +1000,9 @@ function LevelUp({ c, close }) {
     classes: isNew ? [...(c.classes || []), { cls: clsKey, level: 1, subclass: sub }] : (c.classes || []).map((x) => (x.cls === clsKey ? { ...x, level: x.level + 1, subclass: x.subclass || sub } : x)),
     feats: asi.type === 'feat' && asi.feat ? [...(c.feats || []), { key: asi.feat }] : c.feats,
   } : c;
-  const oldPicks = new Set(charPicks(c).map((p) => p.key));
-  const newPicks = cls ? charPicks(preview).filter((p) => !oldPicks.has(p.key)) : [];
+  // neu = neue Auswahl oder eine bestehende, bei der mit der Stufe mehr dazukommen (z. B. weitere Manöver)
+  const oldPicks = new Map(charPicks(c).map((p) => [p.key, Number(p.f.n) || 1]));
+  const newPicks = cls ? charPicks(preview).filter((p) => !oldPicks.has(p.key) || (Number(p.f.n) || 1) > oldPicks.get(p.key)) : [];
   if (!cls) probs.push('Klasse wählen.');
   if (isNew && (!mc.ok || !mcHome.ok)) probs.push(`Mehrklassen-Voraussetzung nicht erfüllt: ${mc.why || mcHome.why}`);
   for (const p of newPicks) if ((p.chosen || []).length < (Number(p.f.n) || 1)) { probs.push(`Auswahl treffen: ${p.f.label || p.src}`); break; }
@@ -1050,11 +1051,11 @@ function LevelUp({ c, close }) {
       </div>
       <div class="card stack sm">
         <b>3. Neu auf ${cls.name}-Stufe ${newLvl}</b>
-        ${feats.filter((f) => f.kind === 'feature').length ? html`<div class="feat-list">${feats.filter((f) => f.kind === 'feature').map((f) => html`<div><b>${f.name}</b>${f.desc ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>` : null}
+        ${feats.filter((f) => f.kind === 'feature' || f.kind === 'subfeature').length ? html`<div class="feat-list">${feats.filter((f) => f.kind === 'feature' || f.kind === 'subfeature').map((f) => html`<div><b>${f.kind === 'subfeature' ? `${f.sub || sub}: ${f.name}` : f.name}</b>${f.desc ? html` <span class="small muted">– ${f.desc}</span>` : null}</div>`)}</div>` : null}
         ${nextX && (nextX.count !== prevX?.count || nextX.cantrips !== prevX?.cantrips) ? html`<div class="small accent-text">Zauber: ${nextX.cantrips} Zaubertricks, ${nextX.count} Zauber ${nextX.mode}${prevX ? ` (vorher ${prevX.cantrips} / ${prevX.count})` : ''}</div>` : null}
         ${needSub ? html`<${Field} label=${cls.subLabel}><${BG3Pick} compact value=${sub} onChange=${setSub}
-          items=${(cls.subclasses[ed] || cls.subclasses[2014] || []).map((s) => ({ key: s, name: s, desc: subclassText(cls.key, s) }))} /><//>` : null}
-        ${feats.some((f) => f.kind === 'sub') && !needSub ? html`<div class="small muted">Neues Merkmal deiner Unterklasse ${entry?.subclass ? `(${entry.subclass})` : ''} – Details in den Regeln deiner Kampagne.</div>` : null}
+          items=${(cls.subclasses[ed] || cls.subclasses[2014] || []).map((s) => ({ key: s, name: s, desc: subclassText(cls.key, s, ed) }))} /><//>` : null}
+        ${feats.some((f) => f.kind === 'sub') && !needSub && !feats.some((f) => f.kind === 'subfeature') ? html`<div class="small muted">Neues Merkmal deiner Unterklasse ${entry?.subclass ? `(${entry.subclass})` : ''} – Details in den Regeln deiner Kampagne.</div>` : null}
         ${needStyle ? html`<${Field} label="Kampfstil"><${BG3Pick} compact value=${style} onChange=${setStyle}
           empty="Wähle links einen Kampfstil – hier steht, was er bewirkt." items=${styleItems(ed, clsKey)} /><//>` : null}
         ${asiF ? html`<div class="stack sm">

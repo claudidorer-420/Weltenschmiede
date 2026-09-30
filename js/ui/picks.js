@@ -6,7 +6,9 @@ import { charPicks, AB, AB_NAME, WEAPONS, LANGUAGES } from '../data/chargen.js';
 import { SKILLS } from '../data/rules5e.js';
 import { DAMAGE_ART } from '../data/artmap.js';
 import { useSpells } from '../data/spells.js';
-import { PICK_DE, STYLE_FX } from '../core/effects.js';
+import { PICK_DE, STYLE_FX, fxLabel, optKey } from '../core/effects.js';
+import { FxText, fxNames } from './fxtext.js';
+
 
 const toArr = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]);
 // Möglichkeiten einer Auswahl: [{ value, label }]
@@ -25,6 +27,7 @@ export function pickOptions(f, spells) {
       const lv = f.k === 'cantrip' ? 0 : Number(f.lv) || 1;
       return (spells || []).filter((s) => s.level === lv && (!f.list || (s.classes || []).includes(f.list)) && (!from.length || from.includes(s.name))).map((s) => ({ value: s.name, label: s.name }));
     }
+    case 'option': return toArr(f.options).filter((o) => o && o.name).map((o) => ({ value: optKey(o), label: o.name, desc: o.desc || '', fx: o.fx || [] }));
     default: return from.map((x) => ({ value: x, label: x }));
   }
 }
@@ -48,7 +51,11 @@ export function PicksPanel({ char, ed = '2014', disabled = false, onChange, only
     const title = p.f.label || `${p.src}: ${n} × ${PICK_DE[p.f.k] || p.f.k}${p.f.v ? ` (+${p.f.v})` : ''}`;
     return html`<div class="pk-row" key=${p.key}>
       <div class="pk-h"><b>${title}</b><span class=${`pk-n${chosen.length >= n ? ' ok' : ''}`}>${chosen.length}/${n}</span></div>
-      ${p.f.k === 'tool' && !opts.length ? html`<input class="input" disabled=${disabled} value=${chosen.join(', ')} placeholder="Werkzeug eintragen" onInput=${(e) => onChange(p.key, e.target.value.split(/\s*,\s*/).filter(Boolean).slice(0, n))} />`
+      ${p.f.k === 'option' ? html`<div class="pk-opts">${opts.map((o) => html`<button type="button" key=${o.value} class=${`pk-opt${chosen.includes(o.value) ? ' on' : ''}`} disabled=${disabled} onClick=${() => toggle(o.value)}>
+          <b>${o.label}</b>${o.desc ? html`<span class="small"><${FxText} text=${o.desc} name=${o.label} /></span>` : null}
+          ${o.fx.length ? html`<span class="tiny muted">${o.fx.map((g) => fxLabel(g, fxNames)).join(' · ')}</span>` : null}</button>`)}
+          ${!opts.length ? html`<span class="small faint">Keine Optionen – im Regelwerk ergänzen.</span>` : null}</div>`
+      : p.f.k === 'tool' && !opts.length ? html`<input class="input" disabled=${disabled} value=${chosen.join(', ')} placeholder="Werkzeug eintragen" onInput=${(e) => onChange(p.key, e.target.value.split(/\s*,\s*/).filter(Boolean).slice(0, n))} />`
         : html`<div class="pk-chips">${opts.map((o) => html`<button type="button" key=${o.value} class=${`pk-chip${chosen.includes(o.value) ? ' on' : ''}`} disabled=${disabled} onClick=${() => toggle(o.value)}>${o.label}</button>`)}
           ${!opts.length ? html`<span class="small faint">Keine Möglichkeiten – im Regelwerk prüfen.</span>` : null}</div>`}
     </div>`;

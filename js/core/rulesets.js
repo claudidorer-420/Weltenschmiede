@@ -13,6 +13,7 @@ import * as CG from '../data/chargen.js';
 import { SPELL_OVERLAY } from '../data/spells.js';
 import { WEAPON_RANGE } from '../data/items.js';
 import { CUSTOM_STATUS } from './effects.js';
+import { baseSubFeatures } from '../data/subclassbase.js';
 import { uid, now, slugify, sortBy, download } from '../lib/util.js';
 
 export const PACK_FORMAT = 'weltenschmiede-regeln';
@@ -55,7 +56,7 @@ export function baseEntries(cat, ed) {
   if (cat === 'backgrounds') return BASE.backgrounds[e].map(plain);
   if (cat === 'feats') return BASE.feats.filter((f) => !f.ed || f.ed === e).map(plain);
   if (cat === 'classes') return BASE.classes.map(({ c, subs }) => plain({ ...c, subclasses: subs }));
-  if (cat === 'subclasses') return BASE.classes.flatMap(({ c, subs }) => subs[e].map((name) => ({ cls: c.key, name, ed: e, desc: CG.SUBCLASS_DESC[name] || '', features: {} })));
+  if (cat === 'subclasses') return BASE.classes.flatMap(({ c, subs }) => subs[e].map((name) => ({ cls: c.key, name, ed: e, desc: CG.SUBCLASS_DESC[name] || '', features: plain(baseSubFeatures(c.key, name, e) || {}) })));
   if (cat === 'weapons') return BASE.weapons.map(plain);
   if (cat === 'armor') return BASE.armor.map(plain);
   if (cat === 'subspecies') return BASE.species[e].flatMap((s) => (s.subs || []).map((x) => plain({ species: s.key, ...x })));
@@ -329,7 +330,13 @@ export function applyPacks(packs) {
       if (!f.ed && p.edition !== 'beide') f.ed = p.edition;
       put(CG.FEATS, f);
     });
-    for (const [name, desc] of Object.entries(p.features || {})) tryDo(p, `Merkmal ${name}`, () => { setKey(CG.FEATURE_INFO, name, str(desc)); setKey(CG.FEATURE_SRC, name, p.name); });
+    // Klassenmerkmale: Text (alt) oder { desc, fx } mit strukturierten Wirkungen
+    for (const [name, v] of Object.entries(p.features || {})) tryDo(p, `Merkmal ${name}`, () => {
+      const desc = v && typeof v === 'object' ? str(v.desc) : str(v);
+      setKey(CG.FEATURE_INFO, name, desc);
+      setKey(CG.FEATURE_SRC, name, p.name);
+      if (v && typeof v === 'object' && arr(v.fx).length) setKey(CG.FEATURE_FX, name, arr(v.fx));
+    });
     for (const raw of c.weapons || []) tryDo(p, `Waffe ${raw?.name}`, () => {
       const w = { ...NORM.weapons(raw), _pack: p.name };
       put(CG.WEAPONS, w);

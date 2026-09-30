@@ -3,8 +3,9 @@
 // Alles darüber hinaus kommt aus Regelpaketen der Kampagne (core/rulesets.js) – nie hier eintragen.
 // Beschreibungen sind kurze Zusammenfassungen in eigenen Worten.
 import { SKILLS } from './rules5e.js';
-import { parseFx, fxSummary, fxVal } from '../core/effects.js';
+import { parseFx, fxSummary, fxVal, withCols, optKey } from '../core/effects.js';
 import { MAGIC_FX, WEAPON_BASES } from './magicfx.js';
+import { baseSubFeatures } from './subclassbase.js';
 import { DICE_RULES } from '../lib/dice.js';
 
 export const AB = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -624,9 +625,9 @@ export const classLabel = (c) => (c?.classes?.length
 
 export const subclassFeatures = (clsKey, sub) => (sub ? SUBCLASS_FEATURES[`${clsKey}|${sub}`] || null : null);
 // Beschreibung einer Unterklasse für die Auswahl – mit ihren Merkmalen je Stufe, falls ein Regelpaket sie angibt
-export function subclassText(clsKey, name) {
+export function subclassText(clsKey, name, ed = '2024') {
   const base = SUBCLASS_DESC[name] || '';
-  const f = subclassFeatures(clsKey, name);
+  const f = subclassFeatures(clsKey, name) || baseSubFeatures(clsKey, name, ed);
   if (!f) return base;
   const lines = Object.entries(f).sort((a, b) => a[0] - b[0]).flatMap(([l, list]) => list.map((x) => `Stufe ${l} – ${x.name}${x.desc ? `: ${x.desc}` : ''}`));
   return [base, ...lines].filter(Boolean).join('\n\n');
@@ -637,7 +638,9 @@ export function classFeatures(clsKey, ed, to, from = 1, sub = '') {
   if (!cls) return [];
   const table = (cls.feat && (cls.feat[ed] || cls.feat[2014] || cls.feat[2024])) || {};
   const subLvl = cls.subLevel?.[ed] || cls.subLevel?.[2014] || 3;
-  const subF = subclassFeatures(clsKey, sub);
+  // Merkmale der Unterklasse: aus dem Regelwerk – sonst die des Grundbestands (data/subclassbase.js)
+  const packF = subclassFeatures(clsKey, sub);
+  const subF = packF || (sub ? baseSubFeatures(clsKey, sub, ed) : null);
   const out = [];
   for (let l = from; l <= to; l++) {
     const own = subF?.[l] || [];
@@ -646,9 +649,9 @@ export function classFeatures(clsKey, ed, to, from = 1, sub = '') {
       else if (f === '@boon') out.push({ level: l, kind: 'boon', name: 'Epische Gabe', desc: FEATURE_INFO['Epische Gabe'] });
       else if (f === '@sub') {
         if (l === subLvl || !own.length) out.push({ level: l, kind: 'sub', name: l === subLvl ? `${cls.subLabel} wählen` : `${cls.subLabel}: Merkmal`, desc: l === subLvl ? `Du wählst deine Unterklasse (${cls.subLabel}).` : `Neues Merkmal deiner Unterklasse (${cls.subLabel}).` });
-      } else out.push({ level: l, kind: 'feature', name: f, desc: FEATURE_INFO[f] || '' });
+      } else out.push({ level: l, kind: 'feature', name: f, desc: FEATURE_INFO[f] || '', ...(FEATURE_FX[f]?.length ? { fx: FEATURE_FX[f] } : {}) });
     }
-    for (const f of own) out.push({ level: l, kind: 'subfeature', name: f.name, desc: f.desc || FEATURE_INFO[f.name] || '', sub, ...(f.fx ? { fx: f.fx } : {}) });
+    for (const f of own) out.push({ level: l, kind: 'subfeature', name: f.name, desc: f.desc || FEATURE_INFO[f.name] || '', sub, ...(f.fx ? { fx: f.fx } : {}), ...(packF ? {} : { base: true }) });
   }
   return out;
 }
@@ -827,14 +830,21 @@ export function weaponAttack(c, w, mods, pbv) {
   const spellAb = w.ability === 'spell' ? spellAbilityOf(c, mods) : null;
   const ab = spellAb && mods[spellAb] > (finesse ? Math.max(mods.dex, mods.str) : ranged ? mods.dex : mods.str) ? spellAb
     : w.ability && mods[w.ability] != null ? w.ability : finesse ? (mods.dex >= mods.str ? 'dex' : 'str') : ranged ? 'dex' : 'str';
-  const monk = classLevel(c, 'moench') && w.cat === 'simple' && !w.p.includes('h') ? (mods.dex > mods[ab] ? 'dex' : ab) : ab;
+  const fx = charFx(c);
+  // Wirkungen, die nur für genau diese Waffe gelten (Waffen und magische Einzelstücke)
+  const own = fx.byItem[w.key]?.length ? fxSummary(fx.byItem[w.key], { level: totalLevel(c), pb: pbv, mods }) : null;
+  let monk = classLevel(c, 'moench') && w.cat === 'simple' && !w.p.includes('h') ? (mods.dex > mods[ab] ? 'dex' : ab) : ab;
+  const monkish = !w.p.includes('h') && !w.p.includes('2');
+  for (const wa of [...fx.wAb, ...(own?.wAb || [])]) {
+    const on = wa.on || 'all';
+    if ((on === 'melee' && ranged) || (on === 'ranged' && !ranged) || (on === 'simple' && w.cat !== 'simple') || (on === 'monk' && !monkish)) continue;
+    const k = wa.k === 'spell' ? spellAbilityOf(c, mods) : wa.k;
+    if (k && mods[k] != null && mods[k] > mods[monk]) monk = k;
+  }
   const m = mods[monk];
   const prof = weaponProficient(c, w);
   const feats = new Set((c.feats || []).map((f) => f.key));
-  const fx = charFx(c);
   const magic = Number(w.magic) || 0;
-  // Wirkungen, die nur für genau diese Waffe gelten (Waffen und magische Einzelstücke)
-  const own = fx.byItem[w.key]?.length ? fxSummary(fx.byItem[w.key], { level: totalLevel(c), pb: pbv, mods }) : null;
   const archery = feats.has('style-archery') || fx.styles.has('archery');
   const dueling = feats.has('style-dueling') || fx.styles.has('dueling');
   const bonus = m + (prof ? pbv : 0) + (ranged && archery ? 2 : 0) + fx.atk.all + fx.atk.weapon + (ranged ? fx.atk.ranged : fx.atk.melee) + magic + (own ? own.atk.all + own.atk.weapon + (ranged ? own.atk.ranged : own.atk.melee) : 0);
@@ -857,7 +867,7 @@ export function charMods(c) {
   // Attributswerte samt Boni, Obergrenzen und festgesetzter Werte aus Merkmalen und Gegenständen
   const scores = fx.scores || scoresOf(c, fx);
   const mods = Object.fromEntries(AB.map((k) => [k, abMod(scores[k])]));
-  const jack = classLevel(c, 'barde') >= 2 || fx.jack ? Math.floor(pbv / 2) : 0;
+  const jack = classLevel(c, 'barde') >= 2 || fx.jack ? (fx.jackUp ? Math.ceil(pbv / 2) : Math.floor(pbv / 2)) : 0;
   const cb = fx.checkBonus || {};
   const saves = Object.fromEntries(AB.map((k) => {
     const prof = (c.saves || []).includes(k) || fx.saveProf.has(k);
@@ -868,7 +878,7 @@ export function charMods(c) {
     if (fx.skill.has(k)) p = Math.max(p, 1);
     if (fx.exp.has(k) && p >= 1) p = 2;
     const ab = skillAbility(k);
-    const bonus = mods[ab] + (p === 2 ? pbv * 2 : p === 1 ? pbv : jack) + (cb[k] || 0) + (cb[ab] || 0) + (cb.all || 0);
+    const bonus = mods[ab] + (p === 2 ? pbv * 2 : p === 1 ? pbv : Math.max(jack, fx.jackAb?.[ab] || 0)) + (cb[k] || 0) + (cb[ab] || 0) + (cb.all || 0);
     return [k, { prof: p, bonus, adv: fx.checkAdv.has(k) || fx.checkAdv.has(ab) || fx.checkAdv.has('all'), dis: fx.checkDis.has(k) || fx.checkDis.has(ab) }];
   }));
   const feats = new Set((c.feats || []).map((f) => f.key));
@@ -1053,6 +1063,36 @@ export function attacksPerAction(c) {
 // Texte aus Regelpaketen wirken (core/effects.js); der Grundbestand hat seine Regeln fest eingebaut.
 // Strukturierte Wirkungen (Feld fx: [{ t, k, v, lvl, cond }]) wirken überall.
 export const FEATURE_SRC = {};   // Merkmalsname → Paket (nur diese Merkmalstexte werden gelesen)
+export const FEATURE_FX = {};    // Merkmalsname → strukturierte Wirkungen aus Regelpaketen
+// Tabellenspalten der Klassen (eigene Spalten aus Regelwerken + Grundbestand): { Name: Wert auf der aktuellen Stufe }
+export function classCols(c, only = null) {
+  const ed = edOf(c);
+  const out = {};
+  const list = [...(c?.classes || [])].sort((a, b) => (a.cls === only ? 1 : 0) - (b.cls === only ? 1 : 0)); // eigene Klasse zuletzt = gewinnt
+  for (const x of list) {
+    const l = Number(x.level) || 1;
+    if (x.cls === 'schurke') out['Hinterhältiger Angriff'] = `${Math.ceil(l / 2)}W6`;
+    if (x.cls === 'moench') out.Kampfkunst = `W${ed === '2024' ? (l >= 17 ? 12 : l >= 11 ? 10 : l >= 5 ? 8 : 6) : l >= 17 ? 10 : l >= 11 ? 8 : l >= 5 ? 6 : 4}`;
+    if (x.cls === 'barbar') out.Wutschaden = `+${l >= 16 ? 4 : l >= 9 ? 3 : 2}`;
+    for (const col of findClass(x.cls)?.columns || []) {
+      const v = Array.isArray(col.values) ? col.values[Math.min(col.values.length, l) - 1] : col.values;
+      if (col.name && v != null && v !== '') out[col.name] = v;
+    }
+  }
+  return out;
+}
+// Spaltenverweise einer Wirkung auflösen (auch in verschachtelten Wirkungen von Stärkungen und Auren)
+function colFx(f, cols) {
+  if (!cols || !Object.keys(cols).length) return f;
+  const o = {};
+  for (const [k, v] of Object.entries(f)) {
+    if (k === 'options') o[k] = v;
+    else if (k === 'fx' && Array.isArray(v)) o[k] = v.map((g) => (g && typeof g === 'object' ? colFx(g, cols) : g));
+    else if (k === 'up' && v && typeof v === 'object') o[k] = Object.fromEntries(Object.entries(v).map(([l, d]) => [l, withCols(d, cols)]));
+    else o[k] = withCols(v, cols);
+  }
+  return o;
+}
 let FX_REV = 0;
 let vocab = null;
 const fxCache = new Map();
@@ -1069,16 +1109,34 @@ export function charFxList(c) {
   const out = [];
   const picks = [];
   // pk = Schlüssel der Quelle für Auswahlen (c.picks['<pk>#<Nummer>']), item = Waffe, an der die Wirkung hängt
-  const add = (list, src, { classLevel: cl = null, skip = null, pk = null, item = null, itemId = null } = {}) => {
-    (list || []).forEach((f, i) => {
-      if (!f || !f.t || (skip && skip.has(f.t))) return;
+  // cls = Klasse, aus der die Wirkung stammt (für Spaltenverweise wie „[Kampfkunst]“ oder 'col:Wutschaden')
+  const colCache = {};
+  const colsFor = (k) => (colCache[k || '-'] ||= classCols(c, k));
+  const add = (list, src, { classLevel: cl = null, skip = null, pk = null, item = null, itemId = null, cls = null } = {}) => {
+    (list || []).forEach((f0, i) => {
+      if (!f0 || !f0.t || (skip && skip.has(f0.t))) return;
+      const f = colFx(f0, colsFor(cls));
       // Stufenangaben bei Klassenmerkmalen beziehen sich auf die Klassenstufe
       if (cl != null && f.lvl && f.lvl > cl) return;
       const base = { ...f, active: f.active !== false, lvl: cl != null ? 0 : f.lvl, src: f.src || src, ...(item ? { item } : {}), ...(itemId ? { itemId } : {}) };
       if (f.t === 'pick') {
+        // Anzahl: Zahl, Übungsbonus oder Attributsmodifikator (Tabellenspalten sind oben schon aufgelöst)
+        if (typeof base.n === 'string') base.n = base.n === 'pb' ? profBonus(totalLevel(c)) : base.n.startsWith('mod:') ? Math.max(1, abMod(c.abilities?.[base.n.slice(4)])) : Number(base.n) || 1;
         const key = `${pk || slug(src)}#${i}`;
         const chosen = Array.isArray(c.picks?.[key]) ? c.picks[key] : [];
         picks.push({ key, f: base, src: base.src, chosen });
+        // Eigene Optionen (Manöver, Anrufungen, Totemtiere …): die Wirkungen der gewählten Option gelten
+        if (f.k === 'option') {
+          for (const ok of chosen) {
+            const o = (f.options || []).find((x) => optKey(x) === ok);
+            if (!o) continue;
+            const osrc = `${base.src}: ${o.name}`;
+            const ofx = (o.fx || []).map((g) => ({ ...g, lvl: g.lvl || f0.lvl || 0, cond: g.cond || f.cond }));
+            add(ofx, osrc, { classLevel: cl, pk: `${key}:${ok}`, item, itemId, cls });
+            if (!ofx.length && o.desc) add(fxText(o.desc, { name: o.name }), osrc, { classLevel: cl, item, itemId, cls });
+          }
+          return;
+        }
         out.push(...expandPick(base, chosen));
         return;
       }
@@ -1126,13 +1184,14 @@ export function charFxList(c) {
   for (const x of c.classes || []) {
     const cls = findClass(x.cls);
     if (!cls) continue;
-    add(cls.fx, cls.name, { classLevel: x.level, pk: `cls:${cls.key}` });
+    add(cls.fx, cls.name, { classLevel: x.level, pk: `cls:${cls.key}`, cls: cls.key });
     for (const ft of classFeatures(x.cls, ed, x.level, 1, x.subclass)) {
-      if (ft.kind === 'feature' && FEATURE_SRC[ft.name]) add(fxText(ft.desc, { name: ft.name }), `${cls.name}: ${ft.name}`, { classLevel: x.level });
-      if (ft.kind === 'feature' && ft.fx?.length) add(ft.fx, `${cls.name}: ${ft.name}`, { classLevel: x.level, pk: `cf:${cls.key}:${slug(ft.name)}` });
+      // Texte nur lesen, wenn es keine strukturierten Wirkungen gibt – sonst zählte „kritisch ab 19“ doppelt
+      if (ft.kind === 'feature' && FEATURE_SRC[ft.name] && !ft.fx?.length) add(fxText(ft.desc, { name: ft.name }), `${cls.name}: ${ft.name}`, { classLevel: x.level, cls: cls.key });
+      if (ft.kind === 'feature' && ft.fx?.length) add(ft.fx, `${cls.name}: ${ft.name}`, { classLevel: x.level, pk: `cf:${cls.key}:${slug(ft.name)}`, cls: cls.key });
       if (ft.kind === 'subfeature') {
-        add(ft.fx, `${x.subclass}: ${ft.name}`, { classLevel: x.level, pk: `sf:${cls.key}:${slug(ft.name)}` });
-        add(fxText(ft.desc, { name: ft.name }), `${x.subclass}: ${ft.name}`, { classLevel: x.level });
+        add(ft.fx, `${x.subclass}: ${ft.name}`, { classLevel: x.level, pk: `sf:${cls.key}:${slug(ft.name)}`, cls: cls.key });
+        if (!ft.fx?.length && !ft.base) add(fxText(ft.desc, { name: ft.name }), `${x.subclass}: ${ft.name}`, { classLevel: x.level, cls: cls.key });
       }
     }
     for (const [l, names] of Object.entries(SUBCLASS_SPELLS[`${x.cls}|${x.subclass}`] || {})) {
@@ -1143,7 +1202,6 @@ export function charFxList(c) {
   // Mechanik des Grundbestands, die über Wirkungen läuft (Champion, Entrinnen, Aura des Schutzes, Brutaler kritischer Treffer, Wilde Angriffe)
   for (const x of c.classes || []) {
     const src = findClass(x.cls)?.name || x.cls;
-    if (x.cls === 'kaempfer' && x.subclass === 'Champion' && x.level >= 3) out.push({ t: 'crit', v: x.level >= 15 ? 2 : 1, on: 'weapon', active: true, src: 'Verbesserter kritischer Treffer' });
     if ((x.cls === 'schurke' || x.cls === 'moench') && x.level >= 7) out.push({ t: 'evasion', active: true, src: `${src}: Entrinnen` });
     if (x.cls === 'paladin' && x.level >= 6) out.push({ t: 'aura', k: 'save', v: 'mod:cha', min: 1, r: x.level >= 18 ? 30 : 10, active: true, src: 'Aura des Schutzes' });
     if (x.cls === 'barbar' && ed === '2014' && x.level >= 9) out.push({ t: 'dmgExtra', dice: 'weapon', n: x.level >= 17 ? 3 : x.level >= 13 ? 2 : 1, crit: true, on: 'melee', active: true, src: 'Brutaler kritischer Treffer' });
@@ -1166,6 +1224,7 @@ export function charFxList(c) {
     if (a && !a.attuneMissing) itemText(a.baseKey ? findArmor(a.baseKey) : a, a.name, { itemId: a.itemId });
   }
   for (const it of c.inventory || []) {
+    if (it.stored) continue; // im Besitz (Truhe) – nicht dabei, wirkt nicht
     const info = itemInfo(it);
     if (!info || info.kind === 'weapon' || info.kind === 'armor' || info.kind === 'shield' || (!info.fx.length && !(info.own && info.def?.desc))) continue;
     // Tränke wirken über ihre Aktion (verbraucht), getragene Gegenstände solange ausgerüstet und eingestimmt
@@ -1186,6 +1245,7 @@ function expandPick(f, chosen) {
   const out = [];
   for (const t of into) {
     if (t === 'abil') for (const k of chosen) out.push({ ...base, t: 'abil', k, v: Number(f.v) || 1, ...(f.max ? { max: Number(f.max) } : {}) });
+    else if (t === 'skillsOf') out.push({ ...base, t: 'skill', k: SKILLS.filter((s) => chosen.includes(s.ability)).map((s) => s.key) });
     else if (t === 'spell') for (const k of chosen) out.push({ ...base, t: 'spell', k, lv: f.k === 'cantrip' ? 0 : Number(f.lv) || 1, uses: f.k === 'cantrip' ? 'will' : f.uses || '1', rest: f.rest || 'long' });
     else if (t === 'tool') for (const k of chosen) out.push({ ...base, t: 'tool', k });
     else if (t === 'feat') continue; // Talente wählt der Assistent
@@ -1195,6 +1255,13 @@ function expandPick(f, chosen) {
 }
 // Alle offenen und getroffenen Auswahlen eines Charakters (für Assistent und Bogen)
 export const charPicks = (c) => (c ? charFxList(c).picks || [] : []);
+// Einstimmungsplätze: Grundregel (0 = unbegrenzt) + Wirkungen („ein weiterer Gegenstand“)
+export function attuneLimit(c) {
+  if (RULES.attuneMax === 0) return 99;
+  return (RULES.attuneMax || 3) + (Number(charFx(c).attune) || 0);
+}
+// Traglast in kg: STÄ × 7,5 kg, Wirkungen erhöhen sie in Prozent (+100 % = doppelt)
+export function carryFactor(c) { return 1 + (Number(charFx(c).carry) || 0) / 100; }
 // Ausgerüstet (Waffe/Rüstung zählen über den Bogen) und – falls nötig – eingestimmt
 export function itemReady(c, it, info = itemInfo(it)) {
   if (!info) return false;
@@ -1231,7 +1298,7 @@ const armorKind = (c) => {
 // dyn = Kampfbedingungen { conc, bloodied, raging } – ohne dyn bleiben solche Wirkungen außen vor (s.dynamic).
 export function charFx(c, dyn = null) {
   if (!c) return fxSummary([]);
-  const inv = (c.inventory || []).map((it) => (it.mref || it.pack ? `${it.id}:${it.equipped ? 1 : 0}${it.attuned ? 1 : 0}:${it.variant || ''}:${it.base || ''}` : '')).filter(Boolean).join(',');
+  const inv = (c.inventory || []).map((it) => (it.mref || it.pack ? `${it.id}:${it.equipped ? 1 : 0}${it.attuned ? 1 : 0}${it.stored ? 's' : ''}:${it.variant || ''}:${it.base || ''}` : '')).filter(Boolean).join(',');
   const key = `${FX_REV}|${edOf(c)}|${c.speciesKey}|${c.subspeciesKey}|${c.speciesOption}|${c.backgroundKey}|${(c.feats || []).map((f) => f.key).join(',')}|${(c.classes || []).map((x) => `${x.cls}:${x.level}:${x.subclass || ''}`).join(',')}|${c.armor?.body || ''}|${c.armor?.shield ? 1 : 0}|${c.armor?.shieldKey || ''}|${(c.weapons || []).join(',')}|${inv}|${AB.map((k) => c.abilities?.[k] || 10).join(',')}|${JSON.stringify(c.picks || {})}|${dyn ? JSON.stringify(dyn) : ''}`;
   const hit = fxCache.get(key);
   if (hit) return hit;

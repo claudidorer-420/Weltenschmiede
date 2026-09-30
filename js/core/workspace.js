@@ -171,11 +171,72 @@ function shift(delta) {
   if (!at) return;
   const pos = Math.max(0, Math.min(at.stack.length - 1, at.pos + delta));
   if (pos === at.pos) return;
+  // Passt der Schritt zur Browser-Historie, geht er über sie – so bleiben Zurück-Taste und Pfeile im Gleichschritt
+  const want = nav.log[nav.idx + delta];
+  if (nav.on && want && want.active === at.id && want.pos === pos) { try { if (delta < 0) history.back(); else history.forward(); return; } catch { /* weiter unten */ } }
   ws.set({ tabs: ws.get().tabs.map((t) => (t.id === at.id ? { ...t, pos } : t)) });
   persist();
 }
 export const goBack = () => shift(-1);
 export const goForward = () => shift(1);
+
+// ───────────────────────── Zurück-Taste von Browser, Handy und Tablet ─────────────────────────
+// Alles passiert auf einer Seite – ohne Einträge in der Browser-Historie verließe „Zurück“ die Weltenschmiede.
+// Deshalb legt jede Navigation (Ansicht öffnen, Tab wechseln, Vor/Zurück im Tab) einen Eintrag an; „Zurück“ springt
+// dann zum vorigen Stand. Offene Fenster, Menüs und die mobilen Schubladen schließt die Zurück-Taste zuerst.
+const nav = { log: [], idx: 0, restoring: false, on: false, closer: null, cid: null };
+const snapNow = () => { const at = activeTab(); return at ? { active: at.id, pos: at.pos } : null; };
+function navRecord() {
+  if (!nav.on || nav.restoring || nav.cid !== app.get().cid) return;
+  const snap = snapNow();
+  if (!snap) return;
+  const cur = nav.log[nav.idx];
+  if (cur && cur.active === snap.active && cur.pos === snap.pos) return;
+  nav.log = [...nav.log.slice(0, nav.idx + 1), snap].slice(-200);
+  nav.idx = nav.log.length - 1;
+  try { history.pushState({ wsNav: nav.idx, cid: nav.cid }, ''); } catch { /* z. B. in Vorschauen */ }
+}
+function navApply(snap) {
+  const s = ws.get();
+  const tab = s.tabs.find((t) => t.id === snap.active);
+  if (!tab) return false;
+  nav.restoring = true;
+  try {
+    ws.set({ tabs: s.tabs.map((t) => (t.id === tab.id ? { ...t, pos: Math.max(0, Math.min(snap.pos, t.stack.length - 1)) } : t)), active: tab.id });
+  } finally { nav.restoring = false; }
+  closeDrawerIfMobile();
+  persist();
+  return true;
+}
+function onPop(e) {
+  if (!nav.on) return;
+  // Erst Fenster/Menü/Schublade schließen und an der Stelle bleiben
+  if (nav.closer?.()) {
+    try { history.pushState({ wsNav: nav.idx, cid: nav.cid }, ''); } catch { /* egal */ }
+    return;
+  }
+  const st = e.state;
+  if (!st || st.wsNav == null || st.cid !== nav.cid) return;
+  let k = Math.max(0, Math.min(nav.log.length - 1, Number(st.wsNav) || 0));
+  const dir = k < nav.idx ? -1 : 1;
+  // Geschlossene Tabs überspringen
+  while (nav.log[k] && !ws.get().tabs.some((t) => t.id === nav.log[k].active) && k + dir >= 0 && k + dir < nav.log.length) k += dir;
+  nav.idx = k;
+  if (nav.log[k]) navApply(nav.log[k]);
+}
+// Beim Öffnen einer Kampagne (nach restoreTabs). closer() schließt Fenster, Menüs oder Schubladen und meldet true.
+export function startHistory(closer) {
+  nav.closer = closer || null;
+  nav.cid = app.get().cid;
+  const snap = snapNow();
+  nav.log = snap ? [snap] : [];
+  nav.idx = 0;
+  try { history.replaceState({ wsNav: 0, cid: nav.cid }, ''); } catch { /* egal */ }
+  if (nav.on) return;
+  nav.on = true;
+  ws.subscribe(() => navRecord());
+  window.addEventListener('popstate', onPop);
+}
 export const canGoBack = (tab) => !!tab && tab.pos > 0;
 export const canGoForward = (tab) => !!tab && tab.pos < tab.stack.length - 1;
 

@@ -13,10 +13,11 @@ import {
   watchLibrary, saveToLibrary, removeFromLibrary, watchCampaignPacks, saveToCampaign, removeFromCampaign, exportPack, activeDoc, activateOnly,
 } from '../core/rulesets.js';
 import * as CG from '../data/chargen.js';
+import { loadBase, TEMPLATE_ONLY } from '../core/rulebase.js';
 import { SKILLS } from '../data/rules5e.js';
 import { DAMAGE_ART, SCHOOL_ART } from '../data/artmap.js';
 import { useSpells } from '../data/spells.js';
-import { FX_TYPES, FX_BY, FX_HELP, FX_CONDS, MOVE_DE, SENSE_DE, fxLabel, CUSTOM_STATUS, ENGINE_EFFECTS, FX_ON, FX_HP, FX_SELFHP, DICE_FX, STYLE_FX, BONUS_ACTS, PICK_DE } from '../core/effects.js';
+import { FX_TYPES, FX_BY, FX_HELP, FX_CONDS, MOVE_DE, SENSE_DE, fxLabel, CUSTOM_STATUS, ENGINE_EFFECTS, FX_ON, FX_HP, FX_SELFHP, DICE_FX, STYLE_FX, BONUS_ACTS, PICK_DE, SCHOOLS } from '../core/effects.js';
 import { FxText, fxNames, fxTitle } from '../ui/fxtext.js';
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Toggle, Check, Segmented, Select, AutoTextarea, Empty, ViewToggle, openModal, confirmDialog, promptDialog, openMenu, toast, pickFiles } from '../ui/components.js';
@@ -60,7 +61,7 @@ const INFO = {
   onHitDc: 'Leer = 8 + Übungsbonus + Attributsmodifikator des Angriffs (bei Zaubern der Zauber-SG). Gegenstände haben oft einen festen SG (z. B. 12 oder 15).',
   spellFx: 'Zauber aus Merkmalen und Gegenständen kosten keinen Zauberplatz. „als Grad“ = wird auf diesem Grad gewirkt (z. B. Magisches Geschoss als 3. Grad). „fester SG“ = Rettungswurf-SG des Gegenstands statt deines eigenen. „kostet Ladungen“ nutzt die Ladungen des Gegenstands (Feld „Ladungen“).',
   actKind: 'Angriff: Trefferwurf mit eigenem Schaden (Klauen, Biss). Waffenaktion: Angriff mit der Waffe (an der die Wirkung hängt, sonst der besten) plus Extra-Schaden und Zustand (z. B. Hieb, der blutet, oder Schlag, der umwirft). Rettungswurf: Odem, Welle, Blick. Kampfhaltung: Wirkungen auf Zeit (Kampfrausch, Klingengesang, −5/+10). Markieren: Zeichen des Jägers o. Ä. Zurückholen: Zauberplatz oder Ressourcenpunkte. Reaktion: wird dir angeboten, wenn du getroffen wirst.',
-  actDice: 'Würfel wie 2W6 oder 1W8. Platzhalter: PB = Übungsbonus (z. B. „PBW4“), LV = Stufe (z. B. „LVW6“), HL = halbe Stufe aufgerundet (z. B. „HLW6“ wie der Hinterhältige Angriff), MOD = Attributsmodifikator.',
+  actDice: 'Würfel wie 2W6 oder 1W8. Platzhalter: PB = Übungsbonus (z. B. „PBW4“), LV = Stufe (z. B. „LVW6“), HL = halbe Stufe aufgerundet (z. B. „HLW6“ wie der Hinterhältige Angriff), MOD = Attributsmodifikator, „4*LV“ = viermal die Stufe, [Spaltenname] = Wert einer Tabellenspalte der Klasse (z. B. „[Überlegenheitswürfel]“ oder „[Kampfkunst]+MOD“).',
   actUses: '„kostet Punkte einer Ressource“: z. B. Ki-Punkte, Überlegenheitswürfel, Zaubereipunkte – der Name muss mit einer Ressource des Charakters beginnen. „kostet Ladungen“: bei Gegenständen mit Ladungen (Zauberstäbe, Stäbe, Ringe).',
   itemSlot: 'Wo der Gegenstand getragen wird. Tränke verbrauchen sich; alles andere wirkt, solange es im Inventar ausgerüstet ist (und eingestimmt, falls nötig).',
   attune: 'Magische Gegenstände mit Einstimmung wirken erst, wenn der Charakter sich eingestimmt hat. Wie viele gleichzeitig gehen, steht in den Grundregeln (5E: 3).',
@@ -129,7 +130,10 @@ const INFO = {
   cast: 'Art des Zauberwirkens: Voll- (bis Grad 9), Halb- (bis Grad 5), Drittelzauberer (bis Grad 4) oder Paktmagie (wenige Plätze, kurze Rast). Die Zauberplätze ergeben sich daraus automatisch.',
   castMode: '„bereitet vor“: täglich aus der Klassenliste wählen · „kennt feste Zauber“: nur beim Stufenaufstieg tauschen · „Zauberbuch“: sammelt Zauber im Buch und bereitet daraus vor.',
   resources: 'Begrenzt nutzbare Klassenfähigkeiten (z. B. Kampfrausch, Fokuspunkte, Inspiration). Sie erscheinen im Bogen mit Anzeige und werden bei der Rast aufgefrischt.',
-  columns: 'Eigene Spalten der Klassentabelle, z. B. „Wutschaden“ (+2, +3 …) oder „Kampfkunst“ (W6, W8 …). Der aktuelle Wert erscheint im Bogen.',
+  columns: 'Eigene Spalten der Klassentabelle, z. B. „Wutschaden“ (+2, +3 …) oder „Kampfkunst“ (W6, W8 …). Der aktuelle Wert erscheint im Bogen – und Wirkungen können ihn nutzen: in Würfelfeldern als „[Kampfkunst]“ (wird zu 1W8), bei Zahlen über „Spalte“ (z. B. Schadensbonus = Wutschaden). Eingebaut sind außerdem „Hinterhältiger Angriff“, „Kampfkunst“ und „Wutschaden“.',
+  featFx: 'Strukturierte Wirkungen dieses Merkmals – sie wirken genau so, wie sie hier stehen (z. B. „Kritischer Treffer schon ab 19“, eine Auswahl für den Spieler, eine eigene Aktion). Solange hier Wirkungen stehen, wird der Text oben nicht zusätzlich gelesen.',
+  options: 'Eigene Optionen, aus denen der Spieler wählt – z. B. Kampfmanöver, Schauerliche Anrufungen, Totemtiere, Erzfeinde oder Drachenahnen. Jede Option hat einen Text und eigene Wirkungen (Zusatzschaden, Aktion mit Überlegenheitswürfel, Resistenz …). „Anzahl“ darf auch eine Tabellenspalte sein, damit mit der Stufe mehr dazukommen.',
+  replaces: 'Name einer anderen Aktion, die diese ersetzt (z. B. ein Unterklassen-Kampfrausch statt des normalen). Die ersetzte Aktion verschwindet aus der Kampfleiste.',
   classFx: 'Wirkungen der Klasse selbst; „ab Stufe“ bezieht sich hier auf die Klassenstufe.',
   featTable: 'Merkmale je Stufe. Eingabetaste fügt ein Merkmal hinzu, ein Klick auf den Namen öffnet seinen Regeltext. „Extra-Angriff“, „Zwei Extra-Angriffe“ und „Drei Extra-Angriffe“ erhöhen die Angriffe pro Angriffsaktion automatisch.',
   subDesc: 'Erscheint bei der Auswahl im Assistenten.',
@@ -164,6 +168,18 @@ const ED_OPTS = [{ value: '', label: 'Wie das Paket' }, { value: '2024', label: 
 // ───────────────────────── Kleine Bausteine ─────────────────────────
 function Info({ text, children, wide = false }) {
   const [pin, setPin] = useState(false);
+  // Lange Hilfe (wide): erscheint als Leiste am linken Rand – Klick auf „i“ hält sie fest, × oder erneuter Klick schließt
+  if (wide) {
+    const toggle = (e) => { e.preventDefault(); e.stopPropagation(); setPin(!pin); if (pin) e.currentTarget.blur?.(); };
+    return html`<span class=${`rb-i wide${pin ? ' pin' : ''}`} tabindex="0" role="button" aria-label="Hilfe" aria-expanded=${pin}
+      onClick=${toggle} onKeyDown=${(e) => { if (e.key === 'Enter' || e.key === ' ') toggle(e); if (e.key === 'Escape') setPin(false); }}>
+      <${Icon} name="info" size=${13} />
+      <span class="rb-i-dock" role="dialog" aria-label="Hilfe" onClick=${(e) => e.stopPropagation()}>
+        <span class="rb-i-dock-head"><b>Hilfe</b><span class="grow"></span>
+          ${pin ? html`<button type="button" class="icon-btn" title="Schließen" aria-label="Schließen" onClick=${(e) => { e.stopPropagation(); setPin(false); }}><${Icon} name="x" size=${16} /></button>` : html`<span class="tiny faint">Klick auf „i“ hält die Hilfe fest</span>`}</span>
+        ${children || text}
+      </span></span>`;
+  }
   return html`<span class=${`rb-i${pin ? ' pin' : ''}${wide ? ' wide' : ''}`} tabindex="0" role="button" aria-label="Info"
     onClick=${(e) => { e.preventDefault(); e.stopPropagation(); setPin(!pin); }} onMouseLeave=${() => setPin(false)}>
     <${Icon} name="info" size=${13} /><span class="rb-i-pop" role="tooltip">${children || text}</span></span>`;
@@ -228,13 +244,14 @@ const SUG = {
 };
 
 // Regeltext mit erkannten Wirkungen (✔ wirkt, ○ nur Hinweis)
-function FxArea({ value, onChange, rows = 3, placeholder = '', name = '' }) {
+// muted: Es gibt strukturierte Wirkungen – dann wird der Text nicht zusätzlich gelesen (Chips nur zur Orientierung)
+function FxArea({ value, onChange, rows = 3, placeholder = '', name = '', muted = false }) {
   const text = String(value ?? '');
   const fx = useMemo(() => CG.fxText(text, { name }), [text, name]);
   const shown = fx.filter((f) => f.t !== 'money');
   return html`<div class="rb-fxarea">
     <${Area} rows=${rows} value=${value} placeholder=${placeholder} onChange=${onChange} />
-    ${shown.length ? html`<div class="rb-fxchips">${shown.map((f, i) => html`<span key=${i} class=${`rb-fxchip ${f.active ? 'on' : 'off'}`} title=${fxTitle(f)}>${f.active ? '✔' : '○'} ${fxLabel(f, fxNames)}</span>`)}</div>` : null}
+    ${shown.length ? html`<div class="rb-fxchips">${shown.map((f, i) => html`<span key=${i} class=${`rb-fxchip ${f.active && !muted ? 'on' : 'off'}`} title=${fxTitle(f)}>${f.active && !muted ? '✔' : '○'} ${fxLabel(f, fxNames)}</span>`)}${muted ? html`<span class="tiny faint">Text wird nicht gelesen – es gelten die Wirkungen unten.</span>` : null}</div>` : null}
   </div>`;
 }
 // Ausrüstung mit Markierung erkannter Gegenstände und Geldbeträge
@@ -361,15 +378,16 @@ function condRefOpts() {
 // Wert: Zahl, Würfel, Übungsbonus oder Attributsmodifikator
 function ValIn({ value, onChange, dice = true, spell = false, level = false, placeholder = '' }) {
   const t = value == null ? '' : String(value);
-  const mode = t === 'pb' ? 'pb' : t === 'level' ? 'level' : t.startsWith('mod:') ? t : /\d*[dW]\d/.test(t) ? 'dice' : 'num';
+  const mode = t === 'pb' ? 'pb' : t === 'level' ? 'level' : t.startsWith('mod:') ? t : t.startsWith('col:') ? 'col' : /\d*[dW]\d|\[/.test(t) ? 'dice' : 'num';
   const opts = [{ value: 'num', label: 'Zahl' }, ...(dice ? [{ value: 'dice', label: 'Würfel' }] : []), { value: 'pb', label: 'Übungsbonus' }, ...(level ? [{ value: 'level', label: 'Stufe' }] : []),
-    ...AB.map((k) => ({ value: `mod:${k}`, label: `${CG.AB_SHORT[k]}-Mod.` })), ...(spell ? [{ value: 'mod:spell', label: 'Zauberattribut-Mod.' }] : [])];
-  return html`<span class="rb-val"><${Select} value=${mode} options=${opts} onChange=${(m) => onChange(m === 'num' ? 1 : m === 'dice' ? '1d4' : m)} />
-    ${mode === 'num' ? html`<${NumIn} value=${value} placeholder=${placeholder} onChange=${(x) => onChange(x ?? 0)} />` : mode === 'dice' ? html`<${TextIn} cls="rb-dice" value=${t} placeholder="1W4" onChange=${(x) => onChange(x.replace(/[Ww]/g, 'd'))} />` : null}</span>`;
+    ...AB.map((k) => ({ value: `mod:${k}`, label: `${CG.AB_SHORT[k]}-Mod.` })), ...(spell ? [{ value: 'mod:spell', label: 'Zauberattribut-Mod.' }] : []), { value: 'col', label: 'Tabellenspalte' }];
+  return html`<span class="rb-val"><${Select} value=${mode} options=${opts} onChange=${(m) => onChange(m === 'num' ? 1 : m === 'dice' ? '1d4' : m === 'col' ? 'col:' : m)} />
+    ${mode === 'num' ? html`<${NumIn} value=${value} placeholder=${placeholder} onChange=${(x) => onChange(x ?? 0)} />` : mode === 'dice' ? html`<${TextIn} cls="rb-dice" value=${t} placeholder="1W4" onChange=${(x) => onChange(x.replace(/[Ww](?=\d)/g, 'd'))} />`
+      : mode === 'col' ? html`<${TextIn} value=${t.slice(4)} placeholder="Spaltenname, z. B. Wutschaden" list="rb-colnames" onChange=${(x) => onChange(`col:${x}`)} />` : null}</span>`;
 }
 // Bedingungen einer Angriffswirkung: worauf, gegen wen, wann
 function Filters({ f, set, on = true, types = true }) {
-  const n = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed'].filter((k) => f[k]).length;
+  const n = ['vs', 'vsCond', 'hp', 'selfHp', 'adv', 'crit', 'once', 'ifType', 'notActed', 'first'].filter((k) => f[k]).length;
   return html`<details class="rb-filt" open=${n > 0}>
     <summary><span class="small">Bedingungen${n ? ` (${n})` : ''}</span><${Info} text=${INFO.filters} /></summary>
     <div class="rb-act-row">
@@ -384,6 +402,7 @@ function Filters({ f, set, on = true, types = true }) {
       <span class="rb-fxp"><${Check} checked=${!!f.crit} label="nur kritisch" onChange=${(x) => set({ crit: x || undefined })} /></span>
       <span class="rb-fxp"><${Check} checked=${!!f.once} label="einmal pro Zug" onChange=${(x) => set({ once: x || undefined })} /></span>
       <span class="rb-fxp"><${Check} checked=${!!f.notActed} label="Ziel noch nicht am Zug" onChange=${(x) => set({ notActed: x || undefined })} /></span>
+      <span class="rb-fxp"><${Check} checked=${!!f.first} label="erste Kampfrunde" onChange=${(x) => set({ first: x || undefined })} /></span>
     </div>
     ${types ? html`<div class="rb-act-row"><span class="rb-fxp"><span class="small muted">nur wenn du diesen Schaden verursachst</span></span><${Chips} options=${DMG} value=${toArr(f.ifType)} onChange=${(x) => set({ ifType: x.length ? x : undefined })} /></div>` : null}
   </details>`;
@@ -401,7 +420,18 @@ function FxParams({ f, set, spells }) {
     case 'sense': return html`${v(html`<${Select} value=${f.k} options=${Object.entries(SENSE_DE).map(([k, l]) => ({ value: k, label: l }))} onChange=${(x) => set({ k: x })} />`)}${v(html`<${DistIn} value=${f.v} onChange=${(x) => set({ v: x || 0 })} />`)}`;
     case 'ac': case 'hpLevel': case 'hp': case 'attacks': case 'acMin': case 'spellDc': return v(html`<${NumIn} value=${f.v} onChange=${(x) => set({ v: x || 0 })} />`);
     case 'dexCap': return v(html`${lab('GES bis +2 plus')}<${NumIn} value=${f.v} min=${1} max=${10} onChange=${(x) => set({ v: x || 1 })} />`);
-    case 'stealthOk': case 'critImmune': case 'evasion': case 'jack': return v(lab('keine weiteren Angaben nötig'));
+    case 'stealthOk': case 'critImmune': case 'evasion': case 'ignoreTerrain': return v(lab('keine weiteren Angaben nötig'));
+    case 'jack': return html`${v(html`${lab('nur für (leer = alle)')}<${Chips} options=${AB_OPTS} value=${toArr(f.k)} onChange=${(x) => set({ k: x.length ? x : undefined })} />`)}${v(html`<${Check} checked=${!!f.up} label="aufrunden" onChange=${(x) => set({ up: x || undefined })} />`)}`;
+    case 'carry': return v(html`${lab('+')}<${NumIn} value=${f.v ?? 100} min=${5} max=${400} step=${5} onChange=${(x) => set({ v: x || 100 })} />${lab('% (100 = doppelt)')}`);
+    case 'attune': return v(html`${lab('+')}<${NumIn} value=${f.v ?? 1} min=${1} max=${6} onChange=${(x) => set({ v: x || 1 })} />${lab('Plätze')}`);
+    case 'wAbility': return html`${v(html`<${Select} value=${f.k || 'cha'} options=${[...AB_OPTS, { value: 'spell', label: 'Zauberattribut' }]} onChange=${(x) => set({ k: x })} />${lab('statt STÄ/GES, wenn höher')}`)}
+      ${v(html`${lab('für')}<${Select} value=${f.on || 'all'} options=${[{ value: 'all', label: 'alle Waffen' }, { value: 'melee', label: 'Nahkampfwaffen' }, { value: 'ranged', label: 'Fernkampfwaffen' }, { value: 'simple', label: 'einfache Waffen' }, { value: 'monk', label: 'Waffen ohne „schwer“/„zweihändig“' }]} onChange=${(x) => set({ on: x === 'all' ? undefined : x })} />`)}`;
+    case 'onKill': return html`<div class="rb-act"><div class="rb-act-row">
+      ${v(html`${lab('temp. TP')}<${TextIn} cls="rb-dice" value=${f.temp ?? ''} placeholder="z. B. MOD+LV" onChange=${(x) => set({ temp: x || undefined })} />`)}
+      ${v(html`${lab('du heilst')}<${TextIn} cls="rb-dice" value=${f.heal ?? ''} placeholder="–" onChange=${(x) => set({ heal: x || undefined })} /><${Check} checked=${!!f.slot} label="× Grad des Zaubers" onChange=${(x) => set({ slot: x || undefined })} />`)}
+</div>
+      <div class="rb-act-row">${v(html`${lab('durch')}<${Select} value=${f.on || 'all'} options=${[{ value: 'all', label: 'jeden Schaden' }, { value: 'melee', label: 'Nahkampfangriffe' }, { value: 'weapon', label: 'Waffenangriffe' }, { value: 'spell', label: 'Zauber' }]} onChange=${(x) => set({ on: x === 'all' ? undefined : x })} />`)}
+        ${v(html`<${Check} checked=${!!f.once} label="einmal pro Zug" onChange=${(x) => set({ once: x || undefined })} />`)}</div></div>`;
     case 'acFormula': return html`${v(html`${lab('RK =')}<${NumIn} value=${f.v} min=${0} max=${25} onChange=${(x) => set({ v: x || 10 })} />${lab('+')}`)}${v(html`<${Chips} options=${AB_OPTS} value=${f.k} max=${2} onChange=${(x) => set({ k: x })} />`)}
       ${v(html`<${Check} checked=${f.shield !== false} label="Schild erlaubt" onChange=${(x) => set({ shield: x ? undefined : false })} />`)}`;
     case 'resist': return html`${v(html`<${Chips} options=${DMG} value=${f.k} onChange=${(x) => set({ k: x })} />`)}${v(html`<${Check} checked=${!!f.nm} label="nur gegen nichtmagische Angriffe" onChange=${(x) => set({ nm: x || undefined })} />`)}`;
@@ -421,12 +451,14 @@ function FxParams({ f, set, spells }) {
     case 'endure': return html`${v(html`<${Select} value=${f.dice ? 'dice' : 'one'} options=${[{ value: 'one', label: 'stattdessen 1 TP' }, { value: 'dice', label: 'TP zurück (Würfel)' }]} onChange=${(x) => set({ dice: x === 'dice' ? '2d6' : undefined })} />`)}
       ${f.dice ? v(html`<${TextIn} cls="rb-dice" value=${f.dice} onChange=${(x) => set({ dice: x.replace(/[Ww]/g, 'd') })} />`) : null}
       ${v(html`<${Select} value=${f.uses || '1'} options=${ACT_USES.filter((o) => o.value !== 'will')} onChange=${(x) => set({ uses: x })} />${lab('pro')}<${Select} value=${f.rest || 'long'} options=${RESTS} onChange=${(x) => set({ rest: x })} />`)}`;
-    case 'aura': return html`${v(html`<${Select} value=${f.k || 'save'} options=${[{ value: 'save', label: 'Bonus auf Rettungswürfe' }, { value: 'saveAdv', label: 'Vorteil gegen Zauber' }, { value: 'heal', label: 'Heilung zu deinem Zugbeginn' }]} onChange=${(x) => set({ k: x })} />`)}
-      ${f.k === 'saveAdv' ? null : v(html`<${ValIn} value=${f.v} onChange=${(x) => set({ v: x })} />`)}${v(html`${lab('Radius')}<${DistIn} value=${f.r || 10} onChange=${(x) => set({ r: x || 10 })} />`)}`;
+    case 'aura': return html`<div class="rb-act"><div class="rb-act-row">${v(html`<${Select} value=${f.k || 'save'} options=${[{ value: 'save', label: 'Bonus auf Rettungswürfe' }, { value: 'saveAdv', label: 'Vorteil gegen Zauber' }, { value: 'heal', label: 'Heilung zu deinem Zugbeginn' }, { value: 'fx', label: 'eigene Wirkungen (Resistenz, Immunität, Schaden …)' }]} onChange=${(x) => set({ k: x, ...(x === 'fx' ? { v: undefined, fx: f.fx || [] } : { fx: undefined }) })} />`)}
+      ${f.k === 'saveAdv' || f.k === 'fx' ? null : v(html`<${ValIn} value=${f.v} onChange=${(x) => set({ v: x })} />`)}${v(html`${lab('Radius')}<${DistIn} value=${f.r || 10} onChange=${(x) => set({ r: x || 10 })} />`)}
+      ${f.k === 'fx' ? v(html`<${Check} checked=${f.self !== false} label="gilt auch für dich" onChange=${(x) => set({ self: x ? undefined : false })} />`) : null}</div>
+      ${f.k === 'fx' ? html`<div class="rb-act-sub"><div class="small muted">Wirkungen für Verbündete im Radius (wirken im Kampf; die Aura endet, wenn du kampfunfähig bist):</div><${FxEditor} value=${f.fx} onChange=${(x) => set({ fx: x })} /></div>` : null}</div>`;
     case 'regen': return html`${v(html`<${ValIn} value=${f.dice || f.v} onChange=${(x) => set(/[dW]/.test(String(x)) ? { dice: x, v: undefined } : { v: x, dice: undefined })} />`)}
       ${v(html`<${Select} value=${f.only || ''} options=${[{ value: '', label: 'immer (ab 1 TP)' }, { value: 'bloodied', label: 'nur bei höchstens halben TP' }]} onChange=${(x) => set({ only: x || undefined })} />`)}`;
     case 'tempStart': return v(html`<${ValIn} value=${f.v} dice=${false} onChange=${(x) => set({ v: x })} />`);
-    case 'healBonus': return html`${v(html`<${Check} checked=${!!f.max} label="Heilwürfel immer maximal" onChange=${(x) => set({ max: x || undefined })} />`)}${f.max ? null : v(html`<${ValIn} value=${f.v} dice=${false} onChange=${(x) => set({ v: x })} />`)}`;
+    case 'healBonus': return html`${v(html`<${Check} checked=${!!f.max} label="Heilwürfel immer maximal" onChange=${(x) => set({ max: x || undefined })} />`)}${f.max ? null : v(html`<${ValIn} value=${f.v} dice=${false} onChange=${(x) => set({ v: x })} /><${Check} checked=${!!f.slot} label="+ Grad des Zaubers" onChange=${(x) => set({ slot: x || undefined })} />`)}`;
     case 'abil': return html`${v(html`<${Select} value=${f.k} options=${AB_OPTS} onChange=${(x) => set({ k: x })} />`)}${v(html`<${NumIn} value=${f.v} onChange=${(x) => set({ v: x || 0 })} />`)}
       ${v(html`${lab('höchstens')}<${NumIn} value=${f.max} min=${1} max=${30} placeholder="–" onChange=${(x) => set({ max: x || undefined })} />`)}`;
     case 'abilSet': return html`${v(html`<${Select} value=${f.k} options=${AB_OPTS} onChange=${(x) => set({ k: x })} />`)}${v(html`${lab('wird zu')}<${NumIn} value=${f.v} min=${1} max=${30} onChange=${(x) => set({ v: x || 19 })} />`)}`;
@@ -452,12 +484,15 @@ function FxParams({ f, set, spells }) {
     case 'lang': return html`${v(html`<${Chips} options=${CG.LANGUAGES.map((l) => ({ value: l, label: l }))} value=${f.k} onChange=${(x) => set({ k: x })} />`)}
       ${v(html`${lab('+ nach Wahl')}<${NumIn} value=${f.n} min=${0} max=${5} onChange=${(x) => set({ n: x || undefined })} />`)}`;
     case 'pick': return html`<div class="rb-act">
-      <div class="rb-act-row">${v(html`<${NumIn} value=${f.n} min=${1} max=${6} onChange=${(x) => set({ n: x || 1 })} />`)}
+      <div class="rb-act-row">${v(html`${lab('Anzahl')}<${ValIn} value=${f.n ?? 1} dice=${false} onChange=${(x) => set({ n: x || 1 })} />`)}
         ${v(html`<${Select} value=${f.k || 'skill'} options=${Object.entries(PICK_DE).map(([value, label]) => ({ value, label }))} onChange=${(x) => set({ k: x, from: undefined, into: undefined })} />`)}
-        ${f.k === 'ability' ? v(html`${lab('um')}<${NumIn} value=${f.v} min=${1} max=${3} placeholder="1" onChange=${(x) => set({ v: x || undefined })} />${lab('höchstens')}<${NumIn} value=${f.max} placeholder="20" onChange=${(x) => set({ max: x || undefined })} /><${Check} checked=${toArr(f.into).includes('saveProf')} label="+ Übung im Rettungswurf" onChange=${(x) => set({ into: x ? ['abil', 'saveProf'] : undefined })} />`) : null}
+        ${f.k === 'ability' ? v(html`${lab('um')}<${NumIn} value=${f.v} min=${0} max=${3} placeholder="1" onChange=${(x) => set({ v: x ?? undefined })} />${lab('höchstens')}<${NumIn} value=${f.max} placeholder="20" onChange=${(x) => set({ max: x || undefined })} />
+          <${Check} checked=${toArr(f.into).includes('saveProf')} label="+ Übung im Rettungswurf" onChange=${(x) => set({ into: pickInto(f, 'saveProf', x) })} />
+          <${Check} checked=${toArr(f.into).includes('skillsOf')} label="+ Übung in allen Fertigkeiten des Attributs" onChange=${(x) => set({ into: pickInto(f, 'skillsOf', x) })} />`) : null}
         ${f.k === 'dmg' ? v(html`${lab('als')}<${Select} value=${toArr(f.into)[0] || 'resist'} options=${[{ value: 'resist', label: 'Resistenz' }, { value: 'immune', label: 'Immunität' }, { value: 'ignoreResist', label: 'Resistenz ignorieren' }]} onChange=${(x) => set({ into: x })} />`) : null}
         ${f.k === 'spell' || f.k === 'cantrip' ? v(html`${lab('aus der Liste')}<${Select} value=${f.list || ''} options=${[{ value: '', label: 'alle Zauber' }, ...CG.CLASSES.map((c) => ({ value: c.key, label: c.name }))]} onChange=${(x) => set({ list: x || undefined })} />${f.k === 'spell' ? html`${lab('Grad')}<${NumIn} value=${f.lv} min=${1} max=${9} placeholder="1" onChange=${(x) => set({ lv: x || undefined })} /><${Select} value=${f.uses || '1'} options=${[{ value: '1', label: '1× pro langer Rast' }, { value: 'will', label: 'beliebig oft' }, { value: 'always', label: 'immer vorbereitet (Zauberplatz)' }]} onChange=${(x) => set({ uses: x })} />` : null}`) : null}</div>
       ${PICK_FROM[f.k] ? html`<div class="rb-act-row">${lab('nur aus (leer = alle)')}<${Chips} options=${PICK_FROM[f.k]()} value=${toArr(f.from)} onChange=${(x) => set({ from: x.length ? x : undefined })} /></div>` : null}
+      ${f.k === 'option' ? html`<div class="rb-act-sub"><div class="small muted">Optionen<${Info} text=${INFO.options} /></div><${OptionsEditor} value=${f.options} onChange=${(x) => set({ options: x })} /></div>` : null}
       <div class="rb-act-row">${lab('Bezeichnung im Assistenten')}<${TextIn} value=${f.label || ''} placeholder="z. B. Widerstandsfähig: Attribut" onChange=${(x) => set({ label: x || undefined })} /></div></div>`;
     case 'attack': case 'damage': return html`<div class="rb-act"><div class="rb-act-row">${v(html`<${ValIn} value=${f.v} spell onChange=${(x) => set({ v: x })} />`)}${v(html`<${Select} value=${f.k || 'all'} options=${f.t === 'damage' ? ATK_K.filter((o) => o.value !== 'spell') : ATK_K} onChange=${(x) => set({ k: x })} />`)}</div>
       <${Filters} f=${f} set=${set} on=${false} /></div>`;
@@ -486,15 +521,17 @@ function FxParams({ f, set, spells }) {
       ${v(html`<${Select} value=${f.ab || 'best'} options=${[{ value: 'best', label: 'STÄ oder GES' }, { value: 'str', label: 'STÄ' }, { value: 'dex', label: 'GES' }]} onChange=${(x) => set({ ab: x })} />`)}`;
     case 'spell': return html`${v(html`<${TextIn} value=${f.k} placeholder="Name des Zaubers" list="rb-spellnames" onChange=${(x) => set({ k: x })} />`)}
       ${v(html`<${Select} value=${String(f.lv ?? 1)} options=${[{ value: '0', label: 'Zaubertrick' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}. Grad` }))]} onChange=${(x) => set({ lv: Number(x) })} />`)}
-      ${v(html`<${Select} value=${f.uses || (f.lv === 0 ? 'will' : '1')} options=${[{ value: 'will', label: 'beliebig oft' }, { value: '1', label: '1×' }, { value: '2', label: '2×' }, { value: '3', label: '3×' }, { value: 'pb', label: 'Übungsbonus-mal' }, { value: 'charges', label: 'kostet Ladungen des Gegenstands' }, { value: 'always', label: 'immer vorbereitet (Zauberplatz)' }]} onChange=${(x) => set({ uses: x })} />`)}
+      ${v(html`<${Select} value=${f.uses || (f.lv === 0 ? 'will' : '1')} options=${[{ value: 'will', label: 'beliebig oft' }, { value: '1', label: '1×' }, { value: '2', label: '2×' }, { value: '3', label: '3×' }, { value: 'pb', label: 'Übungsbonus-mal' }, { value: 'charges', label: 'kostet Ladungen des Gegenstands' }, { value: 'pool', label: 'kostet Punkte einer Ressource (Ki …)' }, { value: 'always', label: 'immer vorbereitet (Zauberplatz)' }]} onChange=${(x) => set({ uses: x })} />`)}
+      ${f.uses === 'pool' ? v(html`<${TextIn} value=${f.pool || ''} placeholder="Ki-Punkte" list="rb-resnames" onChange=${(x) => set({ pool: x || undefined })} />${lab('Kosten')}<${NumIn} value=${f.cost} min=${1} placeholder="1" onChange=${(x) => set({ cost: x || undefined })} />`) : null}
       ${['1', '2', '3', 'pb'].includes(String(f.uses || (f.lv === 0 ? '' : '1'))) ? v(html`${lab('pro')}<${Select} value=${f.rest || 'long'} options=${RESTS} onChange=${(x) => set({ rest: x })} />`) : null}
       ${f.uses === 'charges' ? v(html`${lab('Ladungen')}<${NumIn} value=${f.cost} min=${1} max=${20} placeholder="1" onChange=${(x) => set({ cost: x || undefined })} />`) : null}
       ${v(html`${lab('als Grad')}<${NumIn} value=${f.castLv} min=${1} max=${9} placeholder="–" onChange=${(x) => set({ castLv: x || undefined })} />`)}
       ${v(html`${lab('fester SG')}<${NumIn} value=${f.dc} min=${8} max=${30} placeholder="–" onChange=${(x) => set({ dc: x || undefined })} /><${Info} text=${INFO.spellFx} />`)}
       ${spells && f.k && !spells.some((s) => s.name.toLowerCase() === String(f.k).toLowerCase()) ? html`<span class="tiny rb-warn">Zauber nicht gefunden – im Regelwerk anlegen oder Namen prüfen.</span>` : null}`;
     case 'spellDmg': return html`${v(html`<${ValIn} value=${f.v} dice=${false} spell onChange=${(x) => set({ v: x })} />`)}
-      ${v(html`${lab('für')}<${Select} value=${f.on && f.on !== 'all' && f.on !== 'cantrip' ? 'name' : f.on || 'all'} options=${[{ value: 'all', label: 'alle Zauber' }, { value: 'cantrip', label: 'Zaubertricks' }, { value: 'name', label: 'einen Zauber …' }]} onChange=${(x) => set({ on: x === 'name' ? '' : x })} />`)}
-      ${f.on !== undefined && f.on !== 'all' && f.on !== 'cantrip' ? v(html`<${TextIn} value=${f.on} placeholder="Name des Zaubers" list="rb-spellnames" onChange=${(x) => set({ on: x })} />`) : null}
+      ${v(html`${lab('für')}<${Select} value=${f.on && !['all', 'cantrip', 'school'].includes(f.on) ? 'name' : f.on || 'all'} options=${[{ value: 'all', label: 'alle Zauber' }, { value: 'cantrip', label: 'Zaubertricks' }, { value: 'school', label: 'eine Zauberschule' }, { value: 'name', label: 'einen Zauber …' }]} onChange=${(x) => set({ on: x === 'name' ? '' : x, school: x === 'school' ? f.school || 'evocation' : undefined })} />`)}
+      ${f.on === 'school' ? v(html`<${Select} value=${f.school || 'evocation'} options=${Object.entries(SCHOOLS).map(([value, label]) => ({ value, label }))} onChange=${(x) => set({ school: x })} />`) : null}
+      ${f.on !== undefined && !['all', 'cantrip', 'school'].includes(f.on) ? v(html`<${TextIn} value=${f.on} placeholder="Name des Zaubers" list="rb-spellnames" onChange=${(x) => set({ on: x })} />`) : null}
       ${v(html`<${Check} checked=${!!f.once} label="einmal pro Zug" onChange=${(x) => set({ once: x || undefined })} />`)}
       ${v(html`${lab('nur bei')}<${Chips} options=${DMG} value=${toArr(f.ifType)} onChange=${(x) => set({ ifType: x.length ? x : undefined })} />`)}`;
     case 'slots': return html`${v(html`<${NumIn} value=${f.n} min=${1} max=${4} onChange=${(x) => set({ n: x || 1 })} />${lab('Zauberplatz/-plätze des')}`)}${v(html`<${Select} value=${String(f.lv || 1)} options=${Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}. Grades` }))} onChange=${(x) => set({ lv: Number(x) })} />`)}`;
@@ -519,6 +556,7 @@ function ActionParams({ f, set, v, lab }) {
   const riders = ['attack', 'weapon', 'save'].includes(kind);
   return html`<div class="rb-act">
     <div class="rb-act-row">${v(html`<${TextIn} value=${f.k} placeholder="Name, z. B. Odemwaffe" onChange=${(x) => set({ k: x })} />`)}
+      ${v(html`${lab('ersetzt')}<${TextIn} value=${f.replaces || ''} placeholder="–" onChange=${(x) => set({ replaces: x || undefined })} /><${Info} text=${INFO.replaces} />`)}
       ${v(html`<${Select} value=${kind} options=${ACT_KIND} onChange=${(x) => set({ kind: x })} />`)}
       ${kind === 'react' ? null : v(html`<${Select} value=${f.cost || 'action'} options=${ACT_COST} onChange=${(x) => set({ cost: x })} />`)}<${Info} text=${INFO.actKind} /></div>
     ${kind === 'react' ? html`<div class="rb-act-row">
@@ -534,7 +572,7 @@ function ActionParams({ f, set, v, lab }) {
       ${kind === 'heal' ? v(html`<${Check} checked=${f.addMod !== false} label="+ Attributsmod." onChange=${(x) => set({ addMod: x ? undefined : false })} /><${Check} checked=${!!f.addLevel} label="+ Stufe" onChange=${(x) => set({ addLevel: x || undefined })} />`)
         : kind === 'temp' || kind === 'mark' ? null : v(html`<${Select} value=${f.type || ''} options=${kind === 'weapon' ? DMG_ANY : DMG} onChange=${(x) => set({ type: x || undefined })} />`)}
       ${dmgKinds ? v(html`<${Check} checked=${!!f.addPb} label="+ Übungsbonus" onChange=${(x) => set({ addPb: x || undefined })} />`) : null}
-      ${kind === 'mark' ? v(html`<${Check} checked=${!!f.adv} label="Vorteil gegen das Ziel" onChange=${(x) => set({ adv: x || undefined })} />`) : null}
+      ${kind === 'mark' ? v(html`<${Check} checked=${!!f.adv} label="Vorteil gegen das Ziel" onChange=${(x) => set({ adv: x || undefined })} />${lab('+ fest')}<${ValIn} value=${f.flat ?? 0} dice=${false} onChange=${(x) => set({ flat: x || undefined })} />${lab('kritisch gegen das Ziel ab')}<${Select} value=${String(f.crit || 0)} options=${[{ value: '0', label: '20' }, { value: '1', label: '19' }, { value: '2', label: '18' }]} onChange=${(x) => set({ crit: Number(x) || undefined })} />`) : null}
       ${kind !== 'weapon' ? v(html`${lab('Attribut')}<${Select} value=${f.ab || 'con'} options=${AB_OPTS} onChange=${(x) => set({ ab: x })} /><${Info} text=${INFO.actAb} />`) : null}</div>` : null}
     ${kind === 'save' ? html`<div class="rb-act-row">
       ${v(html`${lab('Rettungswurf')}<${Select} value=${f.save || 'dex'} options=${AB_OPTS} onChange=${(x) => set({ save: x })} />`)}
@@ -547,7 +585,8 @@ function ActionParams({ f, set, v, lab }) {
       ${f.dur === 'toggle' ? null : v(html`<${NumIn} value=${f.rounds} min=${1} max=${6000} placeholder="10" onChange=${(x) => set({ rounds: x || undefined })} />${lab('Runden (10 = 1 Minute)')}`)}
       ${v(html`${lab('für')}<${Select} value=${f.target || 'self'} options=${[{ value: 'self', label: 'dich' }, { value: 'ally', label: 'eine berührte Kreatur' }]} onChange=${(x) => set({ target: x === 'self' ? undefined : x })} />`)}
       ${v(html`${lab('temp. TP')}<${TextIn} cls="rb-dice" value=${f.temp || ''} placeholder="–" onChange=${(x) => set({ temp: x || undefined })} />`)}
-      ${v(html`${lab('Effekt')}<${Select} value=${f.eff || ''} options=${[{ value: '', label: '–' }, ...Object.entries(ENGINE_EFFECTS).map(([k, l]) => ({ value: k, label: l }))]} onChange=${(x) => set({ eff: x || undefined })} />`)}</div>
+      ${v(html`${lab('Effekt')}<${Select} value=${f.eff || ''} options=${[{ value: '', label: '–' }, ...Object.entries(ENGINE_EFFECTS).map(([k, l]) => ({ value: k, label: l }))]} onChange=${(x) => set({ eff: x || undefined })} />`)}
+      ${f.eff === 'rage' ? v(html`${lab('Schadensbonus')}<${ValIn} value=${f.effV ?? 2} dice=${false} onChange=${(x) => set({ effV: x })} />`) : null}</div>
       <div class="rb-act-sub"><div class="small muted">Wirkungen, solange die Stärkung anhält (z. B. Resistenz, +2 Schaden im Nahkampf, Bewegung verdoppelt):</div>
         <${FxEditor} value=${f.fx} onChange=${(x) => set({ fx: x.length ? x : undefined })} /></div>` : null}
     ${kind === 'restore' ? html`<div class="rb-act-row">
@@ -573,6 +612,33 @@ function ActionParams({ f, set, v, lab }) {
       ${f.uses && f.uses !== 'will' && !f.pool && !f.charge ? v(html`${lab('pro')}<${Select} value=${f.rest || 'long'} options=${RESTS} onChange=${(x) => set({ rest: x })} />`) : null}</div>
     ${dmgKinds ? html`<div class="rb-act-row">${v(html`${lab('Stärker ab Stufe 5 / 11 / 17')}${[5, 11, 17].map((l) => html`<${TextIn} key=${l} cls="rb-dice" value=${up[l] || ''} placeholder=${l === 5 ? '3d6' : l === 11 ? '4d6' : '5d6'} onChange=${(x) => set({ up: { ...up, [l]: x.replace(/[Ww]/g, 'd') || undefined } })} />`)}<${Info} text=${INFO.actUp} />`)}</div>` : null}
     <div class="rb-act-row rb-act-full">${v(html`<${TextIn} value=${f.desc || ''} placeholder="Kurzbeschreibung für den Kampf (optional)" onChange=${(x) => set({ desc: x || undefined })} />`)}</div>
+  </div>`;
+}
+// Ziele einer Auswahl („+ Übung im Rettungswurf“, „+ alle Fertigkeiten des Attributs“)
+function pickInto(f, what, on) {
+  const cur = new Set(toArr(f.into).length ? toArr(f.into) : ['abil']);
+  if (on) cur.add(what); else cur.delete(what);
+  const list = [...cur];
+  return list.length === 1 && list[0] === 'abil' ? undefined : list;
+}
+// Eigene Optionen einer Auswahl: { key, name, desc, fx }
+function OptionsEditor({ value, onChange }) {
+  const list = toArr(value);
+  const [open, setOpen] = useState(-1);
+  const upd = (i, p) => { const n = list.map((x) => ({ ...x })); Object.assign(n[i], p); for (const k of Object.keys(n[i])) if (n[i][k] === undefined) delete n[i][k]; onChange(n); };
+  return html`<div class="rb-objlist">
+    ${list.map((o, i) => html`<div class=${`rb-obj${open === i ? ' open' : ''}`} key=${i}>
+      <div class="rb-obj-head" onClick=${() => setOpen(open === i ? -1 : i)}>
+        <${Icon} name=${open === i ? 'chevron-down' : 'chevron-right'} size=${14} /><b class="grow">${o.name || '(ohne Namen)'}</b>${o.fx?.length ? html`<span class="small muted">${o.fx.length} Wirkung${o.fx.length > 1 ? 'en' : ''}</span>` : null}
+        <${IconBtn} icon="trash" size=${14} title="Entfernen" onClick=${(e) => { e.stopPropagation(); onChange(list.filter((_, k) => k !== i)); }} />
+      </div>
+      ${open === i ? html`<div class="rb-obj-body stack sm">
+        <${TextIn} value=${o.name} placeholder="Name, z. B. Präzisionsangriff" onChange=${(x) => upd(i, { name: x, key: !o.key || o.key === slugify(o.name || '') ? slugify(x) : o.key })} />
+        <${FxArea} rows=${2} value=${o.desc} name=${o.name} placeholder="Regeltext der Option" onChange=${(x) => upd(i, { desc: x || undefined })} />
+        <${FxEditor} value=${o.fx} onChange=${(x) => upd(i, { fx: x.length ? x : undefined })} />
+      </div>` : null}
+    </div>`)}
+    <${Btn} size="sm" icon="plus" onClick=${() => { onChange([...list, { key: '', name: '' }]); setOpen(list.length); }}>Option hinzufügen<//>
   </div>`;
 }
 function FxEditor({ value, onChange, lvlLabel = 'ab Stufe' }) {
@@ -929,7 +995,9 @@ function SubFeatures({ obj, ctx }) {
     ${flat.map((x, i) => html`<div class="rb-pair" key=${i}>
       <label class="rb-lvl"><span>Stufe</span><input class="input" type="number" min="1" max="20" value=${x.l} onInput=${(e) => { flat[i].l = Math.max(1, Math.min(20, Number(e.target.value) || 1)); write(flat); }} /></label>
       <div class="grow stack sm"><${TextIn} value=${x.f.name} placeholder="Name des Merkmals" onChange=${(v) => { x.f.name = v; write(flat); }} />
-        <${FxArea} rows=${2} value=${x.f.desc} name=${x.f.name} placeholder="Was das Merkmal bewirkt" onChange=${(v) => { x.f.desc = v; write(flat); }} /></div>
+        <${FxArea} rows=${2} value=${x.f.desc} name=${x.f.name} muted=${!!x.f.fx?.length} placeholder="Was das Merkmal bewirkt" onChange=${(v) => { x.f.desc = v; write(flat); }} />
+        <details class="rb-subfx" open=${!!x.f.fx?.length}><summary class="small">Wirkungen${x.f.fx?.length ? ` (${x.f.fx.length})` : ''} <${Info} text=${INFO.featFx} /></summary>
+          <${FxEditor} value=${x.f.fx} lvlLabel="ab Klassenstufe" onChange=${(v) => { if (v.length) x.f.fx = v; else delete x.f.fx; write(flat); }} /></details></div>
       <${IconBtn} icon="trash" size=${14} title="Entfernen" onClick=${() => write(flat.filter((_, k) => k !== i))} />
     </div>`)}
     <${Btn} size="sm" icon="plus" onClick=${() => write([...flat, { l: subLevels.find((l) => !flat.some((y) => y.l === l)) || subLevels[0] || 3, f: { name: '', desc: '' } }])}>Merkmal hinzufügen<//>
@@ -1044,7 +1112,14 @@ function ClassTable({ obj, ed, ctx, table }) {
     ctx.touch();
   };
   const special = [['@asi', 'Attributswerterhöhung'], ['@sub', 'Unterklasse'], ['@boon', 'Epische Gabe']];
-  const featDesc = (n) => ctx.pack.features?.[n] ?? CG.FEATURE_INFO[n] ?? '';
+  const featVal = (n) => ctx.pack.features?.[n] ?? CG.FEATURE_INFO[n] ?? '';
+  const featDesc = (n) => { const v = featVal(n); return v && typeof v === 'object' ? v.desc || '' : v; };
+  const featFx = (n) => { const v = ctx.pack.features?.[n]; return v && typeof v === 'object' ? toArr(v.fx) : CG.FEATURE_FX[n] || []; };
+  const setFeat = (n, p) => {
+    const cur = { desc: featDesc(n), fx: featFx(n), ...p };
+    ctx.pack.features = { ...(ctx.pack.features || {}), [n]: cur.fx.length ? { desc: cur.desc, fx: cur.fx } : cur.desc };
+    ctx.touch();
+  };
   return html`<div class="rb-ctable">
     ${rows.map((list, i) => {
       const lvl = i + 1;
@@ -1055,7 +1130,7 @@ function ClassTable({ obj, ed, ctx, table }) {
           <div class="rb-chips">
             ${special.map(([k, l]) => html`<button type="button" key=${k} class=${`rb-chip small${list.includes(k) ? ' on' : ''}`} onClick=${() => write(lvl, list.includes(k) ? list.filter((x) => x !== k) : [...list, k])}>${l}</button>`)}
             ${named.map((n) => html`<span class=${`rb-feat${editing === n ? ' on' : ''}`} key=${n}>
-              <button type="button" title="Text bearbeiten" onClick=${() => setEditing(editing === n ? null : n)}>${n}${featDesc(n) ? '' : ' ·'}</button>
+              <button type="button" title="Text und Wirkungen bearbeiten" onClick=${() => setEditing(editing === n ? null : n)}>${n}${featDesc(n) ? '' : ' ·'}${featFx(n).length ? ' ⚡' : ''}</button>
               <button type="button" class="x" title="Entfernen" onClick=${() => write(lvl, list.filter((x) => x !== n))}>×</button></span>`)}
             <input class="input rb-addfeat" placeholder="+ Merkmal" onKeyDown=${(e) => {
               if (e.key !== 'Enter') return;
@@ -1067,12 +1142,14 @@ function ClassTable({ obj, ed, ctx, table }) {
               if (!featDesc(v)) setEditing(v);
             }} />
           </div>
-          ${named.includes(editing) ? html`<div class="rb-featdesc"><b>${editing}</b><${FxArea} rows=${3} value=${featDesc(editing)} name=${editing} placeholder="Was das Merkmal bewirkt (erscheint im Bogen und beim Stufenaufstieg)"
-            onChange=${(v) => { ctx.pack.features = { ...(ctx.pack.features || {}), [editing]: v }; ctx.touch(); }} /></div>` : null}
+          ${named.includes(editing) ? html`<div class="rb-featdesc"><b>${editing}</b><${FxArea} rows=${3} value=${featDesc(editing)} name=${editing} muted=${featFx(editing).length > 0} placeholder="Was das Merkmal bewirkt (erscheint im Bogen und beim Stufenaufstieg)"
+            onChange=${(v) => setFeat(editing, { desc: v })} />
+            <div class="small muted rb-lab">Wirkungen<${Info} text=${INFO.featFx} /></div>
+            <${FxEditor} value=${featFx(editing)} lvlLabel="ab Klassenstufe" onChange=${(x) => setFeat(editing, { fx: x })} /></div>` : null}
         </div>
       </div>`;
     })}
-    <div class="small muted">Eingabetaste fügt ein Merkmal hinzu; ein Klick auf den Namen öffnet seinen Text. „·“ = noch ohne Text.</div>
+    <div class="small muted">Eingabetaste fügt ein Merkmal hinzu; ein Klick auf den Namen öffnet Text und Wirkungen. „·“ = noch ohne Text, „⚡“ = mit Wirkungen.</div>
   </div>`;
 }
 
@@ -1308,7 +1385,7 @@ function CategoryEditor({ cat, pack, ctx, touch }) {
   const shown = list.map((x, i) => ({ x, i })).filter(({ x }) => !ql || `${x.name} ${entryMeta(cat, x)}`.toLowerCase().includes(ql));
   const add = (obj) => { list.push(obj); setSel(list.length - 1); touch(); };
   const fromBase = () => openModal(({ close }) => html`<${BasePicker} cat=${cat} ed=${edBase} close=${close}
-    onPick=${(obj, mode) => { const o = plain(obj); delete o._pack; if (mode === 'copy') { o.name = `${o.name} (eigene Fassung)`; if (cat === 'spells') o.id = ''; else if (cat !== 'subclasses') o.key = ''; } add(o); close(); }} />`, { title: `${catOf(cat).label} aus dem Grundbestand`, icon: 'book', size: 'lg' });
+    onPick=${(obj, mode) => { const o = plain(obj); delete o._pack; delete o._srd; delete o._gear; if (mode === 'copy') { o.name = `${o.name} (eigene Fassung)`; if (cat === 'spells') o.id = ''; else if (cat !== 'subclasses') o.key = ''; } add(o); close(); }} />`, { title: `${catOf(cat).label} aus dem Grundbestand`, icon: 'book', size: 'lg' });
   const fields = FIELDS[cat];
   return html`<div class="rb-cat">
     <div class="rb-cat-list">
@@ -1341,15 +1418,20 @@ function CategoryEditor({ cat, pack, ctx, touch }) {
 
 function BasePicker({ cat, ed, onPick, close }) {
   const [q, setQ] = useState('');
-  const list = baseEntries(cat, ed);
+  // Zauber, magische Gegenstände und Zustände werden erst hier geladen
+  const [list, setList] = useState(() => (['spells', 'items', 'conditions', 'weapons', 'armor'].includes(cat) ? null : baseEntries(cat, ed)));
+  useEffect(() => { let alive = true; loadBase(cat, ed).then((l) => alive && setList(l)).catch(() => alive && setList([])); return () => { alive = false; }; }, [cat, ed]);
   const ql = q.trim().toLowerCase();
-  const shown = list.filter((x) => !ql || `${x.name} ${entryMeta(cat, x)}`.toLowerCase().includes(ql));
+  const shown = (list || []).filter((x) => !ql || `${x.name} ${entryMeta(cat, x)}`.toLowerCase().includes(ql)).slice(0, 400);
+  // Nur als Vorlage: eigene Zustände, magische Gegenstände und Ausrüstung (sie ersetzen nichts im Grundbestand)
+  const tmpl = (x) => TEMPLATE_ONLY.has(cat) || cat === 'items' || x._srd || x._gear;
   return html`<div class="modal-body stack">
     <div class="small muted">„Ersetzen“ übernimmt den Eintrag mit gleicher Kennung – deine Fassung gilt dann statt des Grundbestands. „Als Vorlage“ legt einen neuen, eigenständigen Eintrag an.</div>
     <input class="input" placeholder="Suchen" value=${q} onInput=${(e) => setQ(e.target.value)} autoFocus />
-    <div class="rb-baselist">${shown.map((x, i) => html`<div class="rb-baserow" key=${i}><div class="grow"><b>${x.name}</b> <span class="small muted">${entryMeta(cat, x)}</span></div>
-      <${Btn} size="sm" onClick=${() => onPick(x, 'override')}>Ersetzen<//><${Btn} size="sm" kind="ghost" onClick=${() => onPick(x, 'copy')}>Als Vorlage<//></div>`)}
-      ${shown.length ? null : html`<div class="small faint">Nichts gefunden.</div>`}</div>
+    <div class="rb-baselist">${list == null ? html`<div class="empty"><span class="spinner" /></div>` : null}
+      ${shown.map((x, i) => html`<div class="rb-baserow" key=${i}><div class="grow"><b>${x.name}</b> <span class="small muted">${entryMeta(cat, x)}${x._srd ? ' · SRD-Magie' : x._gear ? ' · Ausrüstung' : ''}</span></div>
+      ${tmpl(x) ? html`<${Btn} size="sm" onClick=${() => onPick(x, 'take')}>Übernehmen<//>` : html`<${Btn} size="sm" onClick=${() => onPick(x, 'override')}>Ersetzen<//><${Btn} size="sm" kind="ghost" onClick=${() => onPick(x, 'copy')}>Als Vorlage<//>`}</div>`)}
+      ${list && !shown.length ? html`<div class="small faint">Nichts gefunden.</div>` : null}</div>
     <div class="modal-foot"><${Btn} onClick=${() => close()}>Schließen<//></div>
   </div>`;
 }
@@ -1693,6 +1775,7 @@ export function RuleBuilderView({ tabId }) {
       <datalist id="rb-spellnames">${(spellNames || []).map((s) => html`<option key=${s.id} value=${s.name} />`)}</datalist>
       <datalist id="rb-ctypes">${[...CREATURE_TYPES, 'Untote, Unholde', 'groß+', 'riesig+', 'klein'].map((t) => html`<option key=${t} value=${t} />`)}</datalist>
       <datalist id="rb-resnames">${RES_NAMES.map((t) => html`<option key=${t} value=${t} />`)}</datalist>
+      <datalist id="rb-colnames">${[...new Set(['Wutschaden', 'Kampfkunst', 'Hinterhältiger Angriff', ...CG.CLASSES.flatMap((c) => toArr(c.columns).map((x) => x.name)), ...(pack?.content?.classes || []).flatMap((c) => toArr(c.columns).map((x) => x.name))].filter(Boolean))].map((t) => html`<option key=${t} value=${t} />`)}</datalist>
       <datalist id="rb-durations">${DURATIONS.map((d) => html`<option key=${d} value=${d} />`)}</datalist>
       <div class="rb-layout">
         <aside class="rb-side">

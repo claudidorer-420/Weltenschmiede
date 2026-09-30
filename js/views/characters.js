@@ -15,13 +15,13 @@ import { CONDITIONS, XP_LEVELS, ALIGNMENTS } from '../data/rules5e.js';
 import {
   AB, AB_NAME, AB_SHORT, ALL_SKILLS, skillName, skillAbility, charMods, rollTraits, resourcesFor, classExtras, spellSlots, classFeatures, RULES, attacksPerAction as attacksPerActionCG,
   findClass, findSpecies, findBackground, findFeat, findWeapon, weaponAttack, ARMOR, ARMOR_TYPE, fmtDist, edOf, totalLevel, perEd, classLevel, RES_INFO, FEATURE_SRC,
-  charWeapons, itemInfo, baseOptions, ITEMS, ITEM_SLOTS, WEAPONS, charPicks,
+  charWeapons, itemInfo, baseOptions, ITEMS, ITEM_SLOTS, WEAPONS, charPicks, attuneLimit, carryFactor,
 } from '../data/chargen.js';
 import { PicksPanel, openPicks } from '../ui/picks.js';
 import { roll as rollExpr } from '../lib/dice.js';
 import { useSpells, damageAt, healAt, healHasMod, fmtDice, damageName, timeShort, rangeShort, levelName, listClassOf } from '../data/spells.js';
-import { CATALOG, CATEGORIES, catalogItem, catalogByName, fmtCost, fmtWeight, carryCapacity, WEAPON_RANGE, weaponReach } from '../data/items.js';
-import { scrollItem, scrollName, tierOf } from '../data/scrolls.js';
+import { CATALOG, CATEGORIES, catalogItem, catalogByName, fmtCost, fmtWeight, carryCapacity, WEAPON_RANGE, weaponReach, magicWeight, itemWeight } from '../data/items.js';
+import { scrollItem, scrollName, tierOf, scrollRef } from '../data/scrolls.js';
 import { openCharacterWizard as runWizard, openLevelUp, derive, migrateLegacy } from './charwizard.js';
 import { openSpellManager, normalizeEntries, SpellDetail, openSpellDetail } from './spellbook.js';
 import { SpellArt, ItemArt, DamageTag, GameIcon } from '../ui/art.js';
@@ -831,13 +831,13 @@ let MAGIC = null;
 const loadMagic = () => (MAGIC ? Promise.resolve(MAGIC) : import('../data/magicitems-srd.js').then((m) => { MAGIC = m.MAGIC_ITEMS; return MAGIC; }));
 
 function ItemPicker({ close, ed = '2014' }) {
-  const [tab, setTab] = useState('catalog');
+  const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [magic, setMagic] = useState(MAGIC);
   const [custom, setCustom] = useState({ name: '', qty: 1, weight: '', cost: '', notes: '' });
   const spells = useSpells(ed);           // zu jedem Zauber gibt es eine Schriftrolle
-  useEffect(() => { if (tab === 'magic' && !magic) loadMagic().then(setMagic); }, [tab]);
+  useEffect(() => { if ((tab === 'magic' || tab === 'all') && !magic) loadMagic().then(setMagic); }, [tab]);
   const ql = q.trim().toLowerCase();
   const cats = [...new Set(CATALOG.map((x) => x.cat))];
   // Gegenstände, magische Waffen und Rüstungen aus dem Regelwerk der Kampagne
@@ -846,17 +846,39 @@ function ItemPicker({ close, ed = '2014' }) {
     ...WEAPONS.filter((w) => w.rarity || w.fx?.length || w.attune).map((w) => ({ key: `weapons:${w.key}`, name: w.name, type: 'Waffe', rarity: w.rarity || '', attune: !!w.attune, weight: w.weight, cost: w.cost, ref: `w:${w.key}` })),
     ...ARMOR.filter((a) => a.rarity || a.fx?.length || a.attune).map((a) => ({ key: `armor:${a.key}`, name: a.name, type: ARMOR_TYPE[a.type] || 'Rüstung', rarity: a.rarity || '', attune: !!a.attune, weight: a.weight, cost: a.cost })),
   ];
+  // Was „Hinzufügen“ in den Bogen legt – je nach Quelle
+  const pickOf = (kind, x) => (kind === 'magic' ? { id: uid(6), name: x.name, qty: 1, magic: true, mref: x.id, type: x.type, rarity: x.rarity, attune: /einstimmung/i.test(String(x.attune || '')) ? x.attune : false, weight: magicWeight(x) }
+    : kind === 'rules' ? { id: uid(6), name: x.name, qty: 1, magic: true, pack: x.key, type: x.type, rarity: x.rarity, attune: x.attune, weight: x.weight, cost: x.cost }
+      : kind === 'scroll' ? { id: uid(6), ...scrollItem(x) }
+        : { id: uid(6), name: x.name, qty: 1, ref: x.key, weight: x.weight, cost: x.cost });
+  // „Alle“: Ausrüstung, magische Gegenstände, Regelwerk und Schriftrollen in einer Liste; der Filter wählt Kategorie oder Quelle
+  const allRows = tab !== 'all' ? [] : [
+    ...(!cat || CATEGORIES[cat] && cat !== 'magic' ? CATALOG.filter((x) => (!cat || x.cat === cat) && (!ql || x.name.toLowerCase().includes(ql))).map((x) => ({ kind: 'catalog', x })) : []),
+    ...(!cat || cat === 'magic' ? (magic || []).filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql)).map((x) => ({ kind: 'magic', x })) : []),
+    ...(!cat || cat === 'rules' ? ruleItems.filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql)).map((x) => ({ kind: 'rules', x })) : []),
+    ...(cat === 'scroll' || (!cat && ql) ? (spells || []).filter((x) => !ql || x.name.toLowerCase().includes(ql)).map((x) => ({ kind: 'scroll', x })) : []),
+  ];
   const list = tab === 'catalog' ? CATALOG.filter((x) => (!cat || x.cat === cat) && (!ql || x.name.toLowerCase().includes(ql)))
     : tab === 'scroll' ? (spells || []).filter((x) => !ql || x.name.toLowerCase().includes(ql))
       : tab === 'rules' ? ruleItems.filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql))
         : (magic || []).filter((x) => !ql || x.name.toLowerCase().includes(ql) || x.type.toLowerCase().includes(ql));
   return html`<div class="modal-body stack">
-    <div class="sm-tabs">${[['catalog', 'Ausrüstung'], ['magic', 'Magische Gegenstände (SRD)'], ...(ruleItems.length ? [['rules', 'Aus dem Regelwerk']] : []), ['scroll', 'Zauberschriftrollen'], ['custom', 'Eigener Gegenstand']].map(([k, l]) => html`<button type="button" class=${`sm-tab${tab === k ? ' active' : ''}`} onClick=${() => setTab(k)}>${l}</button>`)}</div>
+    <div class="sm-tabs">${[['all', 'Alle'], ['catalog', 'Ausrüstung'], ['magic', 'Magische Gegenstände (SRD)'], ...(ruleItems.length ? [['rules', 'Aus dem Regelwerk']] : []), ['scroll', 'Zauberschriftrollen'], ['custom', 'Eigener Gegenstand']].map(([k, l]) => html`<button type="button" class=${`sm-tab${tab === k ? ' active' : ''}`} onClick=${() => setTab(k)}>${l}</button>`)}</div>
     ${tab !== 'custom' ? html`<div class="row">
       <div class="search-box grow" style="margin:0"><${Icon} name="search" size=${15} /><input class="input" placeholder="Suchen …" value=${q} autoFocus onInput=${(e) => setQ(e.target.value)} /></div>
       ${tab === 'catalog' ? html`<select class="select sm" style="width:auto" value=${cat} onChange=${(e) => setCat(e.target.value)}><option value="">Alle Kategorien</option>${cats.map((k) => html`<option value=${k}>${CATEGORIES[k]}</option>`)}</select>` : null}
+      ${tab === 'all' ? html`<select class="select sm" style="width:auto" value=${cat} onChange=${(e) => setCat(e.target.value)}><option value="">Alle</option>${cats.map((k) => html`<option value=${k}>${CATEGORIES[k]}</option>`)}<option value="magic">Magische Gegenstände (SRD)</option>${ruleItems.length ? html`<option value="rules">Aus dem Regelwerk</option>` : null}<option value="scroll">Zauberschriftrollen</option></select>` : null}
     </div>
     <div class="pick-list">
+      ${tab === 'all' ? allRows.slice(0, 300).map(({ kind, x }) => html`<div class="pick-row" key=${`${kind}:${x.key || x.id}`}>
+        ${kind === 'scroll' ? html`<${SpellArt} sp=${x} size=${38} />` : html`<${ItemArt} item=${kind === 'catalog' ? { name: x.name, ref: x.key, icon: x.icon } : { ...x, magic: true }} size=${38} />`}
+        <div class="grow" style="min-width:0"><b>${kind === 'scroll' ? scrollName(x) : x.name}</b><div class="tiny faint">${kind === 'scroll' ? `Zauberschriftrolle · ${levelName(x.level)} · ${tierOf(x.level).rar} · ${fmtCost(tierOf(x.level).gp)}`
+          : kind === 'catalog' ? `${CATEGORIES[x.cat]}${x.sub ? ` · ${x.sub}` : ''} · ${fmtCost(x.cost)} · ${fmtWeight(x.weight)}`
+            : `${kind === 'rules' ? 'Regelwerk · ' : ''}${x.type}${x.rarity ? ` · ${x.rarity}` : ''}${x.attune ? ' · Einstimmung' : ''}${kind === 'magic' ? ` · ${fmtWeight(magicWeight(x))}` : ''}`}</div></div>
+        <${Btn} size="sm" icon="plus" onClick=${() => close(pickOf(kind, x))}>Hinzufügen<//>
+      </div>`) : null}
+      ${tab === 'all' && !magic ? html`<div class="empty"><span class="spinner" /></div>` : null}
+      ${tab === 'all' && magic && !allRows.length ? html`<div class="small faint" style="padding:8px">Nichts gefunden.</div>` : null}
       ${tab === 'magic' && !magic ? html`<div class="empty"><span class="spinner" /></div>` : null}
       ${tab === 'scroll' && !spells ? html`<div class="empty"><span class="spinner" /></div>` : null}
       ${tab === 'scroll' ? list.slice(0, 400).map((sp) => {
@@ -867,13 +889,10 @@ function ItemPicker({ close, ed = '2014' }) {
           <${Btn} size="sm" icon="plus" onClick=${() => close({ id: uid(6), ...scrollItem(sp) })}>Hinzufügen<//>
         </div>`;
       }) : null}
-      ${tab === 'scroll' ? null : list.slice(0, 250).map((x) => html`<div class="pick-row" key=${x.key || x.id}>
+      ${tab === 'scroll' || tab === 'all' ? null : list.slice(0, 250).map((x) => html`<div class="pick-row" key=${x.key || x.id}>
         <${ItemArt} item=${tab === 'magic' || tab === 'rules' ? { ...x, magic: true } : { name: x.name, ref: x.key, icon: x.icon }} size=${38} />
-        <div class="grow" style="min-width:0"><b>${x.name}</b><div class="tiny faint">${tab === 'magic' || tab === 'rules' ? `${x.type}${x.rarity ? ` · ${x.rarity}` : ''}${x.attune ? ' · Einstimmung' : ''}` : `${CATEGORIES[x.cat]}${x.sub ? ` · ${x.sub}` : ''} · ${fmtCost(x.cost)} · ${fmtWeight(x.weight)}`}</div></div>
-        <${Btn} size="sm" icon="plus" onClick=${() => close(tab === 'magic'
-          ? { id: uid(6), name: x.name, qty: 1, magic: true, mref: x.id, type: x.type, rarity: x.rarity, attune: /einstimmung/i.test(String(x.attune || '')) ? x.attune : false }
-          : tab === 'rules' ? { id: uid(6), name: x.name, qty: 1, magic: true, pack: x.key, type: x.type, rarity: x.rarity, attune: x.attune, weight: x.weight, cost: x.cost }
-            : { id: uid(6), name: x.name, qty: 1, ref: x.key, weight: x.weight, cost: x.cost })}>Hinzufügen<//>
+        <div class="grow" style="min-width:0"><b>${x.name}</b><div class="tiny faint">${tab === 'magic' || tab === 'rules' ? `${x.type}${x.rarity ? ` · ${x.rarity}` : ''}${x.attune ? ' · Einstimmung' : ''}${tab === 'magic' ? ` · ${fmtWeight(magicWeight(x))}` : ''}` : `${CATEGORIES[x.cat]}${x.sub ? ` · ${x.sub}` : ''} · ${fmtCost(x.cost)} · ${fmtWeight(x.weight)}`}</div></div>
+        <${Btn} size="sm" icon="plus" onClick=${() => close(pickOf(tab === 'magic' ? 'magic' : tab === 'rules' ? 'rules' : 'catalog', x))}>Hinzufügen<//>
       </div>`)}
     </div>` : html`<div class="stack">
       <${Field} label="Name"><input class="input" value=${custom.name} autoFocus onInput=${(e) => setCustom({ ...custom, name: e.target.value })} placeholder="z. B. Silberner Schlüssel" /><//>
@@ -901,7 +920,7 @@ function ItemDetail({ it, cat, canEdit, close }) {
     <div class="row nowrap"><${ItemArt} item=${it} size=${72} />
       <div style="min-width:0"><b style="font-size:18px">${it.name}</b>
         <div class="small muted">${mi ? `${mi.type} · ${mi.rarity}${mi.attune ? ` · Einstimmung ${mi.attune}` : ''}` : cat ? `${CATEGORIES[cat.cat]}${cat.sub ? ` · ${cat.sub}` : ''}` : 'Gegenstand'}</div>
-        <div class="tiny faint">${fmtWeight(it.weight ?? cat?.weight)} · ${fmtCost(it.cost ?? cat?.cost)}</div></div></div>
+        <div class="tiny faint">${fmtWeight(itemWeight(it, cat))} · ${fmtCost(it.cost ?? cat?.cost)}${it.stored ? ' · im Besitz (nicht dabei)' : ''}</div></div></div>
     ${w ? html`<div class="small">Schaden <b>${fmtDice(w.dmg)} ${w.type}</b>${w.vers ? ` (zweihändig ${fmtDice(w.vers)})` : ''} · ${[...w.p].map((p) => ({ f: 'Finesse', l: 'leicht', h: 'schwer', 2: 'zweihändig', t: 'Wurfwaffe', r: 'Reichweite', v: 'vielseitig', a: 'Munition', o: 'Laden' })[p]).filter(Boolean).join(', ')}${WEAPON_RANGE[w.key] ? ` · ${WEAPON_RANGE[w.key].join('/')} m` : ''}</div>` : null}
     ${mi ? html`<div class="sd-text">${mi.desc.map((p) => html`<p>${p}</p>`)}</div><div class="tiny faint">Quelle: SRD 5.1 (Wizards of the Coast, CC-BY-4.0)</div>` : null}
     ${pack?.desc ? html`<div class="sd-text"><p><${FxText} text=${pack.desc} name=${pack.name} /></p></div>` : null}
@@ -926,10 +945,13 @@ function ItemDetail({ it, cat, canEdit, close }) {
 function InventoryTab({ c, cm, canEdit, upd }) {
   const inv = c.inventory || [];
   const cur = c.currency || {};
+  const spells = useSpells(edOf(c));
   const rows = inv.map((it) => ({ it, cat: it.ref ? catalogItem(it.ref) : it.magic ? null : catalogByName(it.name) }));
-  const weightOf = (r) => (Number(r.it.weight ?? r.cat?.weight) || 0) * (Number(r.it.qty) || 0);
-  const total = rows.reduce((a, r) => a + weightOf(r), 0);
-  const cap = carryCapacity(c.abilities?.str);
+  const weightOf = (r) => itemWeight(r.it, r.cat) * (Number(r.it.qty) || 0);
+  // Besitz (Truhe, Lager, Zuhause) zählt nicht zur Traglast
+  const total = rows.filter((r) => !r.it.stored).reduce((a, r) => a + weightOf(r), 0);
+  const stash = rows.filter((r) => r.it.stored).reduce((a, r) => a + weightOf(r), 0);
+  const cap = Math.round(carryCapacity(cm.scores?.str ?? c.abilities?.str) * carryFactor(c) * 10) / 10;
   const load = total / cap;
   const setItem = (id, patch) => upd({ inventory: inv.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   const isEquipped = (r) => {
@@ -944,6 +966,7 @@ function InventoryTab({ c, cm, canEdit, upd }) {
     return !!r.it.equipped;
   };
   const toggleEquip = (r) => {
+    if (r.it.stored) { toast('Liegt im Besitz – erst in den Rucksack legen.', 'info'); return; }
     const info = itemInfo(r.it);
     if (info && ['weapon', 'armor', 'shield'].includes(info.kind)) {
       if (!info.own && info.kind !== 'shield' && !r.it.base) { toast(`Erst die ${info.kind === 'weapon' ? 'Grundwaffe' : 'Grundrüstung'} wählen (Gegenstand antippen).`, 'info'); open(r); return; }
@@ -963,8 +986,29 @@ function InventoryTab({ c, cm, canEdit, upd }) {
     else if (r.cat?.cat === 'shield') upd({ armor: { ...(c.armor || {}), shield: !c.armor?.shield } }, { rederive: true });
     else setItem(r.it.id, { equipped: !r.it.equipped });
   };
-  const attuned = inv.filter((x) => x.attuned);
-  const attMax = RULES.attuneMax === 0 ? 99 : RULES.attuneMax || 3;
+  const attuned = inv.filter((x) => x.attuned && !x.stored);
+  const attMax = attuneLimit(c);
+  // Zwischen Rucksack und Besitz verschieben: Wer etwas in den Besitz legt, legt es ab (und stimmt sich aus)
+  const moveItem = (r, stored) => {
+    const patch = { inventory: inv.map((x) => (x.id === r.it.id ? { ...x, stored: stored || undefined, ...(stored ? { equipped: false, attuned: false } : {}) } : x)) };
+    let rederive = false;
+    if (stored && isEquipped(r)) {
+      const info = itemInfo(r.it);
+      const k = info && ['weapon', 'armor', 'shield'].includes(info.kind) ? (info.own ? info.def.key : `i:${r.it.id}`) : r.cat?.ref;
+      const others = rows.some((o) => o.it.id !== r.it.id && !o.it.stored && o.cat?.ref && o.cat.ref === r.cat?.ref);
+      if ((info?.kind === 'weapon' || r.cat?.cat === 'weapon') && !others) patch.weapons = (c.weapons || []).filter((w) => w !== k);
+      if ((info?.kind === 'armor' || r.cat?.cat === 'armor') && c.armor?.body === k && !others) { patch.armor = { ...(c.armor || {}), body: '' }; rederive = true; }
+      if (info?.kind === 'shield' && c.armor?.shieldKey === k) { patch.armor = { ...(patch.armor || c.armor || {}), shieldKey: '' }; rederive = true; }
+      if (r.cat?.cat === 'shield' && !others) { patch.armor = { ...(patch.armor || c.armor || {}), shield: false }; rederive = true; }
+    }
+    upd(patch, rederive ? { rederive: true } : undefined);
+  };
+  // Symbol: Schriftrollen zeigen das Bild ihres Zaubers
+  const artOf = (r, size) => {
+    const ref = scrollRef(r.it);
+    const sp = ref && spells ? spells.find((s) => s.id === ref) || spells.find((s) => s.name.toLowerCase() === String(ref).toLowerCase()) : null;
+    return sp ? html`<${SpellArt} sp=${sp} size=${size} />` : html`<${ItemArt} item=${{ ...r.it, icon: r.it.icon || r.cat?.icon }} size=${size} />`;
+  };
   const charges = Object.fromEntries(resourcesFor(c).filter((r) => r.itemId).map((r) => [r.itemId, r]));
   const add = async () => {
     const it = await openModal(({ close }) => html`<${ItemPicker} close=${close} ed=${edOf(c)} />`, { title: 'Gegenstand hinzufügen', icon: 'backpack', size: 'lg' });
@@ -976,17 +1020,19 @@ function InventoryTab({ c, cm, canEdit, upd }) {
     if (res.remove) upd({ inventory: inv.filter((x) => x.id !== r.it.id) });
     else if (res.item) setItem(r.it.id, res.item);
   };
-  const equipped = rows.filter(isEquipped);
-  const pack = rows.filter((r) => !isEquipped(r));
-  const itemRow = (r) => html`<div class="act-row inv-row" key=${r.it.id} onClick=${() => open(r)}>
-    <span><${ItemArt} item=${{ ...r.it, icon: r.it.icon || r.cat?.icon }} size=${36} /></span>
+  const equipped = rows.filter((r) => !r.it.stored && isEquipped(r));
+  const pack = rows.filter((r) => !r.it.stored && !isEquipped(r));
+  const owned = rows.filter((r) => r.it.stored);
+  const itemRow = (r) => html`<div class=${`act-row inv-row${r.it.stored ? ' stored' : ''}`} key=${r.it.id} onClick=${() => open(r)}>
+    <span>${artOf(r, 36)}</span>
     <span class="nm"><b>${r.it.name}${r.it.attuned ? html` <span class="badge gold">eingestimmt</span>` : null}${charges[r.it.id] ? html` <span class="badge">${charges[r.it.id].max - (Number(c.resUsed?.[`it:${r.it.id}`]) || 0)}/${charges[r.it.id].max} Ladungen</span>` : null}</b><small>${r.it.magic ? [r.it.type || '', r.it.rarity || '', r.it.base ? (findWeapon(r.it.base) || ARMOR.find((a) => a.key === r.it.base))?.name : '', r.it.variant ? itemInfo(r.it)?.variant?.label : ''].filter(Boolean).join(' · ') : r.cat ? `${CATEGORIES[r.cat.cat]}${r.cat.sub ? ` · ${r.cat.sub}` : ''}` : r.it.notes || ''}</small></span>
     <span class="small hide-sm">${fmtWeight(weightOf(r))}</span>
     <span class="small">×${r.it.qty}</span>
     <span class="small hide-sm">${fmtCost((r.it.cost ?? r.cat?.cost ?? 0) * (r.it.qty || 1))}</span>
     <span class="row nowrap" style="gap:4px" onClick=${(e) => e.stopPropagation()}>
-      ${r.it.attune ? html`<button type="button" class=${`equip-toggle${r.it.attuned ? ' on' : ''}`} title=${`Einstimmen${attMax < 99 ? ` (max. ${attMax})` : ''}`} disabled=${!canEdit || (!r.it.attuned && attuned.length >= attMax)} onClick=${() => setItem(r.it.id, { attuned: !r.it.attuned })}><${Icon} name="sparkles" size=${14} /></button>` : null}
-      <button type="button" class=${`equip-toggle${isEquipped(r) ? ' on' : ''}`} title=${isEquipped(r) ? 'Ablegen' : 'Ausrüsten'} disabled=${!canEdit} onClick=${() => toggleEquip(r)}><${Icon} name="check" size=${14} /></button>
+      ${r.it.attune && !r.it.stored ? html`<button type="button" class=${`equip-toggle${r.it.attuned ? ' on' : ''}`} title=${`Einstimmen${attMax < 99 ? ` (max. ${attMax})` : ''}`} disabled=${!canEdit || (!r.it.attuned && attuned.length >= attMax)} onClick=${() => setItem(r.it.id, { attuned: !r.it.attuned })}><${Icon} name="sparkles" size=${14} /></button>` : null}
+      ${r.it.stored ? null : html`<button type="button" class=${`equip-toggle${isEquipped(r) ? ' on' : ''}`} title=${isEquipped(r) ? 'Ablegen' : 'Ausrüsten'} disabled=${!canEdit} onClick=${() => toggleEquip(r)}><${Icon} name="check" size=${14} /></button>`}
+      <button type="button" class="equip-toggle" title=${r.it.stored ? 'In den Rucksack legen (mitnehmen)' : 'In den Besitz legen (Truhe – nicht dabei)'} disabled=${!canEdit} onClick=${() => moveItem(r, !r.it.stored)}><${Icon} name=${r.it.stored ? 'backpack' : 'chest'} size=${14} /></button>
     </span>
   </div>`;
 
@@ -1002,7 +1048,7 @@ function InventoryTab({ c, cm, canEdit, upd }) {
         <h3><${Icon} name="backpack" size=${13} />Traglast</h3>
         <div class="row"><b style="font-size:20px">${String(Math.round(total * 10) / 10).replace('.', ',')} kg</b><span class="muted">von ${cap.toLocaleString('de-DE')} kg</span></div>
         <div class=${`load-bar${load > 1 ? ' over' : load > 0.66 ? ' warn' : ''}`}><i style=${{ width: `${Math.min(100, load * 100)}%` }}></i></div>
-        <div class="tiny faint">Stärke ${c.abilities?.str ?? 10} × 7,5 kg. ${load > 1 ? 'Überladen – Bewegung stark eingeschränkt.' : ''}</div>
+        <div class="tiny faint">Stärke ${cm.scores?.str ?? c.abilities?.str ?? 10} × 7,5 kg${carryFactor(c) !== 1 ? ` × ${String(carryFactor(c)).replace('.', ',')}` : ''}. ${load > 1 ? 'Überladen – Bewegung stark eingeschränkt.' : ''}${stash ? ` Im Besitz: ${fmtWeight(stash)} (zählt nicht).` : ''}</div>
       </div>
       <div class="sheet-card stack sm">
         <h3><${Icon} name="sparkles" size=${13} />Einstimmung</h3>
@@ -1033,10 +1079,17 @@ function InventoryTab({ c, cm, canEdit, upd }) {
       </div>
     </div>
     <div class="sheet-card">
-      <h3><${Icon} name="backpack" size=${13} />Rucksack & Besitz</h3>
+      <h3><${Icon} name="backpack" size=${13} />Rucksack<span class="grow"></span><span class="small muted">dabei · zählt zur Traglast</span></h3>
       <div class="act-table">
         ${pack.map(itemRow)}
-        ${!pack.length ? html`<div class="small faint" style="padding:6px 4px">Leer.</div>` : null}
+        ${!pack.length ? html`<div class="small faint" style="padding:6px 4px">Leer. Neue Gegenstände landen hier.</div>` : null}
+      </div>
+    </div>
+    <div class="sheet-card inv-owned">
+      <h3><${Icon} name="chest" size=${13} />Besitz<span class="grow"></span><span class="small muted">nicht dabei · zählt nicht zur Traglast · nicht einsetzbar</span></h3>
+      <div class="act-table">
+        ${owned.map(itemRow)}
+        ${!owned.length ? html`<div class="small faint" style="padding:6px 4px">Nichts eingelagert – mit dem Truhen-Symbol legst du Gegenstände hierher (z. B. in die Truhe im Gasthaus).</div>` : null}
       </div>
     </div>
   </div>`;
@@ -1061,7 +1114,8 @@ function FeaturesTab({ c, ed, canEdit, upd, units }) {
     </div>` : null}
     ${(c.classes || []).map((x) => {
       const cls = findClass(x.cls);
-      const feats = classFeatures(x.cls, ed, x.level, 1, x.subclass).filter((f) => f.kind !== 'asi' && f.kind !== 'boon');
+      // Platzhalter „Unterklasse: Merkmal“ nur, wenn es auf der Stufe keine echten Unterklassen-Merkmale gibt
+      const feats = classFeatures(x.cls, ed, x.level, 1, x.subclass).filter((f, _, all) => f.kind !== 'asi' && f.kind !== 'boon' && !(f.kind === 'sub' && x.subclass && all.some((g) => g.kind === 'subfeature' && g.level === f.level)));
       return html`<div class="sheet-card stack sm">
         <h3><${Icon} name="shield" size=${13} />${cls?.name} ${x.level}${x.subclass ? ` · ${x.subclass}` : ''}</h3>
         <div class="feat-list">${feats.map((f) => html`<div><b>St. ${f.level} · ${f.kind === 'sub' ? (x.subclass ? `${x.subclass}: Merkmal` : f.name) : f.kind === 'subfeature' ? `${x.subclass}: ${f.name}` : f.name}</b>${f.desc && f.kind !== 'sub' ? html` <span class="small muted">– <${FxText} text=${f.desc} name=${f.name} plain=${f.kind === 'feature' && !FEATURE_SRC[f.name]} /></span>` : null}</div>`)}</div>
