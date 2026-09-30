@@ -1,7 +1,11 @@
 // Cloud-Adapter (Firebase Firestore + Auth), wird nur geladen, wenn eine Firebase-Konfiguration existiert.
 // Gleiche API wie db-local.js. Offline-Cache von Firestore ist aktiv (IndexedDB), d. h. die App funktioniert
 // auch ohne Netz weiter und synchronisiert, sobald wieder Verbindung besteht.
-import { clean, slugify } from '../lib/util.js';
+import { clean as cleanJson, slugify, packNested, unpackNested } from '../lib/util.js';
+
+// Schreiben: undefined entfernen und Listen in Listen verpacken · Lesen: wieder auspacken
+const clean = (o) => packNested(cleanJson(o));
+const docData = (s) => unpackNested(s.data());
 
 const FIREBASE_VERSION = '12.19.0';
 const BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
@@ -50,7 +54,7 @@ export async function initCloud(config) {
 
   const colRef = (path) => fsM.collection(fdb, path);
   const docRef = (path, id) => fsM.doc(fdb, path, id);
-  const toDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const toDocs = (snap) => snap.docs.map((d) => ({ id: d.id, ...docData(d) }));
 
   function buildQuery(path, opts = {}) {
     const cons = [];
@@ -65,7 +69,7 @@ export async function initCloud(config) {
     config,
     async get(col, id) {
       const s = await fsM.getDoc(docRef(col, id));
-      return s.exists() ? { id: s.id, ...s.data() } : null;
+      return s.exists() ? { id: s.id, ...docData(s) } : null;
     },
     async list(col, opts) {
       return toDocs(await fsM.getDocs(buildQuery(col, opts)));
@@ -105,7 +109,7 @@ export async function initCloud(config) {
     watchDoc(col, id, cb, onErr) {
       return fsM.onSnapshot(
         docRef(col, id),
-        (s) => cb(s.exists() ? { id: s.id, ...s.data() } : null),
+        (s) => cb(s.exists() ? { id: s.id, ...docData(s) } : null),
         (e) => {
           console.warn('[cloud] watchDoc', col, id, e);
           onErr?.(e);

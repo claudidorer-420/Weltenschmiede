@@ -223,6 +223,23 @@ export function clean(obj) {
   return JSON.parse(JSON.stringify(obj ?? null));
 }
 
+// Firestore kennt keine Listen in Listen (z. B. Rechenwege im Kampfprotokoll [[Wert, Grund]]):
+// innere Listen beim Schreiben als { __a: [...] } verpacken und beim Lesen wieder auspacken.
+export function packNested(v, inList = false) {
+  if (Array.isArray(v)) { const a = v.map((x) => packNested(x, true)); return inList ? { __a: a } : a; }
+  if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = packNested(v[k]); return o; }
+  return v;
+}
+export function unpackNested(v) {
+  if (Array.isArray(v)) return v.some((x) => x && typeof x === 'object') ? v.map(unpackNested) : v;
+  if (!v || typeof v !== 'object' || Object.getPrototypeOf(v) !== Object.prototype) return v;
+  const keys = Object.keys(v);
+  if (keys.length === 1 && keys[0] === '__a' && Array.isArray(v.__a)) return v.__a.map(unpackNested);
+  const o = {};
+  for (const k of keys) o[k] = unpackNested(v[k]);
+  return o;
+}
+
 export function fuzzyScore(query, text) {
   if (!query) return 1;
   const q = query.toLowerCase();

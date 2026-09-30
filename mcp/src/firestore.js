@@ -100,7 +100,12 @@ function fromValue(v) {
   if ('bytesValue' in v) return v.bytesValue;
   if ('geoPointValue' in v) return v.geoPointValue;
   if ('arrayValue' in v) return (v.arrayValue.values || []).map(fromValue);
-  if ('mapValue' in v) return fromFields(v.mapValue.fields);
+  if ('mapValue' in v) {
+    const o = fromFields(v.mapValue.fields);
+    // Von der App verpackte Liste in einer Liste ({ __a: [...] }) wieder auspacken
+    const keys = Object.keys(o);
+    return keys.length === 1 && keys[0] === '__a' && Array.isArray(o.__a) ? o.__a : o;
+  }
   return null;
 }
 
