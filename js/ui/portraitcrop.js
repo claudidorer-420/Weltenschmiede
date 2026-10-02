@@ -2,7 +2,7 @@
 // und in der Initiativleiste erscheint. Zusätzlich wählt man den quadratischen Ausschnitt,
 // der als Token auf der Kampfkarte liegt.
 import { html, useState, useEffect, useRef } from '../lib/preact.js';
-import { Btn, Field, openModal, toast } from './components.js';
+import { Btn, Field, Segmented, openModal, toast } from './components.js';
 
 const HOCH_W = 480;
 const HOCH_H = 640;
@@ -21,8 +21,10 @@ function toPortrait(img) {
   return cv;
 }
 
-function CropBody({ close, src }) {
+function CropBody({ close, src, look0 = 'right' }) {
   const [img, setImg] = useState(null);
+  // Wohin schaut die Figur im Bild? Danach spiegelt die Karte den Token, damit er in seine Blickrichtung schaut
+  const [look, setLook] = useState(look0 === 'left' ? 'left' : 'right');
   const [box, setBox] = useState({ x: 0, y: 0, s: HOCH_W });   // im Koordinatenraum des Hochformats
   const wrapRef = useRef(null);
   const drag = useRef(null);
@@ -64,7 +66,7 @@ function CropBody({ close, src }) {
     cv.width = QUAD;
     cv.height = QUAD;
     cv.getContext('2d').drawImage(hoch, box.x, box.y, box.s, box.s, 0, 0, QUAD, QUAD);
-    close({ portrait: hochUrl, portraitCrop: cv.toDataURL('image/webp', 0.86) });
+    close({ portrait: hochUrl, portraitCrop: cv.toDataURL('image/webp', 0.86), portraitLook: look });
   };
 
   const pct = (v, ganz) => `${(v / ganz) * 100}%`;
@@ -77,6 +79,9 @@ function CropBody({ close, src }) {
       </div>
       <${Field} label="Größe des Ausschnitts">
         <input type="range" style="width:100%;accent-color:var(--accent)" min="80" max=${HOCH_W} step="4" value=${box.s} onInput=${(e) => setBox(clampBox({ ...box, s: Number(e.target.value) }))} />
+      <//>
+      <${Field} label="Im Bild schaut die Figur eher nach …" hint="Auf der Karte dreht sich der Token in seine Blickrichtung – so weiß die App, wie herum das Bild gemeint ist.">
+        <${Segmented} value=${look} onChange=${setLook} options=${[{ value: 'left', label: '← Links' }, { value: 'right', label: 'Rechts →' }]} />
       <//>`}
     <div class="modal-foot" style="padding:0;border:0;background:none">
       <${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//>
@@ -85,13 +90,13 @@ function CropBody({ close, src }) {
   </div>`;
 }
 
-// file: File/Blob aus pickFiles. Liefert { portrait, portraitCrop } oder null
-export async function openPortraitDialog(file) {
+// file: File/Blob aus pickFiles. Liefert { portrait, portraitCrop, portraitLook } oder null
+export async function openPortraitDialog(file, { look = 'right' } = {}) {
   const src = await new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(r.result);
     r.onerror = () => rej(r.error);
     r.readAsDataURL(file);
   });
-  return openModal(({ close }) => html`<${CropBody} close=${close} src=${src} />`, { title: 'Porträt zuschneiden', icon: 'image', size: 'sm' });
+  return openModal(({ close }) => html`<${CropBody} close=${close} src=${src} look0=${look} />`, { title: 'Porträt zuschneiden', icon: 'image', size: 'sm' });
 }

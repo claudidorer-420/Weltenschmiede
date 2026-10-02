@@ -1337,10 +1337,12 @@ function genVillage(W, H, opts = {}) {
   const mat2 = pick(['tex:rocky_trail', 'tex:dirt', 'tex:gravel_ground_01']);
   // Fluss quer zur Hauptstraße – Brücken, wo Straßen ihn kreuzen
   const fluss = jaNein(opts.fluss, area >= 1400 ? 0.3 : 0.12) ? flussLegen(terrain, P, W, H, quer ? 'senkrecht' : 'waagrecht', { breite: clamp(Math.sqrt(area) / 14, 2.4, 4.2) }) : null;
-  strassen.forEach((s, i) => { terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: s.w, mat: i ? mat2 : mat1, pts: flat(s.pts) }); sperreWeg(P, s.pts, s.w + 0.3); });
-  if (fluss) for (const s of strassen) brueckenSetzen(terrain, objects, fluss, s);
   // Dorfplatz an der ersten Abzweigung (sonst mitten an der Hauptstraße)
   const sp = strassen[1] ? { x: strassen[1].pts[0][0], y: strassen[1].pts[0][1] } : aufWeg(haupt, 0.5);
+  strassen.forEach((s, i) => { s.erste = i === 0; });
+  const bruecken = fluss ? flussQuerungen(strassen, fluss) : [];
+  strassen.forEach((s) => { terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: s.w, mat: s.erste ? mat1 : mat2, pts: flat(s.pts) }); sperreWeg(P, s.pts, s.w + 0.3); });
+  for (const br of bruecken) brueckeBauen(terrain, objects, P, br);
   const pr = clamp(Math.sqrt(area) / 7, 3, 6);
   terrain.push({ id: uid(6), op: 'add', kind: 'poly', mat: pick(['tex:mossy_cobblestone', 'tex:cobblestone_floor_01', 'tex:patterned_cobblestone']), pts: blob(sp.x, sp.y, pr, pr * 0.85, { j: 0.15 }) });
   P.nimm([sp.x - pr, sp.y - pr * 0.85, sp.x + pr, sp.y + pr * 0.85]);
@@ -1471,6 +1473,8 @@ function genVillage(W, H, opts = {}) {
       break;
     }
   }
+  // Äcker rund ums Dorf – groß, mit Zaun, gern bis über den Kartenrand
+  felderSetzen(objects, terrain, P, W, H, clamp(Math.round(area / 1600), 1, 5));
   // Natur: Obst- und Dorfbäume, Büsche an Häusern, Gras und Blumen auf freien Flächen
   const frei = () => { const x = rnd(0, W); const y = rnd(0, H); return P.frei([x - 0.3, y - 0.3, x + 0.3, y + 0.3]) ? { x, y } : null; };
   baeume(objects, W, H, Math.round(area / 28), { min: 2.8, ok: (x, y) => P.frei([x - 0.8, y - 0.8, x + 0.8, y + 0.8]), sets: [['laubbaum', 0.75], ['jungbaum', 0.1], ['nadelbaum', 0.15]], s: 0.9 });
@@ -1493,49 +1497,91 @@ function flussLegen(terrain, P, W, H, richtung, { breite = 3, durch = null, bend
   sperreWeg(P, pts, breite + 1.4);
   return { pts, w: breite };
 }
-// Wo eine Straße den Fluss kreuzt: Holzbrücke (begehbar) mit Geländer
-function brueckenSetzen(terrain, objects, fluss, strasse) {
-  const S = strasse.pts;
-  let letzte = null;
-  let gebaut = 0;
-  for (let i = 1; i < S.length; i++) {
-    const [ax, ay] = S[i - 1];
-    const [bx, by] = S[i];
-    const mx = (ax + bx) / 2;
-    const my = (ay + by) / 2;
-    if (distPath(fluss.pts, mx, my) > fluss.w / 2 + 0.3) continue;
-    if (letzte && Math.hypot(mx - letzte[0], my - letzte[1]) < fluss.w + 4) continue;
-    letzte = [mx, my];
-    gebaut++;
-    // Brücke entlang der Straße: von Ufer zu Ufer (auch bei schräger Querung), dazu gut ein Feld aufs Land
-    const dx = bx - ax;
-    const dy = by - ay;
-    const n = Math.hypot(dx, dy) || 1;
-    const ux = dx / n;
-    const uy = dy / n;
-    const imFluss = (x, y) => distPath(fluss.pts, x, y) <= fluss.w / 2 + 0.2;
-    const bis = (sg) => { let k = 0; while (k < 24 && imFluss(mx + ux * k * sg, my + uy * k * sg)) k += 0.25; return k + 1.1; };
-    const a = bis(-1);
-    const b = bis(1);
-    const len = a + b;
-    const zx = mx + (ux * (b - a)) / 2;
-    const zy = my + (uy * (b - a)) / 2;
-    const bw = Math.max(1.8, strasse.w);
-    // Holzdeck darunter (macht die Felder normal begehbar) – schmaler und kürzer als die Bohlen, damit es samt
-    // weichem Rand und runden Enden darunter verschwindet; darüber Bohlen mit Geländer (p:bridge, Länge in y-Richtung)
-    const dw = Math.max(1.2, bw - 0.6);
-    const dl = Math.max(0.5, len / 2 - dw / 2 - 0.4);
-    terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(dw), mat: 'tex:wood_floor_deck', pts: flat([[zx - ux * dl, zy - uy * dl], [zx + ux * dl, zy + uy * dl]]) });
-    const s = (bw + 0.9) / 2;
-    const stueck = 4 * s;
-    const teile = Math.max(1, Math.ceil(len / stueck - 0.15));
-    const rot = Math.round((Math.atan2(uy, ux) * 180) / Math.PI) - 90;
-    for (let k = 0; k < teile; k++) {
-      const t = teile === 1 ? 0 : -len / 2 + stueck / 2 + ((len - stueck) * k) / (teile - 1);
-      objects.push(stampAt('p:bridge', zx + ux * t, zy + uy * t, { r: rot, s }));
-    }
+// Linienzug fein abtasten (Hauptstraßen haben nur wenige Stützpunkte – Querungen lägen sonst zwischen ihnen)
+function dicht(pts, schritt = 0.5) {
+  const out = [];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1];
+    const [bx, by] = pts[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / schritt));
+    for (let k = 0; k < n; k++) out.push([ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n]);
   }
-  return gebaut > 0;
+  if (pts.length) out.push(pts[pts.length - 1]);
+  return out;
+}
+// Straßen über den Fluss: nur dort eine Brücke, wo die Straße ihn wirklich quert – nicht zu schräg, nicht zu lang und
+// ohne Turm, Mauer oder Haus im Weg (hindert(x, y)). Sonst endet die Straße am Ufer. Teilt strassen an verworfenen
+// Stellen (Straßen werden danach gezeichnet) und gibt die Brücken zurück.
+function flussQuerungen(strassen, fluss, { hindert = null } = {}) {
+  const nass = (x, y) => distPath(fluss.pts, x, y) <= fluss.w / 2 + 0.2;
+  const bruecken = [];
+  const neu = [];
+  for (const st of strassen) {
+    const pts = dicht(st.pts, 0.5);
+    let cur = [];
+    let i = 0;
+    while (i < pts.length) {
+      if (!nass(pts[i][0], pts[i][1])) { cur.push(pts[i]); i++; continue; }
+      let j = i;
+      while (j < pts.length && nass(pts[j][0], pts[j][1])) j++;
+      const ok = i > 0 && j < pts.length && (() => {
+        const a = pts[i - 1];
+        const b = pts[j];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 0.5 || len > fluss.w * 1.7 + 2.5) return false;
+        // Überstand an den Ufern kürzen, wenn dort etwas steht (Turm, Mauer am Tor) – erst dann ganz verwerfen
+        let br = null;
+        for (const ext of [1, 0.5, 0.15]) {
+          const probe = { a, b, w: st.w, ext };
+          if (!hindert || !brueckeFlaeche(probe).some(([x, y]) => hindert(x, y))) { br = probe; break; }
+        }
+        if (!br) return false;
+        if (bruecken.some((o) => Math.hypot((o.a[0] + o.b[0]) / 2 - (a[0] + b[0]) / 2, (o.a[1] + o.b[1]) / 2 - (a[1] + b[1]) / 2) < fluss.w + 4)) return false;
+        bruecken.push(br);
+        return true;
+      })();
+      if (ok) for (let k = i; k < j; k++) cur.push(pts[k]);
+      else { if (cur.length >= 2) neu.push({ ...st, pts: cur }); cur = []; }
+      i = j;
+    }
+    if (cur.length >= 2) neu.push({ ...st, pts: cur });
+  }
+  strassen.splice(0, strassen.length, ...neu);
+  return bruecken;
+}
+// Maße einer Brücke von Ufer a nach Ufer b: gut ein Feld aufs Land an beiden Enden, Breite = Straße + Geländer
+function brueckeMass(br) {
+  const dx = br.b[0] - br.a[0];
+  const dy = br.b[1] - br.a[1];
+  const n = Math.hypot(dx, dy) || 1;
+  const ux = dx / n;
+  const uy = dy / n;
+  const len = n + 2 * (br.ext ?? 1);
+  const bw = Math.max(1.8, br.w);
+  return { ux, uy, len, zx: (br.a[0] + br.b[0]) / 2, zy: (br.a[1] + br.b[1]) / 2, bw, s: (bw + 0.9) / 2 };
+}
+// Punkte auf der Brückenfläche (für die Prüfung, ob etwas im Weg steht)
+function brueckeFlaeche(br) {
+  const { ux, uy, len, zx, zy, s } = brueckeMass(br);
+  const out = [];
+  for (let t = -len / 2; t <= len / 2 + 0.01; t += 0.5) for (const q of [-s * 0.86, 0, s * 0.86]) out.push([zx + ux * t - uy * q, zy + uy * t + ux * q]);
+  return out;
+}
+// Holzbrücke bauen: Deck darunter (macht die Felder normal begehbar – schmaler und kürzer, damit es samt weichem
+// Rand unter den Bohlen verschwindet), darüber Bohlen mit Geländer (p:bridge, Länge in y-Richtung); Fläche sperren
+function brueckeBauen(terrain, objects, P, br) {
+  const { ux, uy, len, zx, zy, bw, s } = brueckeMass(br);
+  const dw = Math.max(1.2, bw - 0.6);
+  const dl = Math.max(0.5, len / 2 - dw / 2 - 0.4);
+  terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(dw), mat: 'tex:wood_floor_deck', pts: flat([[zx - ux * dl, zy - uy * dl], [zx + ux * dl, zy + uy * dl]]) });
+  const stueck = 4 * s;
+  const teile = Math.max(1, Math.ceil(len / stueck - 0.15));
+  const rot = Math.round((Math.atan2(uy, ux) * 180) / Math.PI) - 90;
+  for (let k = 0; k < teile; k++) {
+    const t = teile === 1 ? 0 : -len / 2 + stueck / 2 + ((len - stueck) * k) / (teile - 1);
+    objects.push(stampAt('p:bridge', zx + ux * t, zy + uy * t, { r: rot, s }));
+  }
+  if (P) for (const [x, y] of brueckeFlaeche(br)) P.nimm([x - 0.3, y - 0.3, x + 0.3, y + 0.3]);
 }
 function streuPunkt(R) {
   const t = Math.random();
@@ -1545,14 +1591,59 @@ function streuPunkt(R) {
   if (seite === 'w') return { x: R.x + 0.4, y: R.y + R.h * t };
   return { x: R.x + R.w - 0.4, y: R.y + R.h * t };
 }
-// Zaun um ein Rechteck (mit Tor)
-function zaun(objects, x, y, w, h) {
-  const tor = randInt(0, Math.max(0, Math.floor(w / 2) - 1));
-  for (let i = 0; i < Math.floor(w / 2); i++) {
-    if (i !== tor) objects.push(stampAt('p:fence', x + 1 + i * 2, y + h));
-    objects.push(stampAt('p:fence', x + 1 + i * 2, y));
+// Große Felder (Äcker) mit Zaun: Startpunkt im erlaubten Bereich, das Feld wächst vom Zentrum weg zum Kartenrand und
+// darf darüber hinausgehen – so groß es geht, aber mindestens min (sonst lieber gar keins als ein „Kleingarten“)
+function felderSetzen(objects, terrain, P, W, H, anzahl, { draussen = () => true, cx = W / 2, cy = H / 2, min = [12, 8] } = {}) {
+  const ok = (x0, y0, x1, y1) => {
+    for (let yy = y0; yy <= y1 + 0.01; yy += 1.5) for (let xx = x0; xx <= x1 + 0.01; xx += 1.5) if (!draussen(xx, yy)) return false;
+    return P.frei([x0 - 0.5, y0 - 0.5, x1 + 0.5, y1 + 0.5]);
+  };
+  let n = 0;
+  for (let i = 0; i < anzahl; i++) {
+    for (let t = 0; t < 80; t++) {
+      const sx = randInt(0, W);
+      const sy = randInt(0, H);
+      if (!draussen(sx, sy)) continue;
+      const ost = sx >= cx;
+      const sued = sy >= cy;
+      let f = null;
+      for (const [fw, fh] of [[randInt(22, 28), randInt(15, 19)], [randInt(16, 21), randInt(11, 14)], [min[0] + randInt(0, 3), min[1] + randInt(0, 2)], min]) {
+        const x0 = ost ? sx : Math.max(0, sx - fw);
+        const x1 = ost ? Math.min(W, sx + fw) : sx;
+        const y0 = sued ? sy : Math.max(0, sy - fh);
+        const y1 = sued ? Math.min(H, sy + fh) : sy;
+        if (x1 - x0 < min[0] || y1 - y0 < min[1]) continue;
+        if (ok(x0, y0, x1, y1)) { f = [x0, y0, x1, y1]; break; }
+      }
+      if (!f) continue;
+      const [x0, y0, x1, y1] = f;
+      P.nimm([x0 - 0.5, y0 - 0.5, x1 + 0.5, y1 + 0.5]);
+      terrain.push({ id: uid(6), op: 'add', kind: 'rect', mat: pick(['tex:getreidefeld', 'tex:getreidefeld', 'tex:farm_soil', ...(TEXTURES.some((tx) => tx.id === 'gemuesefeld') ? ['tex:gemuesefeld'] : [])]), pts: [x0 > 0 ? x0 + 0.2 : 0, y0 > 0 ? y0 + 0.2 : 0, x1 < W ? x1 - 0.2 : W, y1 < H ? y1 - 0.2 : H] });   // am Kartenrand bis ganz an den Rand
+      zaun(objects, x0, y0, x1 - x0, y1 - y0, { seiten: [y0 > 0 ? 'n' : '', y1 < H ? 's' : '', x0 > 0 ? 'w' : '', x1 < W ? 'e' : ''].join('') });
+      n++;
+      break;
+    }
   }
-  for (let i = 0; i < Math.floor(h / 2); i++) for (const xx of [x, x + w]) objects.push(stampAt('p:fence', xx, y + 1 + i * 2, { r: 90 }));
+  return n;
+}
+// Zaun um ein Rechteck (mit Tor)
+// Zaun um ein Rechteck: jede Seite wird exakt bedeckt (Stücke à 2 Felder, bei ungerader Länge überlappen sie leicht).
+// seiten = welche Seiten ('nesw' – am Kartenrand lässt man sie weg), tor = auf der Südseite (sonst der ersten) bleibt
+// ein Stück offen
+function zaun(objects, x, y, w, h, { seiten = 'nesw', tor = true } = {}) {
+  const stuecke = (L) => { const n = Math.max(1, Math.ceil(L / 2 - 0.01)); return Array.from({ length: n }, (_, i) => (n === 1 ? L / 2 : 1 + ((L - 2) * i) / (n - 1))); };
+  const torSeite = tor ? (seiten.includes('s') ? 's' : seiten[0]) : null;
+  for (const sd of seiten) {
+    const quer = sd === 'w' || sd === 'e';
+    const L = quer ? h : w;
+    const pos = stuecke(L);
+    const offen = sd === torSeite && pos.length > 1 ? randInt(0, pos.length - 1) : -1;
+    pos.forEach((m, i) => {
+      if (i === offen) return;
+      if (quer) objects.push(stampAt('p:fence', sd === 'w' ? x : x + w, y + m, { r: 90 }));
+      else objects.push(stampAt('p:fence', x + m, sd === 'n' ? y : y + h));
+    });
+  }
 }
 // Gemüsegarten hinter einem Haus: Beete, Pflanzenreihen, Zaun
 function garten(objects, terrain, P, h, W, H) {
@@ -1831,12 +1922,42 @@ function genCity(W, H, opts = {}) {
       const seite = Math.abs(Math.cos(a)) > 0.5 ? (Math.cos(a) > 0 ? 'e' : 'w') : Math.sin(a) > 0 ? 's' : 'n';
       return seite !== kuesteSeite;
     }).slice(0, clamp(Math.round(M / 30) + 1, 2, 4));
-    for (const a0 of torWinkel) {
-      const a = a0 + rnd(-0.15, 0.15);
-      tore.push({ a, x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+    // Wo der Fluss die Mauer kreuzt: Wassertor mit Gitter (man sieht hindurch, kommt aber nicht vorbei) und zwei Türmen
+    const wasserTore = [];
+    if (fluss) {
+      let lauf = [];
+      const N = 360;
+      for (let i = 0; i <= N; i++) {
+        const a = (i / N) * TAU;
+        const x = cx + Math.cos(a) * rx;
+        const y = cy + Math.sin(a) * ry;
+        if (distPath(fluss.pts, x, y) < fluss.w / 2 + 0.3) lauf.push(a);
+        else if (lauf.length) {
+          const a = lauf[Math.floor(lauf.length / 2)];
+          const senk = Math.abs(Math.cos(a)) >= Math.abs(Math.sin(a));
+          const x = cx + Math.cos(a) * rx;
+          const y = cy + Math.sin(a) * ry;
+          wasserTore.push({ a, senk, x: senk ? Math.round(x) : x, y: senk ? y : Math.round(y), rr: fluss.w / 2 + 0.6 + (lauf.length * TAU * rx) / N / 4 });
+          lauf = [];
+        }
+      }
     }
-    // Wo Wasser ist (Hafen, Fluss), bleibt die Mauer offen
-    const imWasser = (x, y) => (meer && inPoly(flat(meer.poly), x, y)) || (fluss && distPath(fluss.pts, x, y) < fluss.w / 2 + 1.2);
+    for (const a0 of torWinkel) {
+      let a = a0 + rnd(-0.15, 0.15);
+      // nicht neben ein Wassertor (sonst stehen die Türme ineinander): entlang der Mauer wegschieben
+      for (const wt of wasserTore) {
+        const abst = (Math.min(wt.rr, 4.5) + 9) / rx;
+        const d = Math.atan2(Math.sin(a - wt.a), Math.cos(a - wt.a));
+        if (Math.abs(d) < abst) a = wt.a + (d >= 0 ? abst : -abst);
+      }
+      // Tor auf die Feldkante legen (senkrecht bei Ost/West, waagerecht bei Nord/Süd) – sonst sperrt es den Durchgang nicht
+      const senk = Math.abs(Math.cos(a)) >= Math.abs(Math.sin(a));
+      const x = cx + Math.cos(a) * rx;
+      const y = cy + Math.sin(a) * ry;
+      tore.push({ a, senk, x: senk ? Math.round(x) : x, y: senk ? y : Math.round(y) });
+    }
+    // Am Meer (Hafen) endet die Mauer an der Küste
+    const imWasser = (x, y) => meer && inPoly(flat(meer.poly), x, y);
     let teil = [];
     const teile = [];
     for (const p of ring) { if (imWasser(p[0], p[1])) { if (teil.length > 1) teile.push(teil); teil = []; } else teil.push(p); }
@@ -1845,9 +1966,24 @@ function genCity(W, H, opts = {}) {
     for (const t of teile) shapes.push({ id: uid(6), op: 'add', kind: 'path', w: 1.4, pts: flat(t), tex: 'slab_tiles' });
     mauerRing = ring;
     void imWasser;
-    // Torlücken (die Straße läuft hindurch) mit zwei Tortürmen
+    // Wassertore: Lücke in der Mauer, Gitter quer über den Fluss, Türme an beiden Ufern
+    for (const t of wasserTore) {
+      const rr = Math.min(t.rr, 4.5);
+      shapes.push({ id: uid(6), op: 'sub', kind: 'ellipse', pts: [r2(t.x - rr), r2(t.y - rr), r2(t.x + rr), r2(t.y + rr)] });
+      const tx = t.senk ? 0 : 1;
+      const ty = t.senk ? 1 : 0;
+      for (const sd of [-1, 1]) {
+        const x = t.x + tx * sd * (rr + 1);
+        const y = t.y + ty * sd * (rr + 1);
+        shapes.push({ id: uid(6), op: 'add', kind: 'ellipse', pts: [r2(x - 1.3), r2(y - 1.3), r2(x + 1.3), r2(y + 1.3)], tex: 'slab_tiles', roof: 'roof_slates_02' });
+      }
+      objects.push(stampAt('p:gateBars', t.x, t.y, { r: t.senk ? 90 : 0, s: r2((rr * 2 + 0.4) / 4) }));
+    }
+    // Torlücken (die Straße läuft hindurch) mit zwei Tortürmen und einem Tor zum Öffnen
+    // (Stadttor aus Holz = blickdicht, Gittertor = man sieht hindurch)
     for (const t of tore) {
       shapes.push({ id: uid(6), op: 'sub', kind: 'ellipse', pts: [r2(t.x - 1.8), r2(t.y - 1.8), r2(t.x + 1.8), r2(t.y + 1.8)] });
+      objects.push(stampAt(pick(['p:gate', 'p:gate', 'p:gateBars']), t.x, t.y, { r: t.senk ? 90 : 0 }));
       const tx = -Math.sin(t.a);
       const ty = Math.cos(t.a);
       for (const sd of [-1, 1]) {
@@ -1863,7 +1999,7 @@ function genCity(W, H, opts = {}) {
     const turmN = Math.round((Math.PI * (rx + ry)) / 13);
     for (let i = 0; i < turmN; i++) {
       const a = (i / turmN) * TAU + 0.2;
-      if (tore.some((t) => Math.abs(Math.atan2(Math.sin(a - t.a), Math.cos(a - t.a))) < 0.35)) continue;
+      if ([...tore, ...wasserTore].some((t) => Math.abs(Math.atan2(Math.sin(a - t.a), Math.cos(a - t.a))) < 0.35)) continue;
       const x = cx + Math.cos(a) * rx;
       const y = cy + Math.sin(a) * ry;
       if ((meer && inPoly(flat(meer.poly), x, y)) || (fluss && distPath(fluss.pts, x, y) < fluss.w / 2 + 1.5)) continue;
@@ -1879,7 +2015,17 @@ function genCity(W, H, opts = {}) {
   const meerFlat = meer ? flat(meer.poly) : null;
   const nass = (x, y) => (meerFlat && inPoly(meerFlat, x, y)) || (fluss && distPath(fluss.pts, x, y) < fluss.w / 2 + 0.6);
   const ziele = mitMauer ? tore.map((t) => [t.x + Math.cos(t.a) * (M * 0.6), t.y + Math.sin(t.a) * (M * 0.6)]) : mischen(SEITEN.filter((s) => s !== kuesteSeite)).slice(0, art === 'markt' ? 4 : 3).map((s) => randPunkt(W, H, s, rnd(0.35, 0.65)));
-  for (const z of ziele) strassen.push({ pts: wander([mp.x, mp.y], z, { bend: 0.1, steps: 7 }), w: 3, haupt: true });
+  if (mitMauer) {
+    // Durch das Tor geht es gerade (im rechten Winkel zur Mauer) – sonst liefe die Straße schräg daran vorbei und
+    // quer über Graben und Turm
+    for (const t of tore) {
+      const ox = t.senk ? Math.sign(Math.cos(t.a)) || 1 : 0;
+      const oy = t.senk ? 0 : Math.sign(Math.sin(t.a)) || 1;
+      const vor = [t.x - ox * 4, t.y - oy * 4];
+      const raus = [t.x + ox * M * 0.6, t.y + oy * M * 0.6];
+      strassen.push({ pts: [...wander([mp.x, mp.y], vor, { bend: 0.1, steps: 6 }), [t.x, t.y], raus], w: 3, haupt: true });
+    }
+  } else for (const z of ziele) strassen.push({ pts: wander([mp.x, mp.y], z, { bend: 0.1, steps: 7 }), w: 3, haupt: true });
   if (art === 'hafen') {
     const k = meer.pts[Math.floor(meer.pts.length * rnd(0.35, 0.65))];
     strassen.push({ pts: wander([mp.x, mp.y], k, { bend: 0.06, steps: 5 }), w: 3, haupt: true });
@@ -1997,11 +2143,20 @@ function genCity(W, H, opts = {}) {
       for (const s of stuecke(pts, (x, y) => inKarte(x, y) && inStadt(x, y, mitMauer ? 0.93 : 1) && !nass(x, y) && !imBau(x, y))) strassen.push({ pts: s, w: 1.8 });
     }
   }
-  strassen.forEach((s, i) => {
+  // Über den Fluss: Brücken nur, wo nichts im Weg steht (Türme, Mauer, große Bauten – das Tor selbst ist frei)
+  const tuerme = shapes.filter((sh) => sh.kind === 'ellipse' && sh.roof && sh.op !== 'sub');
+  const hindert = (x, y) => {
+    if (tore.some((t) => Math.hypot(x - t.x, y - t.y) < 2.2)) return false;
+    if (tuerme.some((sh) => { const [x0, y0, x1, y1] = sh.pts; const ex = (x1 - x0) / 2; const ey = (y1 - y0) / 2; return ((x - x0 - ex) / ex) ** 2 + ((y - y0 - ey) / ey) ** 2 <= 1.2; })) return true;
+    if (mauerRing && distPath(mauerRing, x, y) < 1.1) return true;
+    return bauten.some((b) => x > b.x - 0.3 && x < b.x + b.w + 0.3 && y > b.y - 0.3 && y < b.y + b.h + 0.3);
+  };
+  const bruecken = fluss ? flussQuerungen(strassen, fluss, { hindert }) : [];
+  strassen.forEach((s) => {
     terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: s.w, mat: s.w >= 3 ? mat1 : mat2, pts: flat(s.pts) });
-    if (i >= vorRing) sperreWeg(P, s.pts, s.w + 0.4);
+    if (!s.haupt) sperreWeg(P, s.pts, s.w + 0.4);
   });
-  if (fluss) for (const s of strassen) brueckenSetzen(terrain, objects, fluss, s);
+  for (const br of bruecken) brueckeBauen(terrain, objects, P, br);
 
   // ── Häuser: dicht an allen Straßen, ein Feld Gasse dazwischen ──
   // Feldraster: Straßen/Platz (S), Gesperrtes (Wasser, Mauer, große Bauten, Straßen) und Häuser (G)
@@ -2183,21 +2338,8 @@ function genCity(W, H, opts = {}) {
 
   // ── Außerhalb: Felder, Windmühle, Friedhof, Bäume ──
   const draussen = (x, y) => !inStadt(x, y, mitMauer ? 1.12 : 1.02);
-  const felder = clamp(Math.round(area / 1400), 1, 8);
-  for (let i = 0; i < felder; i++) {
-    for (let t = 0; t < 40; t++) {
-      const fw = randInt(6, 12);
-      const fh = randInt(5, 9);
-      const fx = randInt(1, W - fw - 1);
-      const fy = randInt(1, H - fh - 1);
-      if (!draussen(fx, fy) || !draussen(fx + fw, fy + fh) || !draussen(fx + fw, fy) || !draussen(fx, fy + fh)) continue;
-      if (!P.frei([fx - 0.5, fy - 0.5, fx + fw + 0.5, fy + fh + 0.5])) continue;
-      P.nimm([fx - 0.5, fy - 0.5, fx + fw + 0.5, fy + fh + 0.5]);
-      terrain.push({ id: uid(6), op: 'add', kind: 'rect', mat: pick(['tex:getreidefeld', 'tex:getreidefeld', 'tex:farm_soil', ...(TEXTURES.some((t) => t.id === 'gemuesefeld') ? ['tex:gemuesefeld'] : [])]), pts: [fx, fy, fx + fw, fy + fh] });
-      zaun(objects, fx, fy, fw - (fw % 2), fh - (fh % 2));
-      break;
-    }
-  }
+  // Felder: groß, über den Kartenrand hinaus – auf kleinen Stadtkarten passt oft keins (dann eben nicht)
+  felderSetzen(objects, terrain, P, W, H, clamp(Math.round(area / 1500), 2, 10), { draussen, cx, cy });
   if (ids(/^windmuehle$/).length) {
     for (let t = 0; t < 60; t++) {
       const x = rnd(4, W - 4);
@@ -2217,7 +2359,7 @@ function genCity(W, H, opts = {}) {
       const gy = randInt(2, H - gh - 2);
       if (!draussen(gx, gy) || !draussen(gx + gw, gy + gh) || !P.frei([gx - 0.5, gy - 0.5, gx + gw + 0.5, gy + gh + 0.5])) continue;
       P.nimm([gx - 0.5, gy - 0.5, gx + gw + 0.5, gy + gh + 0.5]);
-      zaun(objects, gx, gy, gw - (gw % 2), gh - (gh % 2));
+      zaun(objects, gx, gy, gw, gh);
       for (let yy = gy + 1.2; yy < gy + gh - 0.8; yy += 2) for (let xx = gx + 1.2; xx < gx + gw - 0.8; xx += 1.4) if (chance(0.75)) objects.push(stampAt(pick(['ph:grab_platte', ...ids(/^grab_huegel$/)]), xx, yy, { s: 0.75 }));
       ort('Friedhof', gx + gw / 2, gy - 0.6, 0.7);
       break;

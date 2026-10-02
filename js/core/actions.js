@@ -2526,8 +2526,15 @@ export async function ensureBattleContext(mapId) {
     }
     gridCache = { mapId, grid };
   }
-  loaded.set(mapId, { tokens: tokens || [], party: party || [], grid: gridCache.grid, mapId, live: false });
-  if (!battle.live && (!battle.mapId || battle.mapId === mapId)) Object.assign(battle, { tokens: tokens || [], party: party || [], grid: gridCache.grid, mapId, live: false });
+  // Türen: Zustand aus der geteilten Kartenebene (party/doors-<karte>)
+  let grid = gridCache.grid;
+  if (grid?.tueren?.length) {
+    const tuer = await db.get(col('party'), `doors-${mapId}`).catch(() => null);
+    const { mitTueren } = await import('../views/mapeditor.js');
+    grid = mitTueren(grid, new Set(tuer?.open || []));
+  }
+  loaded.set(mapId, { tokens: tokens || [], party: party || [], grid, mapId, live: false });
+  if (!battle.live && (!battle.mapId || battle.mapId === mapId)) Object.assign(battle, { tokens: tokens || [], party: party || [], grid, mapId, live: false });
 }
 
 // ───────────────────────── Beim Handelnden: Zielanzahl, Schaden, Niederstrecken, Reaktionen ─────────────────────────

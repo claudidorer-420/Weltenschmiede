@@ -1319,12 +1319,6 @@ details.how-to[open] > summary::after { transform: rotate(90deg); }
 .insp-star.on { color: #ffd34d; border-color: #ffd34d99; box-shadow: 0 0 0 1px #ffd34d66, 0 0 22px #ffd34d66; transform: rotate(-10deg) scale(1.06); text-shadow: 0 0 10px #ffb70088; }
 .sh-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 2fr); gap: 8px; }
 .sh-stat { background: var(--bg-2); border: 1px solid var(--border); border-radius: 14px; padding: 8px 6px; text-align: center; display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center; min-height: 66px; color: var(--text); }
-.sh-facing .v { display: grid; place-items: center; color: var(--text); }
-.facing-pick { position: relative; width: 240px; height: 240px; margin: 4px auto; border-radius: 50%; background: radial-gradient(circle, var(--bg-2) 55%, transparent 56%); }
-.facing-pick button { position: absolute; transform: translate(-50%, -50%); min-width: 34px; height: 26px; padding: 0 4px; border-radius: 13px; border: 1px solid var(--border); background: var(--bg-1); color: var(--text-2); font: 700 11px/1 system-ui, sans-serif; cursor: pointer; }
-.facing-pick button.on { background: #ffcf3f; border-color: #ffcf3f; color: #2a1e00; }
-.facing-pick button:hover { border-color: #ffcf3f; }
-.facing-mid { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text); }
 .sh-stat .l { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
 .sh-stat .v { font: 700 23px/1.1 var(--font-serif); }
 .sh-stat .v small { font-size: 14px; color: var(--text-3); margin-left: 3px; }
@@ -1718,6 +1712,10 @@ details.how-to[open] > summary::after { transform: rotate(90deg); }
 .roll-card.death { background: linear-gradient(150deg, rgba(42, 10, 16, 0.97), rgba(14, 4, 7, 0.97)); border-color: rgba(220, 60, 70, 0.45); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 26px rgba(200, 24, 44, 0.35); }
 .roll-card.death .rc-total { background: radial-gradient(circle at 50% 70%, #7a1020, #1d0509); color: #f1e6cf; box-shadow: inset 0 0 0 1px rgba(255, 120, 110, 0.35), 0 0 22px rgba(200, 24, 44, 0.5); }
 .roll-card.death .rc-notes { color: #ffb0a8; }
+/* Todesrettungswurf geschafft (10 oder mehr): grün statt rot */
+.roll-card.death.ok { background: linear-gradient(150deg, rgba(10, 38, 22, 0.97), rgba(4, 14, 8, 0.97)); border-color: rgba(61, 214, 140, 0.45); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 26px rgba(61, 214, 140, 0.3); }
+.roll-card.death.ok .rc-total { background: radial-gradient(circle at 50% 70%, #1f7a45, #062012); box-shadow: inset 0 0 0 1px rgba(140, 255, 190, 0.35), 0 0 22px rgba(61, 214, 140, 0.45); }
+.roll-card.death.ok .rc-notes { color: #9ff0c4; }
 @keyframes rc-in { from { transform: translateX(-26px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (max-width: 599px) {
   .bt-strip { top: 6px; max-width: calc(100% - 64px); left: calc(50% + 22px); padding: 4px 6px; gap: 4px; }
@@ -2515,3 +2513,5 @@ body.resizing .sb-resize::after { background: var(--accent); }
 .gen-opt > span { font-weight: 600; color: var(--text-2); }
 .gen-opt .input { width: 100%; }
 .gen-size { font-size: 12.5px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--text); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* Weltkarte: schwebende Symbol-Palette beim Werkzeug „Symbol setzen“ */
+.map-symfloat { position: absolute; left: 58px; top: 10px; z-index: 6; width: min(300px, calc(100% - 76px)); max-height: calc(100% - 20px); overflow: auto; display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--bg-1) 94%, transparent); border: 1px solid var(--border); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4); font-size: 12.5px; }

@@ -34,7 +34,6 @@ import {
 } from '../ui/components.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { now, debounce, uid } from '../lib/util.js';
-import { FacingIcon, FacingPicker, dirName, setCharFacing } from '../ui/facing.js';
 
 const sg = (n) => (n >= 0 ? `+${n}` : `${n}`);
 const DMG_KEY = { Wucht: 'bludgeoning', Stich: 'piercing', Hieb: 'slashing' };
@@ -283,8 +282,8 @@ export function CharacterSheet({ id, owner }) {
     const [f] = await pickFiles({ accept: 'image/*' });
     if (!f) return;
     const { openPortraitDialog } = await import('../ui/portraitcrop.js');
-    const r = await openPortraitDialog(f);
-    if (r) upd({ portrait: r.portrait, portraitCrop: r.portraitCrop });
+    const r = await openPortraitDialog(f, { look: c.portraitLook || 'right' });
+    if (r) upd({ portrait: r.portrait, portraitCrop: r.portraitCrop, portraitLook: r.portraitLook });
   };
   const editXp = async () => {
     if (!canEdit) return;
@@ -298,6 +297,7 @@ export function CharacterSheet({ id, owner }) {
   const menu = (e) => openMenu(e, [
     canEdit ? { label: unlock ? 'Korrektur-Modus beenden' : 'Korrektur-Modus …', icon: unlock ? 'lock' : 'unlock', onClick: toggleUnlock } : null,
     canEdit ? { label: 'Porträt ändern …', icon: 'image', onClick: setPortrait } : null,
+    canEdit && c.portrait ? { label: c.portraitLook === 'left' ? 'Im Bild schaut die Figur nach links ✓ (umstellen)' : 'Im Bild schaut die Figur nach rechts ✓ (umstellen)', icon: 'flip', onClick: () => upd({ portraitLook: c.portraitLook === 'left' ? 'right' : 'left' }) } : null,
     canEdit ? { label: 'Erfahrungspunkte …', icon: 'star', onClick: editXp } : null,
     owner === me ? { divider: true } : null,
     owner === me ? { header: true, label: 'Kampagne' } : null,
@@ -353,13 +353,6 @@ export function CharacterSheet({ id, owner }) {
       <div class="sh-stat ac" title=${cm.ac.parts.join(' · ')}><span class="l">RK</span><span class="v">${cm.ac.ac}</span></div>
       <button type="button" class="sh-stat click" onClick=${() => roll20(cm.init, 'Initiative', 'init', false, cm.initAdv ? 'adv' : null, { dice: cm.initDice })}><span class="l">Initiative</span><span class="v">${fmtMod(cm.init)}</span></button>
       <div class="sh-stat"><span class="l">Bewegung</span><span class="v">${fmtDist(c.speed || 30, units)}</span></div>
-      <button type="button" class="sh-stat click sh-facing" disabled=${!canEdit} title=${`Blickrichtung: ${dirName(c.facing || 0)} – bestimmt den Sichtkegel auf der Karte (Q/E/W drehen dort)`}
-        onClick=${async () => {
-          const d = await openModal(({ close }) => html`<div class="modal-body stack"><div class="small muted">Wohin blickt ${c.name}? Auf der Karte sieht die Figur nur in diese Richtung (40 % der Rundumsicht). Dort drehen Q und E um 1/16, W macht kehrt.</div><${FacingPicker} value=${c.facing || 0} onPick=${close} /></div>`, { title: 'Blickrichtung', icon: 'compass', size: 'sm' });
-          if (d == null) return;
-          setC({ ...c, facing: d });
-          await setCharFacing(c, owner, d);
-        }}><span class="l">Blick</span><span class="v"><${FacingIcon} dir=${c.facing || 0} size=${26} /></span></button>
       <div class="sh-stat"><span class="l">Übung</span><span class="v">+${cm.pb}</span></div>
       <button type="button" class=${`sh-stat hp click ${hpCls}`} onClick=${hpDialog}>
         <span class="l">Trefferpunkte</span>

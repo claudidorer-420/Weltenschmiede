@@ -63,6 +63,8 @@ const imKegel = (v, cx, cy, px, py) => {
   const diff = Math.abs((((a - v.dir) % 360) + 540) % 360 - 180);
   return diff <= v.fov / 2 + 0.5;
 };
+// Rundumblick: so viele Felder um die Figur herum sieht sie immer – auch hinter sich, außerhalb des Kegels
+export const RUNDUM_FELDER = 2;
 export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
   const W = grid.w;
   const H = grid.h;
@@ -86,7 +88,8 @@ export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
         // Im Dunkeln reicht nur die Dunkelsicht; beleuchtete Felder sieht man, solange die Sicht frei ist
         if (!licht[i] && d > (v.dark || 0)) continue;
         if (d <= 0.8 || (x >= v.x && x < v.x + n && y >= v.y && y < v.y + n)) { out[i] = 1; continue; }
-        if (ZIELE.some(([fx, fy]) => imKegel(v, cx, cy, x + fx, y + fy) && rayFree(grid, cx, cy, x + fx, y + fy))) out[i] = 1;
+        const rund = x >= v.x - RUNDUM_FELDER && x < v.x + n + RUNDUM_FELDER && y >= v.y - RUNDUM_FELDER && y < v.y + n + RUNDUM_FELDER;
+        if (ZIELE.some(([fx, fy]) => (rund || imKegel(v, cx, cy, x + fx, y + fy)) && rayFree(grid, cx, cy, x + fx, y + fy))) out[i] = 1;
       }
     }
   }

@@ -20,15 +20,15 @@ import {
   walkFor, turnToken, tokenDir, merkeBlick, SICHTKEGEL, DREH_SCHRITT,
 } from './battle.js';
 import { ViewFrame } from '../ui/frame.js';
-import { WeatherLayer, WeatherForm, WEATHER_SIGHT } from '../ui/weather.js';
+import { WeatherLayer, WeatherForm, WEATHER_SIGHT, WEATHER_KINDS, WIND_DIRS } from '../ui/weather.js';
 import { Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, NotePicker, openModal, promptDialog, confirmDialog, toast, pickFiles } from '../ui/components.js';
-import { useCol } from '../core/hooks.js';
+import { useCol, useDoc } from '../core/hooks.js';
 import { now, debounce, uid, colorFromString, download, randInt, clamp } from '../lib/util.js';
 import { uploadImage } from './codex.js';
 import { STAMPS, TEXTURES } from '../data/mapassets.js';
 import { TEX_MODS, splitTex } from '../data/texvars.js';
 import {
-  PROC, FLUIDS, assetInfo, assetThumb, texUrl, texThumb, fluidOf, preloadMap, onAssets, assetsVersion, blocksSight,
+  PROC, FLUIDS, assetInfo, assetThumb, texUrl, texThumb, fluidOf, preloadMap, onAssets, assetsVersion, blocksSight, DURCHSICHTIG,
   renderReal, renderObjects, drawObjects, renderLighting, drawStampPreview, texName, REAL_INK, drawRoofs,
 } from './maprender.js';
 import { STYLES, isReal, isImageMap, MATS, SETS, SCRAWL_GENERATORS, GEN_OPTS, genSize, genFits, generate, r2, rnd, pick, stampAt } from './mapgen.js';
@@ -533,12 +533,12 @@ export function objMeta(o) {
     const i = assetInfo(o.a);
     const s = o.s || 1;
     if (!i) return { w: s, h: s, block: false, rough: false, door: false, layer: 'obj', name: 'Objekt' };
-    return { w: i.w * s, h: i.h * s, block: !!i.block, rough: !!i.rough, door: !!i.door, layer: o.layer || i.layer || 'obj', name: i.name, glow: !!i.glow, sight: blocksSight({ ...i, hM: (Number(i.hM) || 0) * s }) };
+    return { w: i.w * s, h: i.h * s, block: !!i.block, rough: !!i.rough, door: !!i.door, zu: !!i.door && i.key !== 'p:arch', see: !!i.see || DURCHSICHTIG.has(i.key), layer: o.layer || i.layer || 'obj', name: i.name, glow: !!i.glow, sight: blocksSight({ ...i, hM: (Number(i.hM) || 0) * s }) };
   }
   const def = OBJ[o.t];
   if (!def) return null;
   const s = o.s || 1;
-  return { w: def.w * s, h: def.h * s, block: BLOCK_OBJ.has(o.t), rough: ROUGH_OBJ.has(o.t), door: DOORS.includes(o.t), layer: 'obj', name: def.label, sight: BLOCK_OBJ.has(o.t) && Math.min(def.w, def.h) * s >= 0.9 };
+  return { w: def.w * s, h: def.h * s, block: BLOCK_OBJ.has(o.t), rough: ROUGH_OBJ.has(o.t), door: DOORS.includes(o.t), zu: DOORS.includes(o.t) && o.t !== 'arch', see: o.t === 'portcullis', layer: 'obj', name: def.label, sight: BLOCK_OBJ.has(o.t) && Math.min(def.w, def.h) * s >= 0.9 };
 }
 function objHit(o, x, y) {
   const m = objMeta(o);
@@ -570,7 +570,75 @@ export function glowSources(d) {
   return out;   // die Lichter aus d.lights holt sich lightMap() selbst
 }
 
-export function buildGrid(d) {
+// Was die Karte gerade nicht zeichnet: Auswahl beim Verschieben und offene Türen (Erkunden/Kampf)
+function weglassen(s) {
+  if (!s.skipIds && !s.offenIds) return null;
+  return new Set([...(s.skipIds || []), ...(s.offenIds || [])]);
+}
+// Tür-Symbole (Erkunden/Kampf): geschlossen = Tür, offen = offener Rahmen; Gitter mit Stäben. Antippen schaltet um.
+const TUER_PX = 11;
+function tuerSymbole(ctx, s, k) {
+  const g = s.tuerGrid;
+  if (!g?.tueren?.length) return;
+  // Weit herausgezoomt keine Symbole (sie würden die Karte zudecken), sonst höchstens knapp ein halbes Feld groß
+  if (k < 10) return;
+  const r = Math.min(0.42, TUER_PX / k);
+  for (const t of g.tueren) {
+    if (!s.viewGm && s.sicht && !s.sicht[Math.floor(t.y) * g.w + Math.floor(t.x)] && !s.erkundet?.[Math.floor(t.y) * g.w + Math.floor(t.x)]) continue;
+    const auf = !!g.offen?.has(t.id);
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = auf ? 'rgba(22,48,30,.92)' : 'rgba(44,30,18,.94)';
+    ctx.fill();
+    ctx.lineWidth = Math.max(0.025, 1.6 / k);
+    ctx.strokeStyle = auf ? '#7ee2a0' : '#f0c27a';
+    ctx.stroke();
+    const w = r * 0.78;
+    const h = r * 1.1;
+    ctx.lineWidth = Math.max(0.018, 1.2 / k);
+    if (!auf) {
+      if (t.see) {
+        ctx.strokeStyle = '#d6dbe0';
+        for (let i = 0; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(-w / 2 + (w * i) / 3, -h / 2); ctx.lineTo(-w / 2 + (w * i) / 3, h / 2); ctx.stroke(); }
+        ctx.beginPath(); ctx.moveTo(-w / 2, 0); ctx.lineTo(w / 2, 0); ctx.stroke();
+      } else {
+        ctx.fillStyle = '#c99a5b';
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+        ctx.fillStyle = '#3a2410';
+        ctx.beginPath(); ctx.arc(w * 0.25, 0, r * 0.1, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      // offener Rahmen, das Türblatt schräg aufgeschwungen
+      ctx.strokeStyle = '#7ee2a0';
+      ctx.strokeRect(-w / 2, -h / 2, w, h);
+      ctx.fillStyle = 'rgba(201,154,91,.9)';
+      ctx.beginPath(); ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(-w / 2 + w * 0.42, -h / 2 + h * 0.16); ctx.lineTo(-w / 2 + w * 0.42, h / 2 + h * 0.12); ctx.lineTo(-w / 2, h / 2); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function tuerAn(s, w, k) {
+  const g = s.tuerGrid;
+  if (!g?.tueren?.length) return null;
+  if (k < 10) return null;
+  const r = Math.min(0.55, (TUER_PX + 4) / k);
+  let best = null;
+  for (const t of g.tueren) {
+    const d = Math.hypot(t.x - w.x, t.y - w.y);
+    if (d <= r && (!best || d < best.d)) best = { d, t };
+  }
+  return best?.t || null;
+}
+// Prüfsumme über den Karteninhalt (FNV-1a über den JSON-Text) – schnell genug auch für große Karten
+function inhaltSig(d) {
+  const t = JSON.stringify(d);
+  let h = 2166136261;
+  for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return `${t.length}:${h >>> 0}`;
+}
+export function buildGrid(d, offen = null) {
   const W = d.w || 36;
   const H = d.h || 26;
   const R = 6;
@@ -616,6 +684,7 @@ export function buildGrid(d) {
     for (let y = Math.max(0, Math.floor(y0)); y <= Math.min(H - 1, Math.ceil(y1)); y++) for (let x = Math.max(0, Math.floor(x0)); x <= Math.min(W - 1, Math.ceil(x1)); x++) fn(x, y);
   };
   const mat = new Array(W * H).fill(null);
+  const tueren = [];
   for (const s of d.terrain || []) {
     const p = s.pts || [];
     let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
@@ -629,11 +698,17 @@ export function buildGrid(d) {
     const m = objMeta(o);
     if (!m) continue;
     if (m.door) {
-      // Türen öffnen dünne Wände
-      cells(o.x - 1.5, o.y - 1.5, o.x + 1.5, o.y + 1.5, (x, y) => {
-        if (x < W - 1 && inObj(o, m, x + 1, y + 0.5, 0.25)) wallE[y * W + x] = 0;
-        if (y < H - 1 && inObj(o, m, x + 0.5, y + 1, 0.25)) wallS[y * W + x] = 0;
+      // Türen: die Kanten unter ihnen merken – offen sind sie frei, geschlossen eine Wand (Gitter: nur für den Weg).
+      // Ein Durchgang (Bogen) ist immer offen. Den Zustand setzt mitTueren().
+      const e = [];
+      const sk = [];
+      const ext = Math.max(m.w, m.h) / 2 + 1;
+      cells(o.x - ext, o.y - ext, o.x + ext, o.y + ext, (x, y) => {
+        if (x < W - 1 && inObj(o, m, x + 1, y + 0.5, 0.25)) e.push(y * W + x);
+        if (y < H - 1 && inObj(o, m, x + 0.5, y + 1, 0.25)) sk.push(y * W + x);
       });
+      if (m.zu) tueren.push({ id: o.id, x: o.x, y: o.y, r: o.r || 0, w: m.w, e, s: sk, see: m.see, name: m.name });
+      else { for (const i of e) wallE[i] = 0; for (const i of sk) wallS[i] = 0; }
       continue;
     }
     if (!m.block && !m.rough) continue;
@@ -660,7 +735,19 @@ export function buildGrid(d) {
       } else cost[i] = Math.max(cost[i], 2);
     });
   }
-  return { w: W, h: H, walk, cost, opaque, cover, wallE, wallS };
+  return mitTueren({ w: W, h: H, walk, cost, opaque, cover, wallE, wallS, tueren }, offen);
+}
+// Türzustand anwenden (billig – das Raster selbst bleibt): offen = frei, zu = Wand (1), Gitter zu = nur Weg (2)
+export function mitTueren(g, offen = null) {
+  if (!g?.tueren?.length) return g;
+  const wallE = Uint8Array.from(g.basisE || g.wallE);
+  const wallS = Uint8Array.from(g.basisS || g.wallS);
+  for (const t of g.tueren) {
+    const v = offen?.has(t.id) ? 0 : t.see ? 2 : 1;
+    for (const i of t.e) wallE[i] = v;
+    for (const i of t.s) wallS[i] = v;
+  }
+  return { ...g, basisE: g.basisE || g.wallE, basisS: g.basisS || g.wallS, wallE, wallS, offen: offen || null };
 }
 
 // ───────────────────────── Objektbibliothek (Seitenleiste) ─────────────────────────
@@ -947,7 +1034,33 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const real = isReal(s.doc);
   const imageMap = isImageMap(s.doc);
   const rich = real || imageMap;
-  const grid = useMemo(() => buildGrid(s.doc), [s.geom, s.doc.w, s.doc.h]);
+  // Türen: Zustand in der geteilten Kartenebene (party/doors-<karte>) – alle Mitglieder dürfen dort schreiben.
+  // Das große Raster bleibt, nur die Türkanten werden neu gesetzt (mitTueren).
+  const tuerDoc = useDoc(cid ? col('party') : null, `doors-${params.id}`);
+  const offenKey = (tuerDoc?.open || []).slice().sort().join(',');
+  const offen = useMemo(() => new Set(tuerDoc?.open || []), [offenKey]);
+  const grundGrid = useMemo(() => buildGrid(s.doc), [s.geom, s.doc.w, s.doc.h]);
+  const grid = useMemo(() => mitTueren(grundGrid, offen), [grundGrid, offen]);
+  // Offene Türen zeichnet die Karte nicht (Erkunden/Kampf) – der Durchgang ist frei
+  s.offenIds = mode !== 'build' && offen.size ? offen : null;
+  s.offenKey = mode !== 'build' ? offenKey : '';
+  s.tuerGrid = mode !== 'build' ? grid : null;
+  // Tür öffnen/schließen: SL immer; Spieler mit einer eigenen Figur direkt daneben (im Kampf nur im eigenen Zug)
+  s.toggleTuer = async (tu) => {
+    if (s.paused) return;
+    if (!gm) {
+      const nah = tokens.filter((t) => t.ownerUid === me && Math.hypot(t.x + (t.size || 1) / 2 - tu.x, t.y + (t.size || 1) / 2 - tu.y) <= (t.size || 1) / 2 + 1.4);
+      if (!nah.length) { toast('Zu weit weg – stell eine deiner Figuren direkt neben die Tür.', 'info'); return; }
+      const c = B.combat;
+      if (c.active) {
+        const cur = c.list.find((x) => x.id === c.curId);
+        if (!cur || cur.ownerUid !== me) { toast('Im Kampf öffnest du Türen in deinem Zug.', 'info'); return; }
+      }
+    }
+    const neu = new Set(tuerDoc?.open || []);
+    if (neu.has(tu.id)) neu.delete(tu.id); else neu.add(tu.id);
+    await db.set(col('party'), `doors-${params.id}`, { kind: 'doors', mapId: params.id, open: [...neu], ts: now() }).catch((e2) => toast(e2.message, 'error'));
+  };
   // Licht und Sicht: Grundlage für Nebel des Krieges und für das, was Spieler sehen dürfen
   const licht = useMemo(() => lightMap(s.doc, grid, { glows: glowSources(s.doc) }), [grid, s.geom, s.ver]);
   const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender, explore: mode === 'explore', active });
@@ -968,11 +1081,18 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   };
   useEffect(() => {
     if (!s.localDirty) {
-      s.doc = pickDoc(map);
-      s.geom++;
-      s.ver++;
-      s.dirty = true;
-      rerender();
+      // Nur neu aufbauen, wenn sich am Inhalt wirklich etwas geändert hat – Nebel, Pause, Wetter, Vorschaubild
+      // ändern das Kartendokument auch, und eine große Stadtkarte neu zu zeichnen kostet Sekunden (auf jedem Gerät)
+      const d = pickDoc(map);
+      const sig = inhaltSig(d);
+      if (sig !== s.docSig) {
+        s.docSig = sig;
+        s.doc = d;
+        s.geom++;
+        s.ver++;
+        s.dirty = true;
+        rerender();
+      }
     }
     if (!s.localFog) s.fog = (map.fog?.revealed || '').padEnd((map.w || 36) * (map.h || 26), '0').split('');
     s.dirty = true;
@@ -1403,10 +1523,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           if (s.detailCv) { s.detailCv.width = 1; s.detailCv.height = 1; }
           s.dirty = true;
         }
-        const skipKey = s.skipIds ? [...s.skipIds].join(',') : '';
+        const skipKey = `${s.skipIds ? [...s.skipIds].join(',') : ''}|${s.offenKey || ''}`;
         const ok = `${s.ver}|${cs}|${aver}|${skipKey}`;
         if (!s.live && ok !== s.objKeyC && (t - settleT > 120 || !s.objKeyC.startsWith(`${s.ver}|`)) && (!busyDraw || t - (s.lastObj || 0) > 150)) {
-          renderObjects(s.objCache, d, cs, { legacyDefs: OBJ, skip: s.skipIds });
+          renderObjects(s.objCache, d, cs, { legacyDefs: OBJ, skip: weglassen(s) });
           s.objKeyC = ok;
           s.lastObj = t;
           s.dirty = true;
@@ -1503,7 +1623,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     if (s.rich && !s.useBake) {
       if (s.live) {
         const view = { x0: -s.t.x / k, y0: -s.t.y / k, x1: (s.w - s.t.x) / k, y1: (s.h - s.t.y) / k };
-        drawObjects(ctx, d, { legacyDefs: OBJ, skip: s.skipIds, view });
+        drawObjects(ctx, d, { legacyDefs: OBJ, skip: weglassen(s), view });
       } else ctx.drawImage(s.objCache, 0, 0, d.w, d.h);
       if (s.skipIds) for (const o of d.objects) if (s.skipIds.has(o.id)) drawStampPreview(ctx, o, OBJ, 1);
       if (s.real) dachZeichnen(ctx, d);
@@ -1531,6 +1651,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     }
     if (s.mode === 'build') drawBattle(ctx, s, k, { passive: true });   // Figuren sehen, aber nicht anfassen
     if (s.mode !== 'build') {
+      tuerSymbole(ctx, s, k);
       drawBattle(ctx, s, k);
       if (map.fog?.enabled && s.fog) {
         ctx.fillStyle = s.viewGm ? 'rgba(0,0,0,.5)' : '#000';
@@ -1852,7 +1973,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     };
 
     const down = async (e) => {
-      cv.setPointerCapture(e.pointerId);
+      try { cv.setPointerCapture(e.pointerId); } catch { /* Zeiger schon weg */ }
       const p = pos(e);
       s.pointers.set(e.pointerId, p);
       if (s.pointers.size === 2) {
@@ -1874,6 +1995,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         if (s.paused) { s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y }; return; }
         if (e.altKey && e.button === 0) { ping(s.B, w); return; }
         if (s.B && battleDown(s.B, w, s.doc.w, s.doc.h)) return;
+        // Tür-Symbol angetippt: öffnen bzw. schließen
+        const tu = tuerAn(s, w, k);
+        if (tu && !['measure', 'reveal', 'hide', 'token', 'place'].includes(tl)) { s.toggleTuer?.(tu); return; }
         if (tl === 'place' && s.gm) { await placeMonster(s.B, w, s.doc.w, s.doc.h); return; }
         if (tl === 'measure') { s.measure = { a: w, b: w }; s.act = { kind: 'measure' }; s.dirty = true; return; }
         if ((tl === 'reveal' || tl === 'hide') && s.gm) { s.act = { kind: 'fog' }; fogPaint(w); return; }
@@ -2096,11 +2220,12 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (a.kind === 'token') {
+        // Die Figur bleibt stehen – gezogen wird nur die Zielmarke (Weg, Entfernung); beim Loslassen läuft sie hin
         if (Math.hypot(p.x - a.sx, p.y - a.sy) > 4) a.moved = true;
-        a.t.dragX = w.x - a.off.x;
-        a.t.dragY = w.y - a.off.y;
         const n = a.t.size || 1;
-        if (s.B && a.moved) s.B.drag = { t: a.t, x: clamp(Math.round(a.t.dragX), 0, s.doc.w - n), y: clamp(Math.round(a.t.dragY), 0, s.doc.h - n) };
+        a.zx = clamp(Math.round(w.x - a.off.x), 0, s.doc.w - n);
+        a.zy = clamp(Math.round(w.y - a.off.y), 0, s.doc.h - n);
+        if (s.B && a.moved) s.B.drag = { t: a.t, x: a.zx, y: a.zy, px: w.x, py: w.y };
         s.dirty = true;
         return;
       }
@@ -2233,11 +2358,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         const t = a.t;
         const d = s.doc;
         if (s.B) s.B.drag = null;
-        if (a.moved) {
-          const nx = clamp(Math.round(t.dragX), 0, d.w - (t.size || 1));
-          const ny = clamp(Math.round(t.dragY), 0, d.h - (t.size || 1));
-          delete t.dragX;
-          delete t.dragY;
+        if (a.moved && a.zx != null) {
+          const nx = a.zx;
+          const ny = a.zy;
           s.dirty = true;
           if (nx === t.x && ny === t.y) return;
           const lauf = walkFor(s.B, t, nx, ny, d.w, d.h);
@@ -2640,6 +2763,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           <div class="row small"><${Btn} size="sm" icon="image" onClick=${traceImage}>${map.fileId ? 'Andere Vorlage' : 'Bild als Vorlage'}<//></div>
           ${map.fileId ? html`<${Slider} label="Vorlage sichtbar" value=${d.bgAlpha ?? 0.5} min=${0} max=${1} onInput=${(v) => commit({ bgAlpha: v }, { undo: false })} fmt=${(v) => `${Math.round(v * 100)} %`} />` : null}
         <//>
+        <${Sec} title="Wetter" icon="cloud">
+          <div class="row small"><span class="grow">${map.weather?.kind ? `${WEATHER_KINDS.find((w) => w.value === map.weather.kind)?.label || map.weather.kind} · zieht ${(WIND_DIRS.find((w) => w.value === Number(map.weather.dir || 0))?.label || '').replace(/^\S+\s/, 'nach ')}` : 'Klar – kein Wetter'}</span>
+            <${Btn} size="sm" icon="cloud" onClick=${wetterDialog}>Einstellen<//></div>
+          <div class="tiny faint">Wolken mit Schatten, Nebel, Regen, Gewitter, Schnee oder Sandsturm ziehen animiert über die Karte – waagerecht, senkrecht oder schräg. Auch über die Kopfzeile (Wolken-Knopf).</div>
+        <//>
         ${real ? html`<${Sec} title="Licht & Stimmung" icon="sun">
           <${Slider} label="Dunkelheit" value=${d.dark || 0} min=${0} max=${0.9} onInput=${(v) => commit({ dark: v }, { undo: false, geom: false })} fmt=${(v) => `${Math.round(v * 100)} %`} />
           <${Toggle} checked=${showLight} onChange=${setShowLight} label="Licht beim Bauen zeigen" />
@@ -2758,7 +2886,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, matCat, shapeTex, doorKey, objKey,
     objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
     textKind, textGm, fogBrush, showLight, layerQ, lDrag.id || '', lDrag.over || '', lDrag.zone || '', busy, gm, real, matMod, sidebarOpen, s.ver, s.geom, s.undo.length, s.redo.length,
-    sel.map((x) => `${x.kind}:${x.id}`).join(','), map.fileId || '', map.bake?.fileId || '', map.fog?.enabled ? 1 : 0, B.combat?.active ? 1 : 0, B.showNames ? 1 : 0,
+    sel.map((x) => `${x.kind}:${x.id}`).join(','), map.fileId || '', map.bake?.fileId || '', map.fog?.enabled ? 1 : 0, B.combat?.active ? 1 : 0, B.showNames ? 1 : 0, map.weather?.kind || '', map.weather?.dir ?? 0,
+    // Figurenliste: Tokens auf der Karte, Kämpfer und Gruppe – sonst bliebe ein entfernter Eintrag stehen
+    tokens.map((t) => `${t.id}:${t.label}`).join(','), (B.combat?.list || []).map((c) => c.id).join(','), (B.party || []).length, B.sel || '',
   ].join('|');
   useEffect(() => {
     if (!active) { clearPanels(tabId); return; }
@@ -2800,7 +2930,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   return html`<${ViewFrame} tabId=${tabId} title=${map.name} noScroll actions=${actions}>
     <div class="map-stage scrawl" ref=${wrapRef} style=${{ background: st.bg }} onDragOver=${figDragOver} onDrop=${figDrop}>
       <canvas ref=${cvRef} class=${`tool-${tool}`}></canvas>
-      ${mode !== 'build' ? html`<${WeatherLayer} weather=${map.weather} seed=${params.id} active=${active} size=${{ w: s.doc.w, h: s.doc.h }} view=${() => ({ x: s.t.x, y: s.t.y, k: s.t.k * PX })} />` : null}
+      ${map.weather?.kind ? html`<${WeatherLayer} weather=${map.weather} seed=${params.id} active=${active} size=${{ w: s.doc.w, h: s.doc.h }} view=${() => ({ x: s.t.x, y: s.t.y, k: s.t.k * PX })} />` : null}
       ${!sidebarOpen ? html`<div class="map-toolbar">
         ${tools.map(([id, icon, label]) => html`<${IconBtn} key=${id} icon=${icon} title=${label} active=${tool === id} onClick=${() => pickTool(id)} />`)}
         ${mode === 'build' && (tool === 'land' || tool === 'terrain') ? html`<div class="sep"></div>

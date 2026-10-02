@@ -920,6 +920,9 @@ function gmMenu(B, t, cb, e, editToken) {
     items.push({ label: 'Trefferpunkte ändern …', icon: 'heart', onClick: () => hpQuick(B, t, cb) });
     items.push({ label: 'Zustand setzen …', icon: 'activity', onClick: () => condMenu(B, cb, e) });
   }
+  // Charakter: Bogen im neuen Tab öffnen (Werte, Zauber, Inventar)
+  const pe = charOf(B, t);
+  if (pe?.char) items.push({ label: 'Charakterbogen öffnen', icon: 'user', onClick: () => openView('character', { id: pe.char.id, owner: pe.owner, title: pe.char.name }, { newTab: true }) });
   const sb = statFor(B, t);
   if (sb) items.push({ label: 'Statblock', icon: 'scroll', onClick: () => openModal(() => html`<div class="modal-body"><${Statblock} monster=${sb} /></div>`, { title: t.label, icon: 'ghost', size: 'lg' }) });
   if (!cb && (t.charId || t.mref)) items.push({ label: 'In den Kampf', icon: 'plus', onClick: () => addTokenToCombat(B, t) });
@@ -1156,6 +1159,44 @@ export function tokenPic(B, t, { tall = false, cb = null } = {}) {
   return null;
 }
 
+// Ziehen einer Figur: Weg von der Figur zur Zielmarke, Ring am Ziel und die Entfernung – die Figur selbst bleibt stehen
+function drawMoveMarker(ctx, B, d, W, H, k) {
+  const { t, x, y } = d;
+  const info = moveInfo(B, t, W, H);
+  const n = t.size || 1;
+  const path = info && pathTo(info.r, x, y);
+  const ok = !!path && path.length > 1;
+  const zuWeit = !ok && info && B.combat.active && info.turn && (x !== t.x || y !== t.y);
+  const farbe = zuWeit ? '#ef5a5f' : info?.turn ? '#3dd68c' : '#9fd0ff';
+  const tx = x + n / 2;
+  const ty = y + n / 2;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  // Weg (über das Raster) bzw. gerade Linie, wenn die SL frei schiebt
+  ctx.strokeStyle = 'rgba(0,0,0,.45)';
+  ctx.lineWidth = 5 / k;
+  ctx.beginPath();
+  const pts = ok ? path.map(([px, py]) => [px + n / 2, py + n / 2]) : [[t.x + n / 2, t.y + n / 2], [tx, ty]];
+  pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+  ctx.stroke();
+  ctx.strokeStyle = farbe;
+  ctx.lineWidth = 2.4 / k;
+  ctx.stroke();
+  // Zielmarke: Ring in Figurengröße + Punkt
+  disk(ctx, tx, ty, n / 2 - 0.08, zuWeit ? 'rgba(239,90,95,.16)' : 'rgba(61,214,140,.14)', farbe, 2.4 / k);
+  disk(ctx, tx, ty, 0.09, farbe);
+  ctx.restore();
+  // Entfernung als Schild über dem Ziel
+  let txt = 'frei';
+  if (ok) {
+    const m = info.r.dist[y * W + x] * CELL_M * (info.prone ? 2 : 1);
+    txt = info.turn && B.combat.active ? `🚶 ${fmtMeters(m)} · noch ${fmtMeters(Math.max(0, info.remainingM - m))}` : `🚶 ${fmtMeters(m)}`;
+  } else if (zuWeit) txt = 'zu weit';
+  else txt = `🚶 ${fmtMeters(Math.hypot(x - t.x, y - t.y) * CELL_M)}`;
+  wtext(ctx, txt, tx, y - 0.42, 0.34, zuWeit ? '#ffb4b4' : '#fff', 'rgba(0,0,0,.85)');
+}
+
 function drawToken(ctx, B, t, k, tm, selected) {
   const n = t.size || 1;
   const lauf = t.dragX == null ? laufPos(B, t, tm) : null;
@@ -1185,11 +1226,13 @@ function drawToken(ctx, B, t, k, tm, selected) {
   const bw = r;
   if (img) {
     // Das Bild dreht mit der Blickrichtung; zeigt sie nach links, wird es gespiegelt – so steht niemand kopf
+    // Schaut die Figur im Bild nach links (Porträt-Einstellung), wird es vorher gespiegelt
     const links = Math.cos(dirRad) < -1e-6;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(links ? dirRad - Math.PI : dirRad);
     if (links) ctx.scale(-1, 1);
+    if (pe?.char?.portraitLook === 'left') ctx.scale(-1, 1);
     ctx.drawImage(img, -bw, -bw, bw * 2, bw * 2);
     ctx.restore();
   } else if (t.art?.icon) {
@@ -1213,14 +1256,14 @@ function drawToken(ctx, B, t, k, tm, selected) {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.arc(cx, cy, r + 0.045, dirRad - Math.PI / 4, dirRad + Math.PI / 4);
+    ctx.arc(cx, cy, r + 0.025, dirRad - Math.PI / 4, dirRad + Math.PI / 4);
     ctx.strokeStyle = 'rgba(255,200,60,.35)';
-    ctx.lineWidth = Math.max(0.13, 5 / k);
+    ctx.lineWidth = Math.max(0.052, 2 / k);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(cx, cy, r + 0.045, dirRad - Math.PI / 4, dirRad + Math.PI / 4);
+    ctx.arc(cx, cy, r + 0.025, dirRad - Math.PI / 4, dirRad + Math.PI / 4);
     ctx.strokeStyle = '#ffcf3f';
-    ctx.lineWidth = Math.max(0.055, 2.2 / k);
+    ctx.lineWidth = Math.max(0.022, 0.9 / k);
     ctx.stroke();
     ctx.restore();
   }
@@ -1312,23 +1355,7 @@ export function drawBattle(ctx, s, k, { passive = false } = {}) {
   if (B.pending && selT) drawTargetUnder(ctx, B, selT, vis, W, H, k);
   for (const t of vis) drawToken(ctx, B, t, k, tm, t.id === B.sel);
   if (B.pending && selT) drawTargetOver(ctx, B, selT, vis);
-  if (B.drag) {
-    const { t, x, y } = B.drag;
-    const info = moveInfo(B, t, W, H);
-    const n = t.size || 1;
-    const path = info && pathTo(info.r, x, y);
-    if (path && path.length > 1) {
-      ctx.strokeStyle = info.turn ? '#3dd68c' : '#4d8dff';
-      ctx.lineWidth = 4 / k;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      path.forEach(([px, py], i) => { if (i) ctx.lineTo(px + n / 2, py + n / 2); else ctx.moveTo(px + n / 2, py + n / 2); });
-      ctx.stroke();
-      const m = info.r.dist[y * W + x] * CELL_M * (info.prone ? 2 : 1);
-      wtext(ctx, info.turn && B.combat.active ? `${fmtMeters(m)} · noch ${fmtMeters(Math.max(0, info.remainingM - m))}` : fmtMeters(m), x + n / 2, y - 0.4, 0.36, '#fff', 'rgba(0,0,0,.8)');
-    } else if (info && B.combat.active && info.turn && (x !== t.x || y !== t.y)) wtext(ctx, 'zu weit', x + n / 2, y - 0.4, 0.36, '#ef5a5f', 'rgba(0,0,0,.8)');
-  }
+  if (B.drag) drawMoveMarker(ctx, B, B.drag, W, H, k);
   drawFloats(ctx, B, k);
   for (const p of [...B.overlays.filter((o) => o.kind === 'ping'), B.localPing]) {
     if (!p) continue;

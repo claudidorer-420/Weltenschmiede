@@ -38,8 +38,32 @@ async function fromLegacy(mapId) {
   return st;
 }
 
+// SL in der Cloud: Kampfzustand im Speicher. Die SL ist die einzige, die ihn schreibt – Lesen braucht deshalb keine
+// Server-Rundreise, und gespeichert wird im Hintergrund (Firestore hält die Reihenfolge der Schreibvorgänge ein).
+// Ein Beobachter je Karte hält den Stand aktuell, falls eine Co-SL auf einem anderen Gerät schreibt.
+const memo = new Map();   // '<kampagne>|<karte>' → { st, at }
+const wache = new Map();
+const memoKey = (m) => `${app.get().cid}|${mk(m)}`;
+const merken = () => db.mode === 'cloud' && app.get().role === 'gm';
+function beobachte(mapId) {
+  const k = memoKey(mapId);
+  if (wache.has(k)) return;
+  wache.set(k, db.watchDoc(col('combat'), gmDocId(mapId), (d) => {
+    const m = memo.get(k);
+    if (d && (!m || (Number(d.updatedAt) || 0) >= (m.at || 0))) memo.set(k, { st: d, at: Number(d.updatedAt) || 0 });
+  }, () => { wache.delete(k); memo.delete(k); }));
+}
+let schreibt = Promise.resolve();
+// Warten, bis alle Kampf-Schreibvorgänge beim Server sind (z. B. vor dem Abmelden)
+export const combatWritten = () => schreibt;
+
 export async function loadCombat(mapId = curMap) {
-  const st = (await db.get(col('combat'), gmDocId(mapId))) || (await fromLegacy(mapId));
+  const m = merken() ? memo.get(memoKey(mapId)) : null;
+  const st = m ? clean(m.st) : (await db.get(col('combat'), gmDocId(mapId))) || (await fromLegacy(mapId));
+  if (!m && merken()) {
+    if (st) memo.set(memoKey(mapId), { st: clean(st), at: Number(st.updatedAt) || 0 });
+    beobachte(mapId);
+  }
   return st ? { ...EMPTY_COMBAT, ...st, mapId: mapId && mapId !== NO_MAP ? mapId : null } : { ...EMPTY_COMBAT, mapId: mapId && mapId !== NO_MAP ? mapId : null };
 }
 // Verzeichnis: auf welchen Karten läuft gerade ein Kampf? → [{ mapId, active, round, name }]
@@ -168,7 +192,20 @@ export async function saveCombat(state) {
     indexSeen.set(key, sig);
     ops.push({ op: 'set', col: col('combat'), id: INDEX_DOC, data: { maps: { [mk(s.mapId)]: { ...entry, updatedAt: now() } } }, merge: true });
   }
-  await db.batch(ops);
+  if (!merken()) {
+    await db.batch(ops);
+    return s;
+  }
+  // Cloud-SL: sofort im Speicher, zum Server im Hintergrund – die nächste Änderung wartet nicht auf die Bestätigung
+  const k = memoKey(s.mapId);
+  memo.set(k, { st: clean(s), at: s.updatedAt });
+  const p = db.batch(ops);
+  schreibt = schreibt.then(() => p).catch(() => {});
+  p.catch((e) => {
+    memo.delete(k);
+    indexSeen.delete(key);
+    bridge.toast?.(`Kampf nicht gespeichert: ${e.message}`, 'error');
+  });
   return s;
 }
 

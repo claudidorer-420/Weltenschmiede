@@ -291,8 +291,9 @@ function lineFree(grid, ax, ay, bx, by, opaque) {
 }
 // Schritt zwischen zwei benachbarten Feldern über eine dünne Wand? (diagonal: frei, wenn ein Winkelweg frei ist)
 function edgePass(g, [x0, y0], [x1, y1]) {
-  const vx = (x, y) => x >= 0 && y >= 0 && x < g.w - 1 && y < g.h && !!g.wallE?.[y * g.w + x];
-  const hy = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h - 1 && !!g.wallS?.[y * g.w + x];
+  // 1 = Wand, 2 = Gitter (Fallgitter, geschlossenes Gittertor): man sieht hindurch, kommt aber nicht vorbei
+  const vx = (x, y) => x >= 0 && y >= 0 && x < g.w - 1 && y < g.h && g.wallE?.[y * g.w + x] === 1;
+  const hy = (x, y) => x >= 0 && y >= 0 && x < g.w && y < g.h - 1 && g.wallS?.[y * g.w + x] === 1;
   const mx = Math.min(x0, x1);
   const my = Math.min(y0, y1);
   if (x0 !== x1 && y0 === y1) return !vx(mx, y0);

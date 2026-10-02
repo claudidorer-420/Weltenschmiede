@@ -1,0 +1,381 @@
+[
+ {
+  "id": "folterbank",
+  "name": "Folterbank",
+  "en": "medieval wooden torture rack with ropes and iron chains",
+  "kind": "object"
+ },
+ {
+  "id": "opferaltar",
+  "name": "Blutopfer-Altar",
+  "en": "dark stone sacrificial altar with dried blood and candles",
+  "kind": "object"
+ },
+ {
+  "id": "hexenkessel_feuer",
+  "name": "Hexenkessel über Feuer",
+  "en": "black iron cauldron over a campfire with glowing embers",
+  "kind": "object"
+ },
+ {
+  "id": "skelett_boden",
+  "name": "Skelett am Boden",
+  "en": "human skeleton lying on the ground, bones and tattered cloth",
+  "kind": "object"
+ },
+ {
+  "id": "juwelentruhe",
+  "name": "Juwelentruhe",
+  "en": "open treasure chest overflowing with gold coins and jewels",
+  "kind": "object"
+ },
+ {
+  "id": "waffenstaender",
+  "name": "Waffenständer",
+  "en": "wooden weapon rack with swords, axes and spears",
+  "kind": "object"
+ },
+ {
+  "id": "katapult",
+  "name": "Katapult",
+  "en": "medieval wooden catapult siege engine",
+  "kind": "object"
+ },
+ {
+  "id": "rammbock",
+  "name": "Rammbock",
+  "en": "medieval battering ram with iron head on wheels",
+  "kind": "object"
+ },
+ {
+  "id": "baerenfalle",
+  "name": "Bärenfalle",
+  "en": "rusty iron bear trap, open jaws",
+  "kind": "object"
+ },
+ {
+  "id": "kerzenleuchter_boden",
+  "name": "Bodenleuchter",
+  "en": "tall wrought iron floor candelabra with lit candles",
+  "kind": "object"
+ },
+ {
+  "id": "galgen",
+  "name": "Galgen",
+  "en": "wooden gallows with hanging noose and stone base",
+  "kind": "object"
+ },
+ {
+  "id": "pranger",
+  "name": "Pranger",
+  "en": "wooden pillory stocks on a stone platform",
+  "kind": "object"
+ },
+ {
+  "id": "zauberbuch",
+  "name": "Aufgeschlagenes Zauberbuch",
+  "en": "open spellbook on a wooden lectern, glowing pages",
+  "kind": "object"
+ },
+ {
+  "id": "kristallkugel",
+  "name": "Kristallkugel",
+  "en": "crystal ball on an ornate bronze stand",
+  "kind": "object"
+ },
+ {
+  "id": "goldhaufen",
+  "name": "Goldhaufen",
+  "en": "pile of gold coins, gems and treasure",
+  "kind": "object"
+ },
+ {
+  "id": "stand_gemuese",
+  "name": "Gemüseauslage",
+  "en": "medieval wooden market stall selling vegetables",
+  "look": "one rectangular wooden market stall: the back half is a slanted canvas awning with broad red and cream stripes, the open front counter is covered with wicker baskets of green cabbages, orange carrots, onions and red apples",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.7,
+  "h": 1.4,
+  "block": 1
+ },
+ {
+  "id": "stand_brot",
+  "name": "Brotauslage",
+  "en": "medieval bakery market stall",
+  "look": "one rectangular wooden market stall: the back half is a slanted mustard yellow canvas awning, the open front counter holds round golden loaves, braided breads and pretzels in flat wicker baskets",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.6,
+  "h": 1.4,
+  "block": 1
+ },
+ {
+  "id": "stand_toepfer",
+  "name": "Töpferwaren",
+  "en": "medieval pottery market stall",
+  "look": "one rectangular wooden market stall: the back half is a slanted plain cream canvas awning, the open front counter holds rows of round terracotta pots, jugs and glazed bowls seen from above as circles",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.6,
+  "h": 1.4,
+  "block": 1
+ },
+ {
+  "id": "stand_gewuerze",
+  "name": "Gewürzauslage",
+  "en": "medieval spice merchant stall",
+  "look": "one rectangular wooden market stall: the back half is a slanted orange and purple striped canvas awning, the open front counter holds open burlap sacks and round bowls heaped with red, yellow, ochre and brown spice powders",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.5,
+  "h": 1.4,
+  "block": 1
+ },
+ {
+  "id": "haendlerzelt",
+  "name": "Händlerzelt (rund)",
+  "en": "round medieval merchant pavilion tent",
+  "look": "one round canvas tent roof filling the frame: alternating orange and cream fabric panels radiating from a small central pole tip, a scalloped fabric rim around the edge, a pennant at the top",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2.6,
+  "h": 2.6,
+  "block": 1
+ },
+ {
+  "id": "handkarren",
+  "name": "Handkarren",
+  "en": "medieval two-wheeled wooden hand cart",
+  "look": "one wooden hand cart: a rectangular plank bed loaded with burlap sacks and a small barrel, two spoked wooden wheels at the sides and two long wooden handles pointing forward",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.2,
+  "h": 2.2,
+  "block": 1
+ },
+ {
+  "id": "kornsaecke",
+  "name": "Kornsäcke",
+  "en": "pile of burlap grain sacks",
+  "look": "a small heap of six bulging burlap sacks tied at the top with string, one sack open and spilling golden wheat grain",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.3,
+  "h": 1.3,
+  "rough": 1
+ },
+ {
+  "id": "kistenstapel",
+  "name": "Kisten",
+  "en": "stack of wooden cargo crates",
+  "look": "four square wooden crates pushed together in a block, their nailed plank lids and rope handles visible from above, one smaller crate stacked on top",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "hackklotz",
+  "name": "Hackklotz",
+  "en": "chopping block with an axe",
+  "look": "one round sawn tree stump showing its growth rings, an axe embedded in the top, pale wood chips scattered around the base",
+  "kind": "object",
+  "cat": "werkzeug",
+  "w": 0.9,
+  "h": 0.9,
+  "rough": 1
+ },
+ {
+  "id": "pferdetraenke",
+  "name": "Holztrog",
+  "en": "long wooden horse water trough",
+  "look": "one long rectangular wooden trough made of thick planks with iron bands, filled to the brim with clear water reflecting the sky",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 0.8,
+  "block": 1
+ },
+ {
+  "id": "stadtbrunnen",
+  "name": "Stadtbrunnen",
+  "en": "round stone town fountain",
+  "look": "one round carved stone fountain basin filled with blue water, a central stone column with a small bowl spilling water, a wide stone rim around it",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2.6,
+  "h": 2.6,
+  "block": 1
+ },
+ {
+  "id": "gemuesebeet",
+  "name": "Salatbeet",
+  "en": "rectangular vegetable garden bed",
+  "look": "one rectangular raised garden bed with a wooden plank border, dark rich soil and neat rows of leafy green lettuce, cabbages and carrot tops",
+  "kind": "object",
+  "cat": "natur",
+  "w": 1.8,
+  "h": 1.4,
+  "rough": 1,
+  "layer": "floor"
+ },
+ {
+  "id": "grab_platte",
+  "name": "Grabplatte (bemoost)",
+  "en": "flat stone grave slab",
+  "look": "one flat rectangular grey stone grave slab lying on the ground with a carved cross, patches of green moss and lichen",
+  "kind": "object",
+  "cat": "deko",
+  "w": 1.4,
+  "h": 1.4,
+  "layer": "floor"
+ },
+ {
+  "id": "windmuehle",
+  "name": "Windmühle",
+  "en": "medieval windmill",
+  "look": "the round conical thatched roof of one stone windmill tower in the centre with four long wooden lattice sails spreading out in an X shape",
+  "kind": "object",
+  "cat": "bau",
+  "w": 5,
+  "h": 5,
+  "block": 1
+ },
+ {
+  "id": "segelboot",
+  "name": "Segelboot",
+  "en": "small medieval wooden sailing boat",
+  "look": "one small wooden sailing boat hull with planked deck and benches, a single mast with a furled cream sail along the boom",
+  "kind": "object",
+  "cat": "bau",
+  "w": 2,
+  "h": 5,
+  "block": 1
+ },
+ {
+  "id": "pavillon",
+  "name": "Pavillon",
+  "en": "octagonal wooden garden gazebo",
+  "look": "the octagonal roof of one wooden garden gazebo covered in dark wooden shingles, eight roof segments meeting at a small finial in the centre",
+  "kind": "object",
+  "cat": "bau",
+  "w": 3,
+  "h": 3,
+  "block": 1
+ },
+ {
+  "id": "stand_stoffe",
+  "name": "Marktstand (gestreift)",
+  "en": "striped canvas market stall awning",
+  "look": "one flat rectangular canvas awning roof with broad deep blue and white stripes running front to back, a thin wooden pole tip at each of the four corners, a narrow strip of wooden counter with rolled bolts of crimson and saffron cloth visible along the front edge",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "stand_fisch",
+  "name": "Marktstand (grün)",
+  "en": "green canvas fishmonger stall awning",
+  "look": "one flat rectangular dark green canvas awning roof with a scalloped front hem, a wooden pole tip at each corner, a narrow wooden counter along the front edge holding a tray of silver fish on white crushed ice",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "stand_waffen",
+  "name": "Marktstand (Plane)",
+  "en": "grey canvas weapon stall awning",
+  "look": "one flat rectangular charcoal grey canvas awning roof with a wooden pole tip at each corner, a narrow wooden table along the front edge with steel swords and axes laid parallel and a round wooden shield",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "heuhaufen",
+  "name": "Heuhaufen",
+  "en": "round dome-shaped haystack",
+  "look": "one rounded dome of golden dry hay, a dense even surface of hay strands, slightly brighter at the top, soft irregular round outline",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.7,
+  "h": 1.7,
+  "rough": 1
+ },
+ {
+  "id": "heuballen",
+  "name": "Strohballen",
+  "en": "three rectangular straw bales",
+  "look": "exactly three rectangular golden straw bales lying side by side in one row, each tied with two strands of twine, nothing else",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 1,
+  "block": 1
+ },
+ {
+  "id": "amboss",
+  "name": "Amboss",
+  "en": "blacksmith anvil on a tree stump",
+  "look": "exactly one black iron anvil: its flat polished steel face and pointed horn, resting on a round wooden stump that shows its growth rings around the anvil, nothing else",
+  "kind": "object",
+  "cat": "werkzeug",
+  "w": 1,
+  "h": 1,
+  "block": 1
+ },
+ {
+  "id": "schmiedeesse",
+  "name": "Schmiedeesse",
+  "en": "square stone blacksmith forge",
+  "look": "one square hearth built of rough grey stones with a thick soot-blackened rim, a sunken bed of glowing orange and red coals in the middle, a brown leather bellows lying against one side",
+  "kind": "object",
+  "cat": "werkzeug",
+  "w": 1.8,
+  "h": 1.8,
+  "block": 1,
+  "fill": true
+ },
+ {
+  "id": "huehnerstall",
+  "name": "Hühnerstall",
+  "en": "chicken coop roof and run seen from above",
+  "look": "the flat sloped wooden plank roof of one small chicken coop on the left and a small square fenced run of woven willow on the right with three white hens, strictly from above so that no walls are visible",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.6,
+  "block": 1
+ },
+ {
+  "id": "fischernetz",
+  "name": "Fischernetz",
+  "en": "fishing net spread flat on the ground",
+  "look": "one large brown knotted fishing net spread completely flat in a rough rectangle, round cork floats along one edge, a coil of rope in a corner",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2.2,
+  "h": 2.2,
+  "layer": "floor"
+ },
+ {
+  "id": "bienenkorb",
+  "name": "Bienenkorb",
+  "en": "straw bee skep",
+  "look": "one single round dome-shaped straw bee skep seen from directly above: tight coiled straw rings forming concentric circles up to the top, warm golden straw colour",
+  "neg": "many baskets, bees, insects, wasps, open basket, bowl",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 0.8,
+  "h": 0.8,
+  "block": 1
+ }
+]

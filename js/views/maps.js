@@ -1322,6 +1322,12 @@ function LegacyMapView({ params, active, tabId }) {
         <${IconBtn} icon="zoom-in" title="Hineinzoomen" onClick=${() => { const c = { x: s.w / 2, y: s.h / 2 }; const k = Math.min(8, s.t.k * 1.3); s.t.x = c.x - (c.x - s.t.x) * (k / s.t.k); s.t.y = c.y - (c.y - s.t.y) * (k / s.t.k); s.t.k = k; s.clampView(); s.userMoved = true; s.dirty = true; }} />
         <${IconBtn} icon="zoom-out" title="Herauszoomen" onClick=${() => { const c = { x: s.w / 2, y: s.h / 2 }; const k = Math.max(0.03, s.t.k / 1.3); s.t.x = c.x - (c.x - s.t.x) * (k / s.t.k); s.t.y = c.y - (c.y - s.t.y) * (k / s.t.k); s.t.k = k; s.clampView(); s.userMoved = true; s.dirty = true; }} />
       </div>
+      ${tool === 'symbol' && gm && !battle ? html`<div class="map-symfloat" onPointerDown=${(e) => e.stopPropagation()}>
+        <div class="row nowrap"><b class="grow">Symbol wählen, dann auf die Karte tippen</b><${IconBtn} icon="x" size=${14} title="Schließen" onClick=${() => setTool('pan')} /></div>
+        ${[...new Set(MAP_SYMBOLS.map((x) => x[3]))].map((g) => html`<div class="tiny faint">${g}</div>
+          <div class="map-sym-grid">${MAP_SYMBOLS.filter((x) => x[3] === g).map(([id, name, icon]) => html`<button type="button" key=${id} title=${name} class=${symPick === id ? 'on' : ''} onClick=${() => setSymPick(id)}><${GameIcon} name=${icon} size=${20} /></button>`)}</div>`)}
+        <div class="tiny">Gewählt: <b>${MAP_SYMBOLS.find((x) => x[0] === symPick)?.[1] || ''}</b></div>
+      </div>` : null}
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b>${!battle && gm ? html` <${Btn} size="sm" kind="ghost" onClick=${setScale}>Als Maßstab<//>` : null}</div>` : null}
       ${placing ? html`<div class="map-pop" style="left:50%;top:10px;transform:translateX(-50%);width:auto">Tippe auf die Karte, um „${noteById(placing)?.title}“ zu platzieren · <a href="#" onClick=${(e) => { e.preventDefault(); setPlacing(null); }}>Abbrechen</a></div>` : null}
       ${routeN ? html`<div class="map-pop" style="left:50%;top:10px;transform:translateX(-50%);width:auto"><${Icon} name="footprints" size=${14} /> Weg: ${routeN} Punkt${routeN === 1 ? '' : 'e'} – weiter antippen, Doppelklick oder „Fertig“

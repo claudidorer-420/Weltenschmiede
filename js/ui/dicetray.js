@@ -114,7 +114,7 @@ function RollCard({ c }) {
   const i = lab.indexOf(': ');
   const who = i > 0 ? lab.slice(0, i) : r.character || '';
   const what = i > 0 ? lab.slice(i + 2) : lab || dText(r.input);
-  return html`<div class=${`roll-card${r.special === 'death' ? ' death' : ''}${r.crit ? ' crit' : r.fumble ? ' fumble' : ''}`} onClick=${() => dropCard(c.id)} title="Antippen zum Schließen">
+  return html`<div class=${`roll-card${r.special === 'death' ? (Number(r.total) >= 10 ? ' death ok' : ' death') : ''}${r.crit ? ' crit' : r.fumble ? ' fumble' : ''}`} onClick=${() => dropCard(c.id)} title="Antippen zum Schließen">
     <div class="rc-left">
       <span class="rc-what">${what}</span>
       <span class="rc-kind">${[KIND[r.kind], who].filter(Boolean).join(' · ') || 'Wurf'}${r.crit ? ' · Natürliche 20!' : r.fumble ? ' · Patzer' : ''}</span>

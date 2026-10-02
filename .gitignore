@@ -14,3 +14,4 @@ tools/sdxl/*.png
 .wrangler/
 tools/sdxl/*.err
 tools/sdxl/__pycache__/
+tools/sdxl/out-mal/

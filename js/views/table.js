@@ -19,6 +19,9 @@ import { now, fmtTime, fmtRelative, sortBy, esc } from '../lib/util.js';
 import { uploadImage } from './codex.js';
 import { useTip, RollTip } from '../ui/combatlog.js';
 
+// Kritische Würfe: groß steht die natürliche 20 bzw. 1 (grün/rot), die Summe klein daneben
+const critZahl = (r) => (r?.crit ? 20 : r?.fumble ? 1 : r?.total);
+
 function rollHtml(text) {
   return esc(text || '').replace(/~(\d+)~/g, '<s>$1</s>');
 }
@@ -204,7 +207,7 @@ export function ChatPanel({ active = true }) {
           <${Avatar} name=${m.character || m.name} size="sm" />
           <div class="body">
             <div class="who">${m.character ? `${m.character} (${m.name})` : m.name}<span class="when">${fmtTime(m.ts)}</span>${m._w ? html`<span class="badge accent">🤫 ${m.to === 'gm' ? 'an SL' : mine ? `an ${nameOf(m.to)}` : 'geflüstert'}</span>` : null}</div>
-            ${m.kind === 'roll' && m.roll ? html`<div class="chat-roll has-tip" ...${rt.bind(m.id, { ...m.roll, character: m.character })}><span class=${`roll-total${m.roll.crit ? ' crit' : m.roll.fumble ? ' fumble' : ''}`}>${m.roll.total}</span><span class="small"><b>${m.roll.label || m.text || m.roll.input}</b><br /><span class="mono faint" dangerouslySetInnerHTML=${{ __html: rollHtml(m.roll.text) }} /></span></div>` : html`<${MarkdownView} src=${m.text} />`}
+            ${m.kind === 'roll' && m.roll ? html`<div class="chat-roll has-tip" ...${rt.bind(m.id, { ...m.roll, character: m.character })}><span class=${`roll-total${m.roll.crit ? ' crit' : m.roll.fumble ? ' fumble' : ''}`}>${critZahl(m.roll)}</span><span class="small"><b>${m.roll.label || m.text || m.roll.input}</b>${m.roll.crit || m.roll.fumble ? html` <span class="faint">· gesamt ${m.roll.total}</span>` : null}<br /><span class="mono faint" dangerouslySetInnerHTML=${{ __html: rollHtml(m.roll.text) }} /></span></div>` : html`<${MarkdownView} src=${m.text} />`}
           </div>
         </div>`;
       })}
@@ -313,7 +316,7 @@ function PlayByPost({ active }) {
         ${p.uid === me || gm ? html`<${IconBtn} icon="more-horizontal" size=${15} class="sm" onClick=${(e) => postMenu(e, p)} />` : null}
       </div>
       ${p.text ? html`<${MarkdownView} src=${p.text} />` : null}
-      ${p.roll ? html`<div class="chat-roll has-tip" ...${rt.bind(p.id, { ...p.roll, character: p.as || '' })}><span class=${`roll-total${p.roll.crit ? ' crit' : p.roll.fumble ? ' fumble' : ''}`}>${p.roll.total}</span><span class="mono small faint" dangerouslySetInnerHTML=${{ __html: rollHtml(p.roll.text) }} /></div>` : null}
+      ${p.roll ? html`<div class="chat-roll has-tip" ...${rt.bind(p.id, { ...p.roll, character: p.as || '' })}><span class=${`roll-total${p.roll.crit ? ' crit' : p.roll.fumble ? ' fumble' : ''}`} title=${p.roll.crit || p.roll.fumble ? `gesamt ${p.roll.total}` : ''}>${critZahl(p.roll)}</span><span class="mono small faint" dangerouslySetInnerHTML=${{ __html: rollHtml(p.roll.text) }} /></div>` : null}
     </div>`)}
     <div ref=${endRef}></div>
 

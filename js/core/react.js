@@ -5,7 +5,14 @@ import { now, uid } from '../lib/util.js';
 import { combatMap } from './combat.js';
 
 export const promptStore = createStore({ items: [] });
+// Fragen der SL, die gerade bei einem Spieler liegen (die SL sieht, auf wen sie wartet, und kann weitermachen)
+export const waitStore = createStore({ items: [] });
 const pending = new Map();
+// Ist der Spieler gerade da? (setzt relay.js aus den Lebenszeichen der Spieler) – sonst gar nicht erst fragen
+let onlineCheck = null;
+export function setOnlineCheck(fn) { onlineCheck = fn; }
+// Wartezeit einer Rückfrage: kurz, damit der Kampf nicht steht (alle Ereignisse laufen nacheinander)
+export const PROMPT_MS = 15000;
 const receivers = new Map(); // Frage → Nutzer, der antworten darf
 let remotePost = null; // (prompt) => Promise – schreibt die Frage in den Kampfzustand (setzt relay.js)
 let remoteDrop = null;
@@ -19,10 +26,13 @@ export function setRemotePrompts(post, drop) {
 // Antwort: id der gewählten Option oder null (abgelehnt / Zeit abgelaufen)
 export function askPrompt(p) {
   const id = uid(8);
-  const timeout = p.timeout || 30000;
+  const timeout = p.timeout || PROMPT_MS;
   const pr = { id, ts: now(), expires: now() + timeout, mapId: combatMap() || null, ...p };
   delete pr.local;
   const local = !!p.local || !remotePost;
+  // Spieler gerade nicht in der App: keine Frage, kein Warten
+  if (!local && p.to && onlineCheck && !onlineCheck(p.to)) return Promise.resolve(null);
+  if (!local && p.wait !== false) waitStore.set({ items: [...waitStore.get().items, pr] });
   receivers.set(id, p.to || null);
   if (local) promptStore.set({ items: [...promptStore.get().items, pr] });
   else remotePost(pr).catch(() => answerPrompt(id, null));
@@ -37,6 +47,7 @@ export function askPrompt(p) {
 }
 
 export function answerPrompt(id, choice) {
+  if (waitStore.get().items.some((q) => q.id === id)) waitStore.set({ items: waitStore.get().items.filter((q) => q.id !== id) });
   if (!receivers.has(id) && !pending.has(id)) return;
   const r = pending.get(id);
   pending.delete(id);

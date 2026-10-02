@@ -46,6 +46,22 @@ NEG_OBJ = NEG_COMMON + (
     "flat lay, knolling, product arrangement, set of tools, camera, modern object, electronics, book stack, "
     "frame, border, vignette, drop shadow, cropped, cut off, out of frame"
 )
+# Gemalter Stil (Standard seit Runde 18): passt zu den übrigen Kartenobjekten und gemalten Karten – Fotos fielen heraus
+# Wichtig: CLIP liest nur 77 Token – deshalb Stil, Hintergrund und Draufsicht zuerst, die Objektbeschreibung zuletzt
+# (wird sie abgeschnitten, fehlen nur Einzelheiten, nicht der Stil oder der weiße Hintergrund fürs Freistellen)
+OBJ_PROMPT_MAL = (
+    "hand-painted top-down fantasy battle map asset, digital painting, soft brush strokes, muted natural colours, "
+    "gentle shading, thin dark outline, isolated on plain white background, seen straight from above: "
+    "exactly one {en}, {look}"
+)
+NEG_MAL = (
+    "text, watermark, signature, logo, caption, people, person, hands, blurry, low quality, jpeg artifacts, "
+    "photograph, photo, photorealistic, hyperrealistic, realistic photo, dslr, film grain, 3d render, cgi, "
+    "harsh specular highlights, neon colours, oversaturated, anime, chibi, cartoon character, pencil sketch, "
+    "flat vector clipart, perspective view, side view, front view, three-quarter view, eye level, isometric, "
+    "tilted camera, horizon, background scenery, floor, ground, grass, multiple objects, duplicates, collage, "
+    "grid of items, frame, border, vignette, drop shadow, cropped, cut off, out of frame"
+)
 NEG_TEX = NEG_COMMON + (
     ", perspective, tilted, vignette, dark corners, uneven lighting, strong directional shadow, seam, visible tiling border, "
     "object, item, prop, character, plant pot, frame, border, depth of field, "
@@ -162,13 +178,13 @@ class Clip:
         except Exception as e:  # ohne CLIP wird nur nach Aufbau und Schärfe bewertet
             print(f"CLIP nicht verfügbar ({e}) – Bewertung ohne Bildvergleich", flush=True)
 
-    def score(self, img: Image.Image, en: str, kind: str) -> float:
+    def score(self, img: Image.Image, en: str, kind: str, mal: bool = False) -> float:
         if not self.ok:
             return 0.5
         if kind == "object":
             txt = [
-                f"a photo of a {en} seen from directly above, top down view, flat lay",
-                f"a photo of a {en} seen from the side at eye level, perspective view",
+                f"a {"painted game asset" if mal else "photo"} of a {en} seen from directly above, top down view",
+                f"a {"painting" if mal else "photo"} of a {en} seen from the side at eye level, perspective view",
                 "an empty white studio background",
             ]
         else:
@@ -216,6 +232,7 @@ def main():
     ap.add_argument("--no-refiner", action="store_true")
     ap.add_argument("--only", default="")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--stil", default="maler", choices=["maler", "foto"], help="Objekte gemalt (Standard) oder als Foto")
     ap.add_argument("--waehle", default="", help="id:kandidat,… – diesen Kandidaten aus out/kandidaten fertigstellen")
     args = ap.parse_args()
 
@@ -272,9 +289,10 @@ def main():
         name = job.get("name") or job["id"]
         en = job.get("en", name)
         look = job.get("look", "")
-        tmpl = TEX_PROMPT if kind == "texture" else OBJ_PROMPT
+        mal = kind == "object" and args.stil == "maler"
+        tmpl = TEX_PROMPT if kind == "texture" else OBJ_PROMPT_MAL if mal else OBJ_PROMPT
         prompt = job.get("prompt") or tmpl.format(en=en, look=look)
-        neg = NEG_TEX if kind == "texture" else NEG_OBJ
+        neg = NEG_TEX if kind == "texture" else NEG_MAL if mal else NEG_OBJ
         if job.get("neg"):
             neg += ", " + job["neg"]   # Auftrag-eigene Verbote (was SDXL hier gern falsch macht)
         cfg = job.get("cfg", 5.5 if kind == "texture" else 7.0)
@@ -309,7 +327,7 @@ def main():
             if kind == "object":
                 cut, st = cutout(img, job.get("fill", False))
                 cuts.append((cut, st))
-                punkte.append((clip.score(cut.convert("RGB"), en, kind), sharpness(cut), geom_score(kind, img, st)))
+                punkte.append((clip.score(cut.convert("RGB"), en, kind, mal), sharpness(cut), geom_score(kind, img, st)))
             else:
                 cuts.append((img, None))
                 punkte.append((clip.score(img, en, kind), sharpness(img), 1.0))

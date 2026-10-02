@@ -18,7 +18,7 @@ import { AuthScreen } from '../views/auth.js';
 import { Lobby } from '../views/home.js';
 import { accountMenu } from './account.js';
 import { DiceOverlay } from './dicetray.js';
-import { startGmRelay } from '../core/relay.js';
+import { startGmRelay, startHeartbeat } from '../core/relay.js';
 import { PromptHost } from './prompthost.js';
 import { DeathSaveHost } from './deathsave.js';
 
@@ -183,6 +183,7 @@ function Workspace() {
   // SL: Signale der Spieler (Zugende, Initiative, Angriffe) verarbeiten – unabhängig von der offenen Ansicht
   const role = useStore(app, (x) => x.role);
   useEffect(() => (cid && role === 'gm' ? startGmRelay() : undefined), [cid, role]);
+  useEffect(() => (cid && role !== 'gm' ? startHeartbeat() : undefined), [cid, role]);
   useChatUnread(cid);
   useEffect(() => {
     const h = location.hash;

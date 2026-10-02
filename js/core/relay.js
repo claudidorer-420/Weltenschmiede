@@ -4,7 +4,7 @@
 import { db } from './db.js';
 import { app, col, myUid } from './app.js';
 import { mutateCombat, loadCombat, advanceTurn, resort, setCombatMap, combatMap, INDEX_DOC } from './combat.js';
-import { answerPrompt, promptTarget, setRemotePrompts } from './react.js';
+import { answerPrompt, promptTarget, setRemotePrompts, setOnlineCheck } from './react.js';
 import { now, uid } from '../lib/util.js';
 
 const actions = () => import('./actions.js');
@@ -18,6 +18,19 @@ function dispatch(from, e) {
   const run = chain.then(() => { setCombatMap(e.mapId || null); return handleEvent(from, e); });
   chain = run.catch((err) => console.warn('[Signal]', err));
   return run;
+}
+
+// Spieler: Lebenszeichen alle 45 Sekunden (und beim Zurückkehren in die App) – die SL fragt nur anwesende Spieler
+// nach Reaktionen, sonst stünde der Kampf bei jeder Frage, bis die Wartezeit abläuft
+export function startHeartbeat() {
+  const { cid } = app.get();
+  if (!cid || db.mode !== 'cloud' || app.get().role === 'gm') return () => {};
+  const puls = () => { if (!document.hidden) db.set(col('signals'), myUid(), { alive: now() }, { merge: true }).catch(() => {}); };
+  puls();
+  const i = setInterval(puls, 45000);
+  const sicht = () => { if (!document.hidden) puls(); };
+  document.addEventListener('visibilitychange', sicht);
+  return () => { clearInterval(i); document.removeEventListener('visibilitychange', sicht); };
 }
 
 // Spieler: Ereignis an die SL senden (die letzten Ereignisse bleiben im Dokument, damit nichts verloren geht)
@@ -113,9 +126,13 @@ export function startGmRelay() {
   let handled;
   try { handled = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { handled = new Set(); }
   const since = now() - 120000;
+  // Wer war zuletzt da? (Lebenszeichen oder letztes Ereignis)
+  const zuletzt = new Map();
+  setOnlineCheck((u) => now() - (zuletzt.get(u) || 0) < 110000);
   const unsub = db.watchCol(col('signals'), {}, (docs) => {
     let changed = false;
     for (const d of docs) {
+      zuletzt.set(d.id, Math.max(Number(d.alive) || 0, Number(d.ts) || 0));
       const evs = d.events?.length ? d.events : d.type && d.ts ? [{ id: `${d.id}:${d.ts}`, type: d.type, ts: d.ts, value: d.value, charId: d.charId }] : [];
       for (const e of evs) {
         const id = e.id || `${d.id}:${e.ts}`;
@@ -133,5 +150,6 @@ export function startGmRelay() {
   return () => {
     unsub();
     setRemotePrompts(null, null);
+    setOnlineCheck(null);
   };
 }

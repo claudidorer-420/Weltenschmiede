@@ -375,7 +375,9 @@ export const PROC = {
   door2: { name: 'Doppeltür', cat: 'tueren', w: 2, h: 0.3, tex: [WOOD, BRICK], door: true, draw: (g, u, W, H) => { jambs(g, u, W, H); const w = (W - u * 0.32) / 2; doorLeaf(g, u, u * 0.16, H * 0.18, w, H * 0.64, WOOD); doorLeaf(g, u, u * 0.16 + w, H * 0.18, w, H * 0.64, WOOD); } },
   doorIron: { name: 'Eisentür', cat: 'tueren', w: 1, h: 0.3, tex: [BRICK], door: true, draw: (g, u, W, H) => { jambs(g, u, W, H); doorLeaf(g, u, u * 0.16, H * 0.18, W - u * 0.32, H * 0.64, WOOD, true); } },
   doorDark: { name: 'Eichentür', cat: 'tueren', w: 1, h: 0.3, tex: [WOOD_D, BRICK], door: true, draw: (g, u, W, H) => { jambs(g, u, W, H); doorLeaf(g, u, u * 0.16, H * 0.18, W - u * 0.32, H * 0.64, WOOD_D); } },
-  portcullis: { name: 'Fallgitter', cat: 'tueren', w: 1, h: 0.3, tex: [BRICK], door: true, draw: (g, u, W, H) => { jambs(g, u, W, H); g.fillStyle = '#2e3033'; g.fillRect(u * 0.16, H * 0.42, W - u * 0.32, H * 0.16); g.fillStyle = '#6b7075'; for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(u * 0.22 + ((W - u * 0.44) * i) / 6, H / 2, u * 0.035, 0, TAU); g.fill(); } } },
+  portcullis: { name: 'Fallgitter', cat: 'tueren', w: 1, h: 0.3, tex: [BRICK], door: true, see: true, draw: (g, u, W, H) => { jambs(g, u, W, H); g.fillStyle = '#2e3033'; g.fillRect(u * 0.16, H * 0.42, W - u * 0.32, H * 0.16); g.fillStyle = '#6b7075'; for (let i = 0; i < 7; i++) { g.beginPath(); g.arc(u * 0.22 + ((W - u * 0.44) * i) / 6, H / 2, u * 0.035, 0, TAU); g.fill(); } } },
+  gate: { name: 'Stadttor', cat: 'tueren', w: 4, h: 0.5, tex: [WOOD_D, BRICK], door: true, draw: (g, u, W, H) => { jambs(g, u, W, H); const w = (W - u * 0.32) / 2; doorLeaf(g, u, u * 0.16, H * 0.14, w, H * 0.72, WOOD_D, false); doorLeaf(g, u, u * 0.16 + w, H * 0.14, w, H * 0.72, WOOD_D, false); g.fillStyle = '#2b2d30'; for (const fy of [0.3, 0.7]) g.fillRect(u * 0.16, H * fy - u * 0.02, W - u * 0.32, u * 0.04); } },
+  gateBars: { name: 'Gittertor', cat: 'tueren', w: 4, h: 0.4, tex: [BRICK], door: true, see: true, draw: (g, u, W, H) => { jambs(g, u, W, H); g.fillStyle = '#2e3033'; g.fillRect(u * 0.16, H * 0.4, W - u * 0.32, H * 0.2); g.fillStyle = '#767b80'; const n = Math.round(W / (u * 0.16)); for (let i = 0; i <= n; i++) { g.beginPath(); g.arc(u * 0.2 + ((W - u * 0.4) * i) / n, H / 2, u * 0.04, 0, TAU); g.fill(); } } },
   arch: { name: 'Durchgang', cat: 'tueren', w: 1, h: 0.3, tex: [BRICK], door: true, draw: (g, u, W, H) => jambs(g, u, W, H) },
   secret: { name: 'Geheimtür', cat: 'tueren', w: 1, h: 0.3, tex: [BRICK], door: true, draw: (g, u, W, H) => { rr(g, 0, 0, W, H, u * 0.02); g.fillStyle = pat(g, BRICK, u, '#6a645c'); g.fill(); g.setLineDash([u * 0.06, u * 0.05]); outline(g, u * 0.02, 'rgba(255,230,160,.55)'); g.setLineDash([]); g.font = `700 ${u * 0.2}px Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(255,230,160,.7)'; g.fillText('S', W / 2, H / 2 + u * 0.01); } },
   stairs: {
@@ -598,7 +600,7 @@ export function assetInfo(key) {
   if (!key) return null;
   const [src, id] = split(key);
   if (src === 'ph') { const s = STAMP_BY_ID.get(id); return s ? { ...s, key, src, hM: HOEHE[key] ?? s.hM ?? (s.block ? 2 : 0.8) } : null; }
-  if (src === 'p') { const p = PROC[id]; return p ? { id, key, src, name: p.name, cat: p.cat, w: p.w, h: p.h, block: !!p.block, rough: !!p.rough, layer: p.layer || 'obj', hM: HOEHE[key] ?? p.hM ?? 0.3, glow: p.glow || null, door: !!p.door } : null; }
+  if (src === 'p') { const p = PROC[id]; return p ? { id, key, src, name: p.name, cat: p.cat, w: p.w, h: p.h, block: !!p.block, rough: !!p.rough, layer: p.layer || 'obj', hM: HOEHE[key] ?? p.hM ?? 0.3, glow: p.glow || null, door: !!p.door, see: !!p.see } : null; }
   if (src === 'u') { const u = userAssetInfo(id); return u ? { ...u, key, src, hM: u.hM ?? 0.8 } : null; }
   return null;
 }
