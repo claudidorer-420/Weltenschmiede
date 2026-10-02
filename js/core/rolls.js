@@ -35,14 +35,16 @@ export function prepareRoll(expr, { label = '', kind = 'auto', fx = {}, characte
   }
 }
 
-export function commitRoll(r, { share, secret = false } = {}) {
+// combat: Wurf gehört zum Kampf → steht nur im Aktionsprotokoll, nicht im Chat
+export function commitRoll(r, { share, secret = false, combat = false } = {}) {
   if (!r) return null;
   const log = [r, ...rolls.get().log].slice(0, 150);
   rolls.set({ log });
   try {
     localStorage.setItem('ws.rolls', JSON.stringify(log.slice(0, 60).map(({ dice, ...x }) => x)));
   } catch { /* ignore */ }
-  const doShare = share ?? sharingActive();
+  if (combat) r.combat = true;
+  const doShare = combat ? false : share ?? sharingActive();
   if (doShare && db.mode === 'cloud' && app.get().cid) postRoll(r, secret).catch((e) => console.warn(e));
   return r;
 }

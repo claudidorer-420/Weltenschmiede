@@ -257,6 +257,15 @@ export const DICE_SKINS = [
   { key: 'regenbogen', name: 'Regenbogen', rainbow: true, ink: '#ffffff', style: 'gem' },
 ];
 export const skinBy = (key) => DICE_SKINS.find((s) => s.key === key) || DICE_SKINS[0];
+// Besondere Würfel, die nicht vom gewählten Skin abhängen (roll.special): der Todesrettungswürfel –
+// Rauchglas mit roter Glut und Rissen, Erfolge (10+) knochenweiß, Fehlschläge blutrot, die 1 als Totenkopf, die 20 golden
+export const SPECIAL_SKINS = {
+  death: {
+    key: 'death', name: 'Todesrettung', pair: ['#170709', '#ff4636'], ink: '#efe4cc', style: 'death', glow: 'rgba(200,24,44,.55)',
+    inkOf: (label) => { const n = parseInt(label, 10); return n === 20 ? '#ffd36b' : n >= 10 ? '#f1e6cf' : '#ff5a52'; },
+    glyph: (label) => (label === '1' ? 'skull' : ''),
+  },
+};
 const hsl = (h, s, l) => `hsl(${h} ${s}% ${l}%)`;
 // Für den Regenbogen-Skin: jeder Würfel bekommt seinen eigenen Farbton
 function rainbowPair(i) {
@@ -357,6 +366,26 @@ function faceSkin(ctx, d, i, pts, n) {
       ctx.quadraticCurveTo(d.x, y0 + s * 0.05, d.x + s * 0.6, y0);
       ctx.stroke();
     }
+  } else if (st === 'death') {
+    const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+    const cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    const g = ctx.createRadialGradient(cx, cy + s * 0.05, 1, cx, cy, s * 0.5);
+    g.addColorStop(0, 'rgba(255,60,40,.26)');
+    g.addColorStop(0.55, 'rgba(120,10,24,.18)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fill();
+    const r = rnd(i + 23);
+    ctx.strokeStyle = 'rgba(255,90,60,.55)';
+    ctx.lineWidth = Math.max(0.6, s * 0.01);
+    for (let k = 0; k < 2; k++) {
+      let x = cx + (r() - 0.5) * s * 0.4;
+      let y = cy + (r() - 0.5) * s * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let j = 0; j < 4; j++) { x += (r() - 0.5) * s * 0.22; y += (r() - 0.5) * s * 0.22; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
   } else if (st === 'glow') {
     const g = ctx.createRadialGradient(d.x, d.y, 1, d.x, d.y, s * 0.6);
     g.addColorStop(0, 'rgba(255,255,255,.26)');
@@ -429,16 +458,51 @@ function drawDie(ctx, d, alpha) {
     ctx.translate(cx + c[0] * s, cy + c[1] * s);
     ctx.transform(ux[0] * k, ux[1] * k, uy[0] * k, uy[1] * k, 0, 0);
     ctx.globalAlpha = alpha * Math.min(1, (n[2] - 0.3) / 0.3);
+    const ink = d.inkOf ? d.inkOf(label) : d.ink;
+    if (d.glyph?.(label) === 'skull') {
+      drawSkull(ctx, fs * 0.95, ink);
+      ctx.restore();
+      continue;
+    }
     ctx.font = `800 ${fs}px system-ui, "Segoe UI", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = fs * 0.14;
     ctx.strokeStyle = 'rgba(0,0,0,.35)';
     ctx.strokeText(label, 0, fs * 0.04);
-    ctx.fillStyle = d.ink;
+    ctx.fillStyle = ink;
     ctx.fillText(label, 0, fs * 0.04);
     ctx.restore();
   }
+  ctx.restore();
+}
+// Totenkopf (Fläche „1“ des Todesrettungswürfels), in Flächenkoordinaten um (0, 0), Höhe ≈ h
+function drawSkull(ctx, h, color) {
+  const u = h / 10;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = 'rgba(0,0,0,.45)';
+  ctx.lineWidth = u * 0.6;
+  ctx.beginPath();
+  ctx.arc(0, -u * 1.2, u * 3.6, Math.PI * 0.92, Math.PI * 2.08);
+  ctx.lineTo(u * 2.3, u * 2.6);
+  ctx.lineTo(u * 1.4, u * 4.2);
+  ctx.lineTo(-u * 1.4, u * 4.2);
+  ctx.lineTo(-u * 2.3, u * 2.6);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(20,4,8,.95)';
+  for (const sx of [-1, 1]) { ctx.beginPath(); ctx.ellipse(sx * u * 1.45, -u * 0.6, u * 1.05, u * 1.25, 0, 0, Math.PI * 2); ctx.fill(); }
+  ctx.beginPath();
+  ctx.moveTo(0, u * 0.9);
+  ctx.lineTo(-u * 0.6, u * 2);
+  ctx.lineTo(u * 0.6, u * 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = u * 0.45;
+  ctx.strokeStyle = 'rgba(20,4,8,.9)';
+  for (const sx of [-0.7, 0, 0.7]) { ctx.beginPath(); ctx.moveTo(sx * u, u * 2.9); ctx.lineTo(sx * u, u * 4.1); ctx.stroke(); }
   ctx.restore();
 }
 function drawShadow(ctx, d, alpha) {
@@ -517,14 +581,14 @@ export function createDiceScene(canvas, opts = {}) {
 
   function makeDie(d, S, i, skin) {
     const geo = geometry(d.shape);
-    const sk = skin || DICE_SKINS[0];
+    const sk = (d.special && SPECIAL_SKINS[d.special]) || skin || DICE_SKINS[0];
     const pair = sk.rainbow ? rainbowPair(i) : sk.pair;
     const [c1, c2] = d.bonus ? BONUS : pair || DICE_COLORS[d.color] || DICE_COLORS[20];
     let face = geo.labels.findIndex((L) => d.text(L) === d.final);
     if (face < 0) face = 0;
     const die = {
       geo, size: S, rgb: cssRgb(c1), edge: c2.startsWith('#') ? `${c2}cc` : c2, style: sk.style, glowC: sk.glow,
-      ink: d.bonus ? '#3b2a00' : sk.ink || '#ffffff', text: d.text, final: d.final, face,
+      ink: d.bonus ? '#3b2a00' : sk.ink || '#ffffff', inkOf: d.bonus ? null : sk.inkOf || null, glyph: sk.glyph || null, text: d.text, final: d.final, face,
       dropped: !!d.dropped, main: !!d.main, value: d.value, sides: d.sides, tag: d.adj != null ? `→${d.adj}` : d.from || d.note === 'Glück' ? '↻' : d.exploded ? '!' : '',
       z: 20 + Math.random() * 60, vz: 420 + Math.random() * 260, q: qRandom(), w: mul(norm(rand3()), 15 + Math.random() * 10),
       state: 'fly', delay: i * 55, age: 0, bounces: 0, entered: false,
@@ -699,7 +763,7 @@ export function createDiceScene(canvas, opts = {}) {
   return {
     throwRoll(roll, { onDone, persist = false, animate = true } = {}) {
       resize();
-      const list = expandDice(roll?.dice).slice(0, 30);
+      const list = expandDice(roll?.dice).slice(0, 30).map((d) => (roll?.special ? { ...d, special: roll.special } : d));
       if (!list.length || !W || !H) { onDone?.(roll); return; }
       const n = list.length;
       // Würfelgröße passt sich Fläche und Anzahl an – auf Handy, Tablett und am Rechner gleich gut lesbar

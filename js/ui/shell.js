@@ -20,6 +20,7 @@ import { accountMenu } from './account.js';
 import { DiceOverlay } from './dicetray.js';
 import { startGmRelay } from '../core/relay.js';
 import { PromptHost } from './prompthost.js';
+import { DeathSaveHost } from './deathsave.js';
 
 const LOADERS = {
   home: () => import('../views/home.js'),
@@ -150,7 +151,7 @@ export function App() {
   if (phase === 'boot' || phase === 'loading') body = html`<${BootScreen} />`;
   else if (!user) body = html`<${AuthScreen} />`;
   else body = html`<${Workspace} />`;
-  return html`${body}<${OverlayHost} /><${DiceOverlay} /><${Palette} /><${PromptHost} />`;
+  return html`${body}<${OverlayHost} /><${DiceOverlay} /><${Palette} /><${PromptHost} /><${DeathSaveHost} />`;
 }
 
 function BootScreen() {

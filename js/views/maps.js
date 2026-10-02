@@ -10,8 +10,11 @@ import { settings } from '../core/settings.js';
 import { fileUrl, saveDataUrl, deleteFile, updateFileMeta } from '../core/files.js';
 import { generateImage } from '../core/ai.js';
 import { colorCode, pinColorFor, PIN_COLORS } from '../core/groups.js';
-import { loadParty } from '../core/party.js';
-import { loadCombat } from '../core/combat.js';
+import { loadParty, watchParty } from '../core/party.js';
+import { giImage, GameIcon } from '../ui/art.js';
+import { MAP_SYMBOLS } from '../data/artmap.js';
+import { WeatherLayer, WeatherForm } from '../ui/weather.js';
+import { loadCombat, combatIndex, mutateCombat, NO_MAP } from '../core/combat.js';
 import { CELL, TERRAIN, TERRAIN_KEYS, GENERATORS, resizeCells } from '../data/mapgen.js';
 import { ViewFrame } from '../ui/frame.js';
 import {
@@ -21,7 +24,7 @@ import {
 import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
 import { now, debounce, initials, colorFromString, sortBy } from '../lib/util.js';
 import { uploadImage } from './codex.js';
-import { DungeonMapView, newScrawlMap, SCRAWL_GENERATORS, STYLES } from './mapeditor.js';
+import { DungeonMapView, newScrawlMap, SCRAWL_GENERATORS, STYLES, GenOptions, GenSizeHint } from './mapeditor.js';
 import { detectGrid, evenGrid } from '../lib/gridfind.js';
 
 const cssVar = (n, fb) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb;
@@ -88,8 +91,9 @@ function MapCard({ m, gm, active }) {
       ${erkundet ? null : html`<span class="mc-hint">Noch nicht erkundet</span>`}
     </div>
     <div class="row nowrap"><b class="grow ellipsis">${m.name}</b>
-      <span class="badge">${m.type === 'scrawl' ? `Dungeon ${m.w}×${m.h}` : m.type === 'battle' ? `Rasterkarte ${m.cols}×${m.rows}` : 'Weltkarte'}</span>
-      ${gm ? html`<span class=${`badge ${m.visibility === 'players' ? 'players' : 'gm'}`}>${m.visibility === 'players' ? 'sichtbar' : 'SL'}</span>` : null}</div>
+      <span class="badge">${m.type === 'scrawl' ? `${m.outdoor ? 'Außenkarte' : 'Innenkarte'} ${m.w}×${m.h}` : m.type === 'battle' ? `Rasterkarte ${m.cols}×${m.rows}` : 'Weltkarte'}</span>
+      ${gm ? html`<span class=${`badge ${m.visibility === 'players' ? 'players' : 'gm'}`}>${m.visibility === 'players' ? 'sichtbar' : 'SL'}</span>` : null}
+      ${m.type === 'scrawl' && m.play === 'pause' ? html`<span class="badge warn">Pause</span>` : null}</div>
   </div>`;
 }
 
@@ -111,7 +115,7 @@ function NewBattleForm({ close }) {
 }
 
 function NewScrawlForm({ close }) {
-  const [f, setF] = useState({ name: 'Neue Karte', w: 36, h: 26, style: 'real', gen: 'dungeon' });
+  const [f, setF] = useState({ name: 'Neue Karte', w: 36, h: 26, style: 'real', gen: 'dungeon', opts: {} });
   return html`<form onSubmit=${(e) => { e.preventDefault(); close(f); }}><div class="modal-body stack">
     <${Field} label="Name"><input class="input" value=${f.name} onInput=${(e) => setF({ ...f, name: e.target.value })} autoFocus /><//>
     <div class="grid two" style="gap:8px">
@@ -119,7 +123,8 @@ function NewScrawlForm({ close }) {
       <${Field} label="Zeilen"><input class="input" type="number" min="8" max="150" value=${f.h} onInput=${(e) => setF({ ...f, h: Math.max(8, Math.min(150, Number(e.target.value) || 26)) })} /><//>
     </div>
     <${Field} label="Stil"><div class="style-pick">${Object.entries(STYLES).map(([k, sv]) => html`<button type="button" class=${f.style === k ? 'active' : ''} onClick=${() => setF({ ...f, style: k })}><span class="sw" style=${{ background: `linear-gradient(135deg, ${sv.bg} 0 45%, ${sv.floor} 45% 70%, ${sv.wall} 70%)` }}></span>${sv.label}</button>`)}</div><//>
-    <${Field} label="Start" hint="Generierte Karten kannst du danach frei weiterbauen."><div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button type="button" class=${`chip${f.gen === k ? ' selected' : ' suggest'}`} onClick=${() => setF({ ...f, gen: k })}>${g.label}</button>`)}</div><//>
+    <${Field} label="Start" hint="Generierte Karten kannst du danach frei weiterbauen."><div class="chips">${Object.entries(SCRAWL_GENERATORS).map(([k, g]) => html`<button type="button" class=${`chip${f.gen === k ? ' selected' : ' suggest'}`} onClick=${() => setF({ ...f, gen: k, opts: {}, ...(k === 'stadt' && f.w < 72 ? { w: 72, h: Math.max(f.h, 72) } : {}) })}>${g.label}</button>`)}</div><//>
+    ${f.gen !== 'leer' ? html`<${GenOptions} gen=${f.gen} value=${f.opts} onChange=${(o) => setF({ ...f, opts: o })} w=${f.w} h=${f.h} /><${GenSizeHint} gen=${f.gen} w=${f.w} h=${f.h} opts=${f.opts} />` : null}
   </div><div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" type="submit" icon="castle">Erstellen<//></div></form>`;
 }
 
@@ -226,52 +231,46 @@ function AiMapForm({ close }) {
 }
 
 // ───────────────────────── Kampf: direkt auf die Kampfkarte ─────────────────────────
-function BattlePicker({ close }) {
+// Je Karte läuft ein eigener Kampf – laufende Kämpfe stehen oben und sind markiert
+function BattlePicker({ close, laufend = [], nurLaufend = false }) {
   const maps = useVisibleCol('maps');
-  const dungeons = sortBy((maps || []).filter((m) => m.type === 'scrawl'), (m) => m.updatedAt || m.createdAt || 0, -1);
+  const run = new Map(laufend.map((e) => [e.mapId, e]));
+  const dungeons = sortBy((maps || []).filter((m) => m.type === 'scrawl' && (!nurLaufend || run.has(m.id))), (m) => (run.has(m.id) ? 1e15 : 0) + (m.updatedAt || m.createdAt || 0), -1);
   return html`<div class="modal-body stack">
-    <div class="small muted">Wähle die Karte, auf der gekämpft wird. Dort setzt du Gruppe und Monster und startest mit „Kampf starten“ die Initiative – Bewegung, Reichweiten und Zauberflächen inklusive.</div>
+    <div class="small muted">${nurLaufend ? 'Auf mehreren Karten wird gerade gekämpft – wohin?' : 'Wähle die Karte, auf der gekämpft wird. Dort setzt du Gruppe und Monster und startest mit „Kampf starten“ die Initiative – Bewegung, Reichweiten und Zauberflächen inklusive. Jede Karte hat ihren eigenen Kampf.'}</div>
     ${!maps ? html`<div class="empty"><span class="spinner" /></div>`
-      : dungeons.length ? html`<div class="battle-pick">${dungeons.map((m) => html`<button type="button" class="bp-card" onClick=${() => close({ id: m.id, title: m.name })}>
+      : dungeons.length ? html`<div class="battle-pick">${dungeons.map((m) => html`<button type="button" class=${`bp-card${run.has(m.id) ? ' live' : ''}`} onClick=${() => close({ id: m.id, title: m.name })}>
           <span class="bp-img" style=${m.thumb ? { backgroundImage: `url(${m.thumb})` } : {}}>${m.thumb ? null : html`<${Icon} name="castle" size=${28} />`}</span>
-          <b class="ellipsis">${m.name}</b><span class="tiny faint">${m.w}×${m.h} Felder</span></button>`)}</div>`
+          <b class="ellipsis">${m.name}</b><span class="tiny faint">${run.has(m.id) ? html`<span class="danger-text">⚔ Kampf läuft · Runde ${run.get(m.id).round || 1}</span>` : `${m.w}×${m.h} Felder`}</span></button>`)}</div>`
       : html`<div class="small faint">Noch keine Dungeon-Karte – leg eine an, dann kann es losgehen.</div>`}
-    <div class="btn-row">
+    ${nurLaufend ? null : html`<div class="btn-row">
       <${Btn} kind="primary" icon="plus" onClick=${() => close('new')}>Neue Kampfkarte<//>
       <span class="grow"></span>
       <${Btn} kind="ghost" icon="list" onClick=${() => close('tracker')}>Ohne Karte (nur Initiative-Liste)<//>
-    </div>
+    </div>`}
   </div>`;
 }
 
 // Läuft ein Kampf auf einer Karte, geht es direkt dorthin – sonst wählt die SL die Karte.
 export async function openBattle() {
   const gm = isGM();
-  let mapId = null;
-  let active = false;
-  try {
-    if (gm) {
-      const st = await loadCombat();
-      mapId = st.mapId || null;
-      active = !!st.active;
-    } else {
-      const pub = await db.get(col('combat'), 'public');
-      mapId = pub?.mapId || null;
-      active = !!pub?.active;
-    }
-  } catch { /* noch kein Kampf */ }
-  if (mapId) {
-    const m = await db.get(col('maps'), mapId).catch(() => null);
-    if (m) { openView('map', { id: mapId, title: m.name, play: 1 }); return; }
+  const alle = await combatIndex().catch(() => []);
+  const laufend = alle.filter((e) => e.active && e.mapId);
+  if (laufend.length === 1) {
+    const m = await db.get(col('maps'), laufend[0].mapId).catch(() => null);
+    if (m) { openView('map', { id: m.id, title: m.name, play: 1 }); return; }
   }
   if (!gm) {
-    if (active) openView('combat');
+    if (laufend.length > 1) {
+      const r = await openModal(({ close }) => html`<${BattlePicker} close=${close} laufend=${laufend} nurLaufend />`, { title: 'Laufende Kämpfe', icon: 'swords', size: 'lg' });
+      if (r?.id) openView('map', { id: r.id, title: r.title, play: 1 });
+    } else if (alle.some((e) => e.active)) openView('combat');
     else toast('Gerade läuft kein Kampf. Sobald die Spielleitung einen startet, bringt dich „Kampf“ direkt auf die Kampfkarte.', 'info');
     return;
   }
-  const r = await openModal(({ close }) => html`<${BattlePicker} close=${close} />`, { title: 'Wo wird gekämpft?', icon: 'swords', size: 'lg' });
+  const r = await openModal(({ close }) => html`<${BattlePicker} close=${close} laufend=${laufend} />`, { title: 'Wo wird gekämpft?', icon: 'swords', size: 'lg' });
   if (!r) return;
-  if (r === 'tracker') { openView('combat'); return; }
+  if (r === 'tracker') { openView('combat', { tracker: 1 }); return; }
   if (r === 'new') {
     const f = await openModal(({ close }) => html`<${NewScrawlForm} close=${close} />`, { title: 'Neue Kampfkarte', icon: 'castle' });
     if (!f) return;
@@ -369,8 +368,9 @@ export function MapsView({ tabId, active }) {
 }
 
 // ───────────────────────── Einzelne Karte ─────────────────────────
+const PIN_STYLES = [{ value: 'pin', label: 'Pin' }, { value: 'ort', label: 'Ortsname ◆' }, { value: 'name', label: 'Nur Name' }];
 function PinForm({ close, pin }) {
-  const [f, setF] = useState({ label: '', noteId: null, color: PIN_COLORS.Rot, visibility: 'gm', ...pin });
+  const [f, setF] = useState({ label: '', noteId: null, color: PIN_COLORS.Rot, visibility: 'gm', style: 'pin', ...pin });
   const note = f.noteId ? noteById(f.noteId) : null;
   return html`<form onSubmit=${(e) => { e.preventDefault(); close(f); }}><div class="modal-body stack">
     <${Field} label="Notiz verknüpfen">
@@ -378,9 +378,37 @@ function PinForm({ close, pin }) {
         : html`<${NotePicker} allowCreate onPick=${(n) => { const cc = colorCode(n.title); setF({ ...f, noteId: n.id, label: f.label || n.title, color: cc ? pinColorFor(cc.color) || f.color : f.color }); }} />`}
     <//>
     <${Field} label="Beschriftung"><input class="input" value=${f.label} onInput=${(e) => setF({ ...f, label: e.target.value })} /><//>
+    <${Field} label="Darstellung"><${Segmented} value=${f.style || 'pin'} onChange=${(v) => setF({ ...f, style: v })} options=${PIN_STYLES} /><//>
     <${Field} label="Farbe"><div class="color-pick">${Object.entries(PIN_COLORS).map(([n, c]) => html`<button type="button" title=${n} class=${f.color === c ? 'active' : ''} style=${{ background: c }} onClick=${() => setF({ ...f, color: c })}></button>`)}</div><//>
     <${Field} label="Sichtbarkeit"><${Segmented} value=${f.visibility} onChange=${(v) => setF({ ...f, visibility: v })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Für Spieler', icon: 'users' }]} /><//>
   </div><div class="modal-foot"><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" type="submit" icon="map-pin">Speichern<//></div></form>`;
+}
+
+// Wege auf der Weltkarte (Reiserouten, Handelswege, Frontlinien) – standardmäßig rot gestrichelt
+const ROUTE_STYLES = [{ value: 'dashed', label: 'gestrichelt' }, { value: 'dotted', label: 'gepunktet' }, { value: 'solid', label: 'durchgezogen' }];
+const ROUTE_COLORS = ['#c0392b', '#e0b24a', '#2c3e50', '#ffffff', '#2e86de', '#27ae60', '#8e44ad', '#6d4c2f'];
+function RouteForm({ close, route }) {
+  const [f, setF] = useState({ label: '', color: '#c0392b', dash: 'dashed', width: 3, visibility: 'players', ...route });
+  return html`<div class="modal-body stack">
+    <${Field} label="Name (optional)"><input class="input" value=${f.label} placeholder="z. B. Königsstraße, Route der Karawane" onInput=${(e) => setF({ ...f, label: e.target.value })} /><//>
+    <${Field} label="Linie"><${Segmented} value=${f.dash} onChange=${(v) => setF({ ...f, dash: v })} options=${ROUTE_STYLES} /><//>
+    <${Field} label="Farbe"><div class="color-pick">${ROUTE_COLORS.map((c) => html`<button type="button" class=${f.color === c ? 'active' : ''} style=${{ background: c }} onClick=${() => setF({ ...f, color: c })}></button>`)}</div><//>
+    <div class="row small"><span class="muted" style="width:90px">Stärke</span><input type="range" min="1" max="8" step="0.5" value=${f.width} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setF({ ...f, width: Number(e.target.value) })} /><b style="width:28px;text-align:right">${f.width}</b></div>
+    <${Field} label="Sichtbarkeit"><${Segmented} value=${f.visibility} onChange=${(v) => setF({ ...f, visibility: v })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Für Spieler', icon: 'users' }]} /><//>
+    <div class="btn-row">${route?.id ? html`<${Btn} kind="danger" icon="trash" onClick=${() => close({ _delete: true })}>Löschen<//>` : null}<span class="grow"></span><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" icon="check" onClick=${() => close(f)}>Speichern<//></div>
+  </div>`;
+}
+// Symbol auf der Weltkarte (Krieg, Gefahr, Orte …)
+function SymbolForm({ close, sym }) {
+  const [f, setF] = useState({ label: '', color: '#e74c3c', size: 1, visibility: 'players', ...sym });
+  return html`<div class="modal-body stack">
+    <div class="row"><span class="map-sym-prev" style=${{ borderColor: f.color }}><${GameIcon} name=${f.icon} size=${30} color=${f.color} /></span><b>${MAP_SYMBOLS.find((x) => x[2] === f.icon)?.[1] || 'Symbol'}</b></div>
+    <${Field} label="Beschriftung (optional)"><input class="input" value=${f.label} placeholder="z. B. Schlacht am Rabenfels" onInput=${(e) => setF({ ...f, label: e.target.value })} /><//>
+    <${Field} label="Farbe"><div class="color-pick">${['#e74c3c', '#e0b24a', '#ffffff', '#2e86de', '#27ae60', '#8e44ad', '#f39c12', '#95a5a6'].map((c) => html`<button type="button" class=${f.color === c ? 'active' : ''} style=${{ background: c }} onClick=${() => setF({ ...f, color: c })}></button>`)}</div><//>
+    <div class="row small"><span class="muted" style="width:90px">Größe</span><input type="range" min="0.6" max="3" step="0.1" value=${f.size} style="flex:1;accent-color:var(--accent)" onInput=${(e) => setF({ ...f, size: Number(e.target.value) })} /></div>
+    <${Field} label="Sichtbarkeit"><${Segmented} value=${f.visibility} onChange=${(v) => setF({ ...f, visibility: v })} options=${[{ value: 'gm', label: 'Nur SL', icon: 'lock' }, { value: 'players', label: 'Für Spieler', icon: 'users' }]} /><//>
+    <div class="btn-row">${sym?.id ? html`<${Btn} kind="danger" icon="trash" onClick=${() => close({ _delete: true })}>Löschen<//>` : null}<span class="grow"></span><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" icon="check" onClick=${() => close(f)}>Speichern<//></div>
+  </div>`;
 }
 
 function TokenForm({ close, token, members }) {
@@ -425,7 +453,7 @@ const TOOLS_GM_BATTLE = [
   ['pan', 'hand', 'Bewegen / verschieben'], ['paint', 'brush', 'Gelände malen'], ['erase', 'eraser', 'Radieren'],
   ['reveal', 'eye', 'Nebel aufdecken'], ['hide', 'eye-off', 'Nebel verdecken'], ['token', 'user-plus', 'Token setzen'], ['measure', 'ruler', 'Messen'],
 ];
-const TOOLS_GM_WORLD = [['pan', 'hand', 'Bewegen'], ['pin', 'map-pin', 'Pin setzen'], ['measure', 'ruler', 'Messen']];
+const TOOLS_GM_WORLD = [['pan', 'hand', 'Bewegen'], ['pin', 'map-pin', 'Pin / Ortsname setzen'], ['route', 'footprints', 'Weg zeichnen'], ['symbol', 'flame', 'Symbol setzen'], ['party', 'users', 'Gruppe setzen'], ['measure', 'ruler', 'Messen']];
 const TOOLS_PLAYER = [['pan', 'hand', 'Bewegen'], ['measure', 'ruler', 'Messen']];
 
 // Dungeon-Karten (neuer Editor) bzw. Welt- und Rasterkarten
@@ -457,6 +485,160 @@ export function MapView(props) {
   return html`<${LegacyMapView} ...${props} />`;
 }
 
+// ───────────────────────── Weltkarte: Wege, Symbole, Gruppe ─────────────────────────
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const l = dx * dx + dy * dy;
+  const t = l ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+function routeLen(p, scale) {
+  let px = 0;
+  for (let i = 0; i + 3 < p.length; i += 2) px += Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]);
+  return `${((px / scale.px) * scale.value).toLocaleString('de-DE', { maximumFractionDigits: 1 })} ${scale.unit}`;
+}
+// Weich durch die Punkte (Mittelpunkte als Stützstellen)
+function routePath(ctx, p) {
+  ctx.beginPath();
+  ctx.moveTo(p[0], p[1]);
+  if (p.length <= 4) { ctx.lineTo(p[2], p[3]); return; }
+  for (let i = 2; i < p.length - 2; i += 2) ctx.quadraticCurveTo(p[i], p[i + 1], (p[i] + p[i + 2]) / 2, (p[i + 1] + p[i + 3]) / 2);
+  ctx.lineTo(p[p.length - 2], p[p.length - 1]);
+}
+const dashOf = (d, w) => (d === 'dotted' ? [0.001, w * 2.6] : d === 'solid' ? [] : [w * 3.4, w * 2.4]);
+function drawRoutes(ctx, s, k) {
+  for (const rt of s.routes || []) {
+    const p = rt.pts || [];
+    if (p.length < 4) continue;
+    const w = (rt.width || 3) / k;
+    ctx.save();
+    ctx.globalAlpha = rt.visibility === 'players' || !s.gm ? 1 : 0.7;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.setLineDash(dashOf(rt.dash, w));
+    routePath(ctx, p);
+    ctx.strokeStyle = 'rgba(255,246,228,.45)';
+    ctx.lineWidth = w + 2.5 / k;
+    ctx.stroke();
+    routePath(ctx, p);
+    ctx.strokeStyle = rt.color || '#c0392b';
+    ctx.lineWidth = w;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (rt.label && k > 0.2) {
+      const i = Math.max(0, Math.floor(p.length / 4) * 2);
+      ctx.font = `italic 600 ${12 / k}px Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3 / k;
+      ctx.strokeStyle = 'rgba(20,14,8,.8)';
+      ctx.strokeText(rt.label, p[i], p[i + 1] - 6 / k);
+      ctx.fillStyle = '#f6edd6';
+      ctx.fillText(rt.label, p[i], p[i + 1] - 6 / k);
+    }
+    ctx.restore();
+  }
+  const d = s.routeDraft;
+  if (d?.length >= 2) {
+    ctx.save();
+    ctx.setLineDash([8 / k, 6 / k]);
+    ctx.lineWidth = 3 / k;
+    ctx.strokeStyle = '#c0392b';
+    if (d.length >= 4) { routePath(ctx, d); ctx.stroke(); }
+    ctx.setLineDash([]);
+    for (let i = 0; i < d.length; i += 2) { ctx.beginPath(); ctx.arc(d[i], d[i + 1], 4 / k, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.5 / k; ctx.strokeStyle = '#c0392b'; ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function drawSymbols(ctx, s, k) {
+  for (const sy of s.symbols || []) {
+    const x = sy.dragX ?? sy.x;
+    const y = sy.dragY ?? sy.y;
+    const r = (15 * (sy.size || 1)) / k;
+    const c = sy.color || '#e74c3c';
+    ctx.globalAlpha = sy.visibility === 'players' || !s.gm ? 1 : 0.7;
+    ctx.beginPath();
+    ctx.arc(x + 1.5 / k, y + 2.5 / k, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(20,15,10,.86)';
+    ctx.fill();
+    ctx.lineWidth = 2 / k;
+    ctx.strokeStyle = c;
+    ctx.stroke();
+    const im = giImage(sy.icon, c, () => { s.dirty = true; });
+    if (im?.complete && im.naturalWidth) ctx.drawImage(im, x - r * 0.66, y - r * 0.66, r * 1.32, r * 1.32);
+    if (sy.label && k > 0.2) {
+      ctx.font = `700 ${12 / k}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.lineWidth = 3.5 / k;
+      ctx.strokeStyle = 'rgba(0,0,0,.8)';
+      ctx.strokeText(sy.label, x, y + r + 3 / k);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(sy.label, x, y + r + 3 / k);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+const portraitCache = new Map();
+function portraitImg(src, onload) {
+  if (!src) return null;
+  let im = portraitCache.get(src);
+  if (!im) { im = new Image(); im.onload = onload; im.src = src; portraitCache.set(src, im); }
+  return im.complete && im.naturalWidth ? im : null;
+}
+function drawParty(ctx, s, k) {
+  for (const pm of s.partyMarks || []) {
+    const x = pm.dragX ?? pm.x;
+    const y = pm.dragY ?? pm.y;
+    const r = 17 / k;
+    const pe = (s.partyChars || []).find((p) => p.char?.id === pm.charId);
+    const name = pe?.char?.name || pm.label || '';
+    const im = portraitImg(pe?.char?.portraitCrop || pe?.char?.portrait || null, () => { s.dirty = true; });
+    ctx.beginPath();
+    ctx.arc(x + 1.5 / k, y + 3 / k, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,.4)';
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.clip();
+    if (im) ctx.drawImage(im, x - r, y - r, r * 2, r * 2);
+    else {
+      ctx.fillStyle = pe?.char?.color || pm.color || '#4d8dff';
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      ctx.font = `800 ${14 / k}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(initials(name).slice(0, 2), x, y + 1 / k);
+    }
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.lineWidth = 3 / k;
+    ctx.strokeStyle = '#4d8dff';
+    ctx.stroke();
+    ctx.lineWidth = 1.2 / k;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    if (k > 0.2) {
+      ctx.font = `700 ${11.5 / k}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.lineWidth = 3.5 / k;
+      ctx.strokeStyle = 'rgba(0,0,0,.8)';
+      ctx.strokeText(name, x, y + r + 3 / k);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(name, x, y + r + 3 / k);
+    }
+  }
+}
+
 function LegacyMapView({ params, active, tabId }) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   const cid = useStore(app, (s) => s.cid);
@@ -467,8 +649,17 @@ function LegacyMapView({ params, active, tabId }) {
   const pinOpts = role === 'gm' ? { where: [['mapId', '==', params.id]] } : { where: [['mapId', '==', params.id], ['visibility', '==', 'players']] };
   const pinsRaw = useCol(cid ? col('pins') : null, pinOpts);
   const tokensRaw = useCol(cid ? col('tokens') : null, pinOpts);
-  const pins = (pinsRaw || []).filter((p) => gm || p.visibility === 'players');
+  const allPins = (pinsRaw || []).filter((p) => gm || p.visibility === 'players');
+  // In „pins“ stehen auch Wege, Symbole und Spielermarken der Weltkarte (kind)
+  const pins = allPins.filter((p) => !p.kind || p.kind === 'pin');
+  const routes = allPins.filter((p) => p.kind === 'route');
+  const symbols = allPins.filter((p) => p.kind === 'symbol');
+  const partyMarks = allPins.filter((p) => p.kind === 'party');
   const tokens = (tokensRaw || []).filter((t) => gm || t.visibility === 'players');
+  const [partyChars, setPartyChars] = useState([]);
+  useEffect(() => (cid ? watchParty(setPartyChars) : undefined), [cid]);
+  const [symPick, setSymPick] = useState('krieg');
+  const [routeN, setRouteN] = useState(0);
   const [tool, setTool] = useState('pan');
   const [brush, setBrush] = useState('w');
   const [brushSize, setBrushSize] = useState(1);
@@ -482,6 +673,12 @@ function LegacyMapView({ params, active, tabId }) {
   const s = S.current;
   s.map = map;
   s.pins = pins;
+  s.routes = routes;
+  s.symbols = symbols;
+  s.partyMarks = partyMarks;
+  s.partyChars = partyChars;
+  s.symPick = symPick;
+  s.setRouteN = setRouteN;
   s.tokens = tokens;
   s.gm = gm;
   s.tool = tool;
@@ -505,7 +702,7 @@ function LegacyMapView({ params, active, tabId }) {
     }
     s.dirty = true;
   }, [map?.cells, map?.fog?.revealed, map?.cols, map?.rows]);
-  useEffect(() => { s.dirty = true; }, [pinsRaw, tokensRaw, gm, map?.grid, map?.fog?.enabled, map?.terrainAlpha]);
+  useEffect(() => { s.dirty = true; }, [pinsRaw, tokensRaw, gm, map?.grid, map?.fog?.enabled, map?.terrainAlpha, partyChars]);
 
   // Hintergrundbild
   useEffect(() => {
@@ -668,20 +865,38 @@ function LegacyMapView({ params, active, tabId }) {
         ctx.fillRect((i % m.cols) * CELL - 0.5, Math.floor(i / m.cols) * CELL - 0.5, CELL + 1, CELL + 1);
       }
     }
-    // Pins
+    // Wege, Pins, Symbole, Gruppe (Weltkarte)
     if (!battle) {
+      drawRoutes(ctx, s, k);
       const r = 9 / k;
-      ctx.font = `600 ${13 / k}px system-ui`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       for (const p of s.pins) {
         const x = p.dragX ?? p.x;
         const y = p.dragY ?? p.y;
         ctx.globalAlpha = p.visibility === 'players' || !s.gm ? 1 : 0.75;
+        const label = p.label || '';
+        if (p.style === 'ort' || p.style === 'name') {
+          // Ortsname: Raute + Zierschrift darüber (wie auf gezeichneten Karten), „Nur Name“ ohne Raute
+          if (p.style === 'ort') {
+            const d = 6 / k;
+            ctx.beginPath(); ctx.moveTo(x, y - d); ctx.lineTo(x + d, y); ctx.lineTo(x, y + d); ctx.lineTo(x - d, y); ctx.closePath();
+            ctx.fillStyle = '#17120b'; ctx.fill(); ctx.lineWidth = 1.8 / k; ctx.strokeStyle = '#f6edd6'; ctx.stroke();
+          }
+          ctx.font = `700 ${17 / k}px Georgia, "Palatino Linotype", serif`;
+          ctx.textBaseline = 'bottom';
+          const ty = p.style === 'ort' ? y - 9 / k : y + 8 / k;
+          ctx.lineJoin = 'round'; ctx.lineWidth = 4.5 / k; ctx.strokeStyle = 'rgba(22,16,9,.9)';
+          ctx.strokeText(label, x, ty);
+          ctx.fillStyle = '#f6edd6';
+          ctx.fillText(label, x, ty);
+          ctx.textBaseline = 'top';
+          continue;
+        }
+        ctx.font = `600 ${13 / k}px system-ui`;
         ctx.fillStyle = p.color || '#ff5a5a';
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
         ctx.lineWidth = 2.5 / k; ctx.strokeStyle = '#fff'; ctx.stroke();
         if (k > 0.35 || s.hoverPin === p.id) {
-          const label = p.label || '';
           ctx.lineWidth = 3.5 / k; ctx.strokeStyle = 'rgba(0,0,0,.75)';
           ctx.strokeText(label, x, y + r + 3 / k);
           ctx.fillStyle = '#fff';
@@ -689,6 +904,8 @@ function LegacyMapView({ params, active, tabId }) {
         }
       }
       ctx.globalAlpha = 1;
+      drawSymbols(ctx, s, k);
+      drawParty(ctx, s, k);
     }
     // Maßband
     if (s.measure) {
@@ -718,6 +935,13 @@ function LegacyMapView({ params, active, tabId }) {
       return cx >= 0 && cy >= 0 && cx < m.cols && cy < m.rows ? [cx, cy] : null;
     };
     const hitPin = (w) => s.pins.find((p) => Math.hypot(p.x - w.x, p.y - w.y) < 14 / s.t.k);
+    const hitSym = (w) => [...(s.symbols || [])].reverse().find((p) => Math.hypot(p.x - w.x, p.y - w.y) < (16 * (p.size || 1)) / s.t.k);
+    const hitParty = (w) => [...(s.partyMarks || [])].reverse().find((p) => Math.hypot(p.x - w.x, p.y - w.y) < 19 / s.t.k);
+    const hitRoute = (w) => (s.routes || []).find((rt) => {
+      const p = rt.pts || [];
+      for (let i = 0; i + 3 < p.length; i += 2) if (segDist(w.x, w.y, p[i], p[i + 1], p[i + 2], p[i + 3]) < 8 / s.t.k) return true;
+      return false;
+    });
     const hitToken = (w) => [...s.tokens].reverse().find((t) => w.x >= t.x * CELL && w.x < (t.x + (t.size || 1)) * CELL && w.y >= t.y * CELL && w.y < (t.y + (t.size || 1)) * CELL);
     const canMove = (t) => s.gm || t.ownerUid === s.me;
     const zoomAt = (p, f) => {
@@ -780,6 +1004,14 @@ function LegacyMapView({ params, active, tabId }) {
         return;
       }
       if (tl === 'measure') { s.measure = { a: w, b: w }; s.act = { kind: 'measure' }; s.dirty = true; return; }
+      if (s.map.type !== 'battle') {
+        // Weg: jeder Klick setzt einen Punkt, Doppelklick/„Fertig“ schließt ab
+        if (tl === 'route' && s.gm) { s.routeDraft = [...(s.routeDraft || []), Math.round(w.x * 10) / 10, Math.round(w.y * 10) / 10]; s.setRouteN((s.routeDraft.length || 0) / 2); s.dirty = true; return; }
+        const sy = tl === 'pan' || tl === 'symbol' ? hitSym(w) : null;
+        if (sy) { s.act = { kind: 'mark', pin: sy, col: 'pins', moved: false, sx: p.x, sy: p.y }; return; }
+        const pm = tl === 'pan' || tl === 'party' ? hitParty(w) : null;
+        if (pm) { s.act = { kind: 'mark', pin: pm, col: 'pins', moved: false, sx: p.x, sy: p.y }; return; }
+      }
       if (s.map.type === 'battle' && ['paint', 'erase', 'reveal', 'hide'].includes(tl) && s.gm) { s.act = { kind: 'paint' }; paintCell(w); return; }
       if (s.map.type === 'battle') {
         const t = hitToken(w);
@@ -816,7 +1048,7 @@ function LegacyMapView({ params, active, tabId }) {
         s.dirty = true;
         return;
       }
-      if (a.kind === 'pin') {
+      if (a.kind === 'pin' || a.kind === 'mark') {
         if (Math.hypot(p.x - a.sx, p.y - a.sy) > 5 && s.gm) a.moved = true;
         if (a.moved) { a.pin.dragX = w.x; a.pin.dragY = w.y; s.dirty = true; }
         return;
@@ -854,6 +1086,18 @@ function LegacyMapView({ params, active, tabId }) {
         }
         return;
       }
+      if (a.kind === 'mark') {
+        const pin = a.pin;
+        if (a.moved) {
+          const nx = pin.dragX; const ny = pin.dragY;
+          delete pin.dragX; delete pin.dragY;
+          pin.x = nx; pin.y = ny;
+          await db.update(col('pins'), pin.id, { x: nx, y: ny });
+        } else if (pin.kind === 'symbol') setPop({ sym: pin, x: p.x, y: p.y });
+        else setPop({ party: pin, x: p.x, y: p.y });
+        s.dirty = true;
+        return;
+      }
       if (a.kind === 'pin') {
         const pin = a.pin;
         if (a.moved) {
@@ -875,8 +1119,18 @@ function LegacyMapView({ params, active, tabId }) {
         }
         if (s.tool === 'pin' && s.gm && s.map.type !== 'battle') {
           const r = await openModal(({ close }) => html`<${PinForm} close=${close} />`, { title: 'Neuer Pin', icon: 'map-pin' });
-          if (r) await db.add(col('pins'), { mapId: params.id, x: w.x, y: w.y, label: r.label || noteById(r.noteId)?.title || 'Pin', noteId: r.noteId || null, color: r.color, visibility: r.visibility, createdAt: now() });
+          if (r) await db.add(col('pins'), { mapId: params.id, x: w.x, y: w.y, label: r.label || noteById(r.noteId)?.title || 'Pin', noteId: r.noteId || null, color: r.color, style: r.style || 'pin', visibility: r.visibility, createdAt: now() });
           return;
+        }
+        if (s.tool === 'symbol' && s.gm && s.map.type !== 'battle') {
+          const def = MAP_SYMBOLS.find((x) => x[0] === s.symPick) || MAP_SYMBOLS[0];
+          await db.add(col('pins'), { kind: 'symbol', mapId: params.id, x: w.x, y: w.y, icon: def[2], label: '', color: def[3] === 'Konflikt' || def[3] === 'Gefahr' ? '#e74c3c' : '#e0b24a', size: 1, visibility: 'players', createdAt: now() });
+          return;
+        }
+        if (s.tool === 'party' && s.gm && s.map.type !== 'battle') { await placeParty(w); return; }
+        if (s.map.type !== 'battle' && s.tool === 'pan') {
+          const rt = hitRoute(w);
+          if (rt) { setPop({ route: rt, x: p.x, y: p.y }); return; }
         }
         if (s.tool === 'token' && s.gm && s.map.type === 'battle') {
           const c = cellAt(w);
@@ -891,13 +1145,22 @@ function LegacyMapView({ params, active, tabId }) {
       zoomAt(pos(e), Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
     };
     const ctxmenu = (e) => e.preventDefault();
+    const dbl = () => { if (s.tool === 'route' && s.routeDraft?.length) s.finishRoute?.(); };
+    const key = (e) => {
+      if (!s.routeDraft?.length || /INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+      if (e.key === 'Enter') { e.preventDefault(); s.finishRoute?.(); } else if (e.key === 'Escape') { s.routeDraft = null; s.setRouteN(0); s.dirty = true; } else if (e.key === 'Backspace') { e.preventDefault(); s.routeDraft = s.routeDraft.slice(0, -2); s.setRouteN(s.routeDraft.length / 2); s.dirty = true; }
+    };
     cv.addEventListener('pointerdown', down);
     cv.addEventListener('pointermove', move);
     cv.addEventListener('pointerup', up);
     cv.addEventListener('pointercancel', up);
     cv.addEventListener('wheel', wheel, { passive: false });
     cv.addEventListener('contextmenu', ctxmenu);
+    cv.addEventListener('dblclick', dbl);
+    addEventListener('keydown', key);
     return () => {
+      cv.removeEventListener('dblclick', dbl);
+      removeEventListener('keydown', key);
       cv.removeEventListener('pointerdown', down);
       cv.removeEventListener('pointermove', move);
       cv.removeEventListener('pointerup', up);
@@ -906,6 +1169,51 @@ function LegacyMapView({ params, active, tabId }) {
       cv.removeEventListener('contextmenu', ctxmenu);
     };
   }, [!!map, params.id]);
+
+  // Weg fertig: doppelte Punkte vom Doppelklick entfernen, dann Name/Stil abfragen
+  s.finishRoute = async () => {
+    const p = [...(s.routeDraft || [])];
+    const tol = 6 / s.t.k;
+    const pts = [];
+    for (let i = 0; i < p.length; i += 2) if (!pts.length || Math.hypot(p[i] - pts[pts.length - 2], p[i + 1] - pts[pts.length - 1]) > tol) pts.push(p[i], p[i + 1]);
+    s.routeDraft = null;
+    setRouteN(0);
+    s.dirty = true;
+    if (pts.length < 4) { toast('Ein Weg braucht mindestens zwei Punkte.', 'error'); return; }
+    const r = await openModal(({ close }) => html`<${RouteForm} close=${close} />`, { title: 'Neuer Weg', icon: 'footprints', size: 'sm' });
+    if (r && !r._delete) await db.add(col('pins'), { kind: 'route', mapId: params.id, pts, label: r.label || '', color: r.color, dash: r.dash, width: r.width, visibility: r.visibility, x: pts[0], y: pts[1], createdAt: now() });
+  };
+  // Gruppe auf die Weltkarte setzen: alle Charaktere der Kampagne als Marken rund um die angetippte Stelle
+  async function placeParty(w) {
+    const party = await loadParty().catch(() => []);
+    if (!party.length) { toast('In dieser Kampagne gibt es noch keine Charaktere.', 'error'); return; }
+    const n = party.length;
+    for (let i = 0; i < n; i++) {
+      const pe = party[i];
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const off = n === 1 ? 0 : 26 / s.t.k;
+      const x = w.x + Math.cos(a) * off;
+      const y = w.y + Math.sin(a) * off;
+      const ex = (s.partyMarks || []).find((m) => m.charId === pe.char.id);
+      if (ex) await db.update(col('pins'), ex.id, { x, y });
+      else await db.add(col('pins'), { kind: 'party', mapId: params.id, charId: pe.char.id, owner: pe.owner, label: pe.char.name, color: pe.char.color || '#4d8dff', x, y, visibility: 'players', createdAt: now() });
+    }
+    toast('Die Gruppe steht jetzt hier – Marken lassen sich einzeln verschieben.', 'success');
+  }
+  const editSym = async (sym) => {
+    setPop(null);
+    const r = await openModal(({ close }) => html`<${SymbolForm} close=${close} sym=${sym} />`, { title: 'Symbol', icon: 'flame', size: 'sm' });
+    if (!r) return;
+    if (r._delete) await db.remove(col('pins'), sym.id);
+    else await db.update(col('pins'), sym.id, { label: r.label || '', color: r.color, size: r.size, visibility: r.visibility });
+  };
+  const editRoute = async (rt) => {
+    setPop(null);
+    const r = await openModal(({ close }) => html`<${RouteForm} close=${close} route=${rt} />`, { title: 'Weg bearbeiten', icon: 'footprints', size: 'sm' });
+    if (!r) return;
+    if (r._delete) await db.remove(col('pins'), rt.id);
+    else await db.update(col('pins'), rt.id, { label: r.label || '', color: r.color, dash: r.dash, width: r.width, visibility: r.visibility });
+  };
 
   const editToken = async (t) => {
     const r = await openModal(({ close }) => html`<${TokenForm} close=${close} token=${t} members=${Object.values(vault.get().members)} />`, { title: t.label, icon: 'user' });
@@ -976,13 +1284,21 @@ function LegacyMapView({ params, active, tabId }) {
     }
     toast(i ? `${i} Tokens gesetzt` : 'Keine (neuen) Charaktere gefunden', i ? 'success' : 'error');
   };
+  // Gegner aus dem Kampf-Tracker (ohne Karte) hierher holen – sie wechseln in den Kampf dieser Karte
   const addCombatTokens = async () => {
-    const st = await loadCombat();
+    const st = await loadCombat(NO_MAP);
+    const moved = [];
     let i = 0;
     for (const c of st.combatants) {
       if (c.isPC || (tokensRaw || []).some((t) => t.combatantId === c.id)) continue;
-      await db.add(col('tokens'), { mapId: map.id, x: map.cols - 2 - (i % 5), y: 1 + Math.floor(i / 5), label: c.name, color: '#ef5a5f', size: 1, ownerUid: null, combatantId: c.id, visibility: c.hidden ? 'gm' : 'players', createdAt: now() });
+      const tid = await db.add(col('tokens'), { mapId: map.id, x: map.cols - 2 - (i % 5), y: 1 + Math.floor(i / 5), label: c.name, color: '#ef5a5f', size: 1, ownerUid: null, combatantId: c.id, visibility: c.hidden ? 'gm' : 'players', createdAt: now() });
+      moved.push({ ...c, tokenId: tid });
       i++;
+    }
+    if (moved.length) {
+      await mutateCombat((x) => { for (const c of moved) if (!x.combatants.some((o) => o.id === c.id)) x.combatants.push(c); return x; }, map.id).catch(() => {});
+      const ids = new Set(moved.map((c) => c.id));
+      await mutateCombat((x) => { x.combatants = x.combatants.filter((c) => !ids.has(c.id)); return x; }, NO_MAP).catch(() => {});
     }
     toast(i ? `${i} Gegner-Tokens gesetzt` : 'Keine Gegner im Kampf-Tracker', i ? 'success' : 'error');
   };
@@ -993,11 +1309,13 @@ function LegacyMapView({ params, active, tabId }) {
 
   return html`<${ViewFrame} tabId=${tabId} title=${map.name} noScroll actions=${html`<div class="row nowrap" style="gap:2px">
       ${gm ? html`<button type="button" title="Sichtbarkeit" onClick=${settingsDialog}><span class=${`badge ${map.visibility === 'players' ? 'players' : 'gm'}`}>${map.visibility === 'players' ? 'Spieler sehen sie' : 'Nur SL'}</span></button>` : null}
+      ${gm ? html`<${IconBtn} icon="cloud" title="Wetter (Wolken, Regen, Nebel …)" active=${!!map.weather?.kind} onClick=${async () => { const r = await openModal(({ close }) => html`<${WeatherForm} close=${close} weather=${map.weather} />`, { title: 'Wetter auf der Karte', icon: 'cloud', size: 'sm' }); if (r) await db.update(col('maps'), map.id, { weather: r.weather }); }} />` : null}
       <${IconBtn} icon="maximize" title="Einpassen" onClick=${fit} />
       ${gm ? html`<${IconBtn} icon="panel-right" title="Werkzeuge" active=${side} onClick=${() => setSide(!side)} /><${IconBtn} icon="settings" title="Einstellungen" onClick=${settingsDialog} />` : null}
     </div>`}>
     <div class="map-stage" ref=${wrapRef}>
       <canvas ref=${cvRef}></canvas>
+      <${WeatherLayer} weather=${map.weather} seed=${map.id} active=${active} size=${{ w: W, h: H }} view=${() => ({ x: s.t.x, y: s.t.y, k: s.t.k })} />
       <div class="map-toolbar">
         ${tools.map(([id, icon, label]) => html`<${IconBtn} icon=${icon} title=${label} active=${tool === id} onClick=${() => { setTool(id); setPlacing(null); if (id !== 'measure') { s.measure = null; setMeasureText(''); s.dirty = true; } }} />`)}
         <div class="sep"></div>
@@ -1006,12 +1324,28 @@ function LegacyMapView({ params, active, tabId }) {
       </div>
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b>${!battle && gm ? html` <${Btn} size="sm" kind="ghost" onClick=${setScale}>Als Maßstab<//>` : null}</div>` : null}
       ${placing ? html`<div class="map-pop" style="left:50%;top:10px;transform:translateX(-50%);width:auto">Tippe auf die Karte, um „${noteById(placing)?.title}“ zu platzieren · <a href="#" onClick=${(e) => { e.preventDefault(); setPlacing(null); }}>Abbrechen</a></div>` : null}
-      ${pop ? html`<div class="map-pop" style=${{ left: `${Math.min(pop.x + 12, s.w - 310)}px`, top: `${Math.min(pop.y + 12, s.h - 260)}px` }}>
+      ${routeN ? html`<div class="map-pop" style="left:50%;top:10px;transform:translateX(-50%);width:auto"><${Icon} name="footprints" size=${14} /> Weg: ${routeN} Punkt${routeN === 1 ? '' : 'e'} – weiter antippen, Doppelklick oder „Fertig“
+        <${Btn} size="sm" kind="primary" onClick=${() => s.finishRoute()}>Fertig<//><${Btn} size="sm" kind="ghost" onClick=${() => { s.routeDraft = null; setRouteN(0); s.dirty = true; }}>Abbrechen<//></div>` : null}
+      ${pop?.sym ? html`<div class="map-pop" style=${{ left: `${Math.min(pop.x + 12, s.w - 310)}px`, top: `${Math.min(pop.y + 12, s.h - 200)}px` }}>
+        <div class="row nowrap"><${GameIcon} name=${pop.sym.icon} size=${18} color=${pop.sym.color} /><b class="grow ellipsis">${pop.sym.label || MAP_SYMBOLS.find((x) => x[2] === pop.sym.icon)?.[1] || 'Symbol'}</b><${IconBtn} icon="x" size=${14} class="sm" onClick=${() => setPop(null)} /></div>
+        ${gm ? html`<div class="btn-row" style="margin-top:8px"><${Btn} size="sm" icon="pencil" onClick=${() => editSym(pop.sym)}>Bearbeiten<//><${IconBtn} icon="trash" class="danger" title="Symbol löschen" onClick=${async () => { await db.remove(col('pins'), pop.sym.id); setPop(null); }} /></div>` : null}
+      </div>` : null}
+      ${pop?.route ? html`<div class="map-pop" style=${{ left: `${Math.min(pop.x + 12, s.w - 310)}px`, top: `${Math.min(pop.y + 12, s.h - 200)}px` }}>
+        <div class="row nowrap"><${Icon} name="footprints" size=${16} /><b class="grow ellipsis">${pop.route.label || 'Weg'}</b><${IconBtn} icon="x" size=${14} class="sm" onClick=${() => setPop(null)} /></div>
+        ${pop.route.pts?.length >= 4 && s.map?.scale?.px ? html`<div class="small muted">Länge: ${routeLen(pop.route.pts, s.map.scale)}</div>` : null}
+        ${gm ? html`<div class="btn-row" style="margin-top:8px"><${Btn} size="sm" icon="pencil" onClick=${() => editRoute(pop.route)}>Bearbeiten<//><${IconBtn} icon="trash" class="danger" title="Weg löschen" onClick=${async () => { await db.remove(col('pins'), pop.route.id); setPop(null); }} /></div>` : null}
+      </div>` : null}
+      ${pop?.party ? html`<div class="map-pop" style=${{ left: `${Math.min(pop.x + 12, s.w - 310)}px`, top: `${Math.min(pop.y + 12, s.h - 200)}px` }}>
+        <div class="row nowrap"><${Icon} name="user" size=${16} /><b class="grow ellipsis">${(partyChars.find((p) => p.char?.id === pop.party.charId)?.char?.name) || pop.party.label}</b><${IconBtn} icon="x" size=${14} class="sm" onClick=${() => setPop(null)} /></div>
+        <div class="small muted">Aktueller Standort auf der Weltkarte.</div>
+        ${gm ? html`<div class="btn-row" style="margin-top:8px"><${Btn} size="sm" icon="trash" kind="ghost" onClick=${async () => { await db.remove(col('pins'), pop.party.id); setPop(null); }}>Marke entfernen<//></div>` : null}
+      </div>` : null}
+      ${pop?.pin ? html`<div class="map-pop" style=${{ left: `${Math.min(pop.x + 12, s.w - 310)}px`, top: `${Math.min(pop.y + 12, s.h - 260)}px` }}>
         <div class="row nowrap"><span class="pin-dot" style=${{ background: pop.pin.color }}></span><b class="grow ellipsis">${pop.pin.label}</b><${IconBtn} icon="x" size=${14} class="sm" onClick=${() => setPop(null)} /></div>
         ${popNote ? html`<${MarkdownView} src=${(popNote.body || '').replace(/^---[\s\S]*?---\n/, '').slice(0, 700)} />` : html`<div class="small faint">Keine verknüpfte Notiz.</div>`}
         <div class="btn-row" style="margin-top:8px">
           ${popNote ? html`<${Btn} size="sm" kind="primary" icon="file-text" onClick=${() => openNote(popNote.id, { newTab: true })}>Öffnen<//>` : null}
-          ${gm ? html`<${Btn} size="sm" icon="pencil" onClick=${async () => { const r = await openModal(({ close }) => html`<${PinForm} close=${close} pin=${pop.pin} />`, { title: 'Pin bearbeiten', icon: 'map-pin' }); setPop(null); if (r) await db.update(col('pins'), pop.pin.id, { label: r.label, noteId: r.noteId || null, color: r.color, visibility: r.visibility }); }}>Bearbeiten<//>
+          ${gm ? html`<${Btn} size="sm" icon="pencil" onClick=${async () => { const r = await openModal(({ close }) => html`<${PinForm} close=${close} pin=${pop.pin} />`, { title: 'Pin bearbeiten', icon: 'map-pin' }); setPop(null); if (r) await db.update(col('pins'), pop.pin.id, { label: r.label, noteId: r.noteId || null, color: r.color, style: r.style || 'pin', visibility: r.visibility }); }}>Bearbeiten<//>
             <${IconBtn} icon="trash" class="danger" title="Pin löschen" onClick=${async () => { await db.remove(col('pins'), pop.pin.id); setPop(null); }} />` : null}
         </div>
       </div>` : null}
@@ -1035,6 +1369,16 @@ function LegacyMapView({ params, active, tabId }) {
           ${tray.length ? html`<div class="chips">${tray.map((n) => html`<button type="button" class=${`chip${placing === n.id ? ' selected' : ''}`} onClick=${() => { setPlacing(n.id); setTool('pan'); }}><span class="pin-dot" style=${{ background: pinColorFor(colorCode(n.title).color) || '#ccc', width: '10px', height: '10px' }}></span>${n.title}</button>`)}</div>` : html`<div class="tiny faint">Alle Farbcode-Notizen sind platziert.</div>`}
           <b>Pins (${pins.length})</b>
           <div class="list">${sortBy(pins, 'label').map((p) => html`<div class="list-item" onClick=${() => { s.t.x = s.w / 2 - p.x * s.t.k; s.t.y = s.h / 2 - p.y * s.t.k; s.dirty = true; setPop({ pin: p, x: s.w / 2, y: s.h / 2 }); }}><span class="pin-dot" style=${{ background: p.color, width: '10px', height: '10px' }}></span><span class="title">${p.label}</span>${p.visibility === 'players' ? html`<${Icon} name="users" size=${12} />` : null}</div>`)}</div>
+          <b>Symbole</b>
+          <div class="small muted">Symbol wählen, dann auf die Karte tippen. Antippen zum Bearbeiten, ziehen zum Verschieben.</div>
+          ${[...new Set(MAP_SYMBOLS.map((x) => x[3]))].map((g) => html`<div class="tiny faint" style="margin-top:4px">${g}</div>
+            <div class="map-sym-grid">${MAP_SYMBOLS.filter((x) => x[3] === g).map(([id, name, icon]) => html`<button type="button" key=${id} title=${name} class=${tool === 'symbol' && symPick === id ? 'on' : ''} onClick=${() => { setSymPick(id); setTool('symbol'); }}><${GameIcon} name=${icon} size=${20} /></button>`)}</div>`)}
+          <b>Wege (${routes.length})</b>
+          <div class="btn-row"><${Btn} size="sm" icon="footprints" kind=${tool === 'route' ? 'primary' : 'ghost'} onClick=${() => setTool('route')}>Weg zeichnen<//></div>
+          <div class="list">${routes.map((rt) => html`<div class="list-item" onClick=${() => editRoute(rt)}><span class="pin-dot" style=${{ background: rt.color, width: '10px', height: '10px' }}></span><span class="title">${rt.label || 'Weg'}</span>${rt.visibility === 'players' ? html`<${Icon} name="users" size=${12} />` : null}</div>`)}</div>
+          <b>Gruppe</b>
+          <div class="small muted">Zeigt den Spielern, wo sie gerade sind: „Gruppe setzen“ wählen und auf die Karte tippen – einzelne Marken lassen sich danach verschieben.</div>
+          <div class="btn-row"><${Btn} size="sm" icon="users" kind=${tool === 'party' ? 'primary' : 'ghost'} onClick=${() => setTool('party')}>Gruppe setzen<//>${partyMarks.length ? html`<${Btn} size="sm" kind="ghost" icon="trash" onClick=${async () => { for (const m of partyMarks) await db.remove(col('pins'), m.id); }}>Entfernen<//>` : null}</div>
         `}
       </div>` : null}
     </div>

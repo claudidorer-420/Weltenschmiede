@@ -130,6 +130,178 @@
    "w": 0.98,
    "h": 1.0,
    "layer": "floor"
+  },
+  "stand_gemuese": {
+   "id": "stand_gemuese",
+   "src": "stand_gemuese",
+   "name": "Gemüseauslage",
+   "cat": "stadt",
+   "w": 1.698,
+   "h": 1.631,
+   "block": 1
+  },
+  "stand_brot": {
+   "id": "stand_brot",
+   "src": "stand_brot",
+   "name": "Brotauslage",
+   "cat": "stadt",
+   "w": 1.596,
+   "h": 1.561,
+   "block": 1
+  },
+  "stand_toepfer": {
+   "id": "stand_toepfer",
+   "src": "stand_toepfer",
+   "name": "Töpferwaren",
+   "cat": "stadt",
+   "w": 1.4,
+   "h": 1.6,
+   "block": 1
+  },
+  "stand_gewuerze": {
+   "id": "stand_gewuerze",
+   "src": "stand_gewuerze",
+   "name": "Gewürzauslage",
+   "cat": "stadt",
+   "w": 1.498,
+   "h": 1.247,
+   "block": 1
+  },
+  "haendlerzelt": {
+   "id": "haendlerzelt",
+   "src": "haendlerzelt",
+   "name": "Händlerzelt (rund)",
+   "cat": "stadt",
+   "w": 2.463,
+   "h": 2.6,
+   "block": 1
+  },
+  "handkarren": {
+   "id": "handkarren",
+   "src": "handkarren",
+   "name": "Handkarren",
+   "cat": "stadt",
+   "w": 2.2,
+   "h": 1.322,
+   "block": 1
+  },
+  "kornsaecke": {
+   "id": "kornsaecke",
+   "src": "kornsaecke",
+   "name": "Kornsäcke",
+   "cat": "stadt",
+   "w": 1.298,
+   "h": 1.275,
+   "rough": 1
+  },
+  "kistenstapel": {
+   "id": "kistenstapel",
+   "src": "kistenstapel",
+   "name": "Kisten",
+   "cat": "stadt",
+   "w": 1.8,
+   "h": 1.773,
+   "block": 1
+  },
+  "hackklotz": {
+   "id": "hackklotz",
+   "src": "hackklotz",
+   "name": "Hackklotz",
+   "cat": "werkzeug",
+   "w": 0.898,
+   "h": 0.824,
+   "rough": 1
+  },
+  "pferdetraenke": {
+   "id": "pferdetraenke",
+   "src": "pferdetraenke",
+   "name": "Holztrog",
+   "cat": "stadt",
+   "w": 1.8,
+   "h": 1.722,
+   "block": 1
+  },
+  "stadtbrunnen": {
+   "id": "stadtbrunnen",
+   "src": "stadtbrunnen",
+   "name": "Stadtbrunnen",
+   "cat": "stadt",
+   "w": 2.6,
+   "h": 2.557,
+   "block": 1
+  },
+  "gemuesebeet": {
+   "id": "gemuesebeet",
+   "src": "gemuesebeet",
+   "name": "Salatbeet",
+   "cat": "natur",
+   "w": 1.796,
+   "h": 1.8,
+   "rough": 1,
+   "layer": "floor"
+  },
+  "grab_platte": {
+   "id": "grab_platte",
+   "src": "grab_platte",
+   "name": "Grabplatte (bemoost)",
+   "cat": "deko",
+   "w": 1.4,
+   "h": 1.373,
+   "layer": "floor"
+  },
+  "windmuehle": {
+   "id": "windmuehle",
+   "src": "windmuehle",
+   "name": "Windmühle",
+   "cat": "bau",
+   "w": 3.988,
+   "h": 4.016,
+   "block": 1
+  },
+  "segelboot": {
+   "id": "segelboot",
+   "src": "segelboot",
+   "name": "Segelboot",
+   "cat": "bau",
+   "w": 1.184,
+   "h": 4.016,
+   "block": 1
+  },
+  "pavillon": {
+   "id": "pavillon",
+   "src": "pavillon",
+   "name": "Pavillon",
+   "cat": "bau",
+   "w": 3.0,
+   "h": 2.965,
+   "block": 1
+  },
+  "stand_stoffe": {
+   "id": "stand_stoffe",
+   "src": "stand_stoffe",
+   "name": "Marktstand (gestreift)",
+   "cat": "stadt",
+   "w": 1.898,
+   "h": 2.0,
+   "block": 1
+  },
+  "stand_fisch": {
+   "id": "stand_fisch",
+   "src": "stand_fisch",
+   "name": "Marktstand (grün)",
+   "cat": "stadt",
+   "w": 1.804,
+   "h": 2.0,
+   "block": 1
+  },
+  "stand_waffen": {
+   "id": "stand_waffen",
+   "src": "stand_waffen",
+   "name": "Marktstand (Plane)",
+   "cat": "stadt",
+   "w": 2.0,
+   "h": 1.835,
+   "block": 1
   }
  },
  "textures": {
@@ -168,6 +340,12 @@
    "name": "Krypta-Stein",
    "cat": "boden",
    "m": 3
+  },
+  "getreidefeld": {
+   "id": "getreidefeld",
+   "name": "Getreidefeld",
+   "cat": "gelaende",
+   "m": 4
   }
  }
 }

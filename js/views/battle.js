@@ -8,7 +8,7 @@ import { db } from '../core/db.js';
 import { useCol, useDoc } from '../core/hooks.js';
 import { watchParty } from '../core/party.js';
 import { doRoll } from '../core/rolls.js';
-import { mutateCombat, combatantForToken, combatantFromCharacter, combatantsFromMonsters, makeCombatant, resort, hpState, killKey, addKnownKill } from '../core/combat.js';
+import { mutateCombat, combatantForToken, combatantFromCharacter, combatantsFromMonsters, makeCombatant, resort, hpState, killKey, addKnownKill, gmDocId, pubDocId, finishCombat, sideOfCombatant } from '../core/combat.js';
 import { npcStat } from '../data/npcstat.js';
 import { sendEvent } from '../core/relay.js';
 import * as E from '../core/engine.js';
@@ -47,21 +47,22 @@ function normCombat(raw, gm) {
   if (gm) {
     const list = (raw.combatants || []).map((c) => ({ ...c, hpState: hpState(c) }));
     const cur = raw.active ? list[raw.turn] : null;
-    return { active: !!raw.active, round: raw.round || 1, list, curId: cur?.id || null, turnKey: `${raw.round || 1}:${cur?.id || ''}`, mapId: raw.mapId || null, zones: raw.zones || [], results: raw.results || [], log: raw.log || [], x: raw };
+    return { active: !!raw.active, round: raw.round || 1, list, curId: cur?.id || null, turnKey: `${raw.round || 1}:${cur?.id || ''}`, mapId: raw.mapId || null, zones: raw.zones || [], results: raw.results || [], log: raw.log || [], outcome: raw.outcome || null, x: raw };
   }
   const list = raw.list || [];
   const turn = raw.active ? list.findIndex((c) => c.id === raw.currentId) : -1;
   return {
     active: !!raw.active, round: raw.round || 1, list, curId: raw.currentId || null, turnKey: `${raw.round || 1}:${raw.currentId || ''}`, mapId: raw.mapId || null,
-    zones: raw.zones || [], results: raw.results || [], log: raw.log || [], x: { ...raw, combatants: list, turn },
+    zones: raw.zones || [], results: raw.results || [], log: raw.log || [], outcome: raw.outcome || null, x: { ...raw, combatants: list, turn },
   };
 }
 
 export function useBattle({ cid, mapId, gm, me, tokens, grid, gridKey, redraw, rerender, explore = false, active = true }) {
   const ref = useRef(null);
-  if (!ref.current) ref.current = { sel: null, pending: null, hover: null, drag: null, dismissed: new Set(), placing: null, placeHidden: false, showNames: false, logOpen: false, localMove: new Map(), floats: [], vorher: new Map() };
+  if (!ref.current) ref.current = { sel: null, pending: null, hover: null, drag: null, dismissed: new Set(), placing: null, placeHidden: false, showNames: false, logOpen: false, localMove: new Map(), floats: [], vorher: new Map(), lastPos: new Map(), anim: new Map() };
   const B = ref.current;
-  const raw = useDoc(cid ? col('combat') : null, gm ? 'gm' : 'public');
+  // Je Karte ein eigener Kampf
+  const raw = useDoc(cid && mapId ? col('combat') : null, gm ? gmDocId(mapId) : pubDocId(mapId));
   const overlays = useCol(cid ? col('party') : null, { where: [['mapId', '==', mapId]] });
   const bestiary = useCol(cid && gm ? col('monsters') : null);
   const npcs = useCol(cid && gm ? col('npcs') : null);
@@ -82,7 +83,104 @@ export function useBattle({ cid, mapId, gm, me, tokens, grid, gridKey, redraw, r
   if (active) A.setBattleContext({ tokens, grid, party, mapId, live: true, explore: B.explore });
   B.ctx = A.makeCtx(combat.x, { tokens, grid, party, explore: B.explore });
   sammleFloats(B);
+  merkeBewegung(B);
   return B;
+}
+
+// ───────────────────────── Blickrichtung & Laufen ─────────────────────────
+// Blickrichtung in Grad (0 = rechts, 90 = unten, 180 = links, 270 = oben): am Token, sonst die Voreinstellung im
+// Charakterbogen, sonst nach rechts. Sie bestimmt den Sichtkegel (SICHTKEGEL Grad) und die goldene Viertelmarke.
+export const SICHTKEGEL = 144;          // 40 % der Rundumsicht
+export const DREH_SCHRITT = 22.5;        // Q/E drehen um 1/16
+export const normDir = (d) => ((Math.round(Number(d) * 10) / 10 % 360) + 360) % 360;
+export function tokenDir(B, t) {
+  if (t?.dir != null && Number.isFinite(Number(t.dir))) return normDir(t.dir);
+  const f = charOf(B, t)?.char?.facing;
+  return Number.isFinite(Number(f)) ? normDir(f) : 0;
+}
+// Kleine und winzige Kreaturen: Chip mit 80 % der normalen Größe (belegt trotzdem ein ganzes Feld)
+const KLEIN = /^(klein|winzig|small|tiny)/i;
+export function isSmallToken(B, t) {
+  if (!t || (t.size || 1) > 1) return false;
+  if (t.klein != null) return !!t.klein;
+  const pe = charOf(B, t);
+  if (pe) return KLEIN.test(String(pe.char.size || '').trim());
+  const cb = cbOfTok(B, t);
+  const sb = statFor(B, t) || cb?.statblock || cb?.art || null;
+  return !!sb && (KLEIN.test(String(sb.sizeKey || '')) || KLEIN.test(String(sb.size || '').trim()));
+}
+// Laufen statt Springen: 8 Felder je Sekunde entlang des Weges (token.walk = { p: [x1, y1, …], at })
+export const FELDER_PRO_SEKUNDE = 8;
+const wegPaare = (p) => Array.from({ length: Math.floor((p?.length || 0) / 2) }, (_, i) => [Number(p[i * 2]), Number(p[i * 2 + 1])]);
+function merkeBewegung(B) {
+  const jetzt = performance.now();
+  for (const t of B.tokens) {
+    const alt = B.lastPos.get(t.id);
+    B.lastPos.set(t.id, { x: t.x, y: t.y });
+    if (!alt || (alt.x === t.x && alt.y === t.y)) continue;
+    const lauf = laufPos(B, t, jetzt);
+    const von = lauf ? [lauf.x, lauf.y] : [alt.x, alt.y];
+    let pts = null;
+    const w = t.walk;
+    if (w?.p?.length >= 4 && Date.now() - (Number(w.at) || 0) < 8000) {
+      pts = wegPaare(w.p);
+      const e = pts[pts.length - 1];
+      if (e[0] !== t.x || e[1] !== t.y) pts = null;
+    }
+    if (!pts) pts = [[alt.x, alt.y], [t.x, t.y]];
+    if (pts[0][0] !== von[0] || pts[0][1] !== von[1]) pts.unshift(von);
+    const lens = pts.slice(1).map((p, i) => Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]));
+    const L = lens.reduce((a, b) => a + b, 0);
+    if (L < 0.01) continue;
+    B.anim.set(t.id, { pts, lens, L, t0: jetzt, dur: Math.min(4, L / FELDER_PRO_SEKUNDE) * 1000 });
+  }
+}
+// Wo steht der Token gerade in seiner Laufanimation? → { x, y, dir } oder null
+export function laufPos(B, t, tm = performance.now()) {
+  const a = B?.anim?.get(t.id);
+  if (!a) return null;
+  const p = (tm - a.t0) / a.dur;
+  if (p >= 1) { B.anim.delete(t.id); return null; }
+  let s = Math.max(0, p) * a.L;
+  for (let i = 0; i < a.lens.length; i++) {
+    if (s <= a.lens[i] || i === a.lens.length - 1) {
+      const [x0, y0] = a.pts[i];
+      const [x1, y1] = a.pts[i + 1];
+      const f = a.lens[i] ? Math.min(1, s / a.lens[i]) : 1;
+      return { x: x0 + (x1 - x0) * f, y: y0 + (y1 - y0) * f, dir: normDir((Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI) };
+    }
+    s -= a.lens[i];
+  }
+  return null;
+}
+// Weg für eine Bewegung (für Animation und Blickrichtung): über das Bewegungsraster, sonst gerade Linie
+export function walkFor(B, t, nx, ny, W, H) {
+  let path = null;
+  try {
+    const g = B ? moveGrid(B) || B.grid : null;
+    if (g) {
+      const r = reachable(g, { x: t.x, y: t.y }, Math.max(W, H) * 4, { size: t.size || 1, blocked: blockedFor(B, t, W), W, H });
+      if (Number.isFinite(r.dist[ny * W + nx])) path = pathTo(r, nx, ny);
+    }
+  } catch { path = null; }
+  if (!path || path.length < 2) path = [[t.x, t.y], [nx, ny]];
+  const [ax, ay] = path[path.length - 2];
+  const dir = normDir((Math.atan2(ny - ay, nx - ax) * 180) / Math.PI);
+  return { walk: { p: path.flat(), at: Date.now() }, dir };
+}
+// Drehen (Q/E/W oder Knöpfe): delta in Grad
+export async function turnToken(B, t, delta) {
+  if (!t || !canControl(B, t)) return;
+  const dir = normDir(tokenDir(B, t) + delta);
+  t.dir = dir;
+  B.redraw();
+  await db.update(col('tokens'), t.id, { dir }).catch((e) => toast(e.message, 'error'));
+  merkeBlick(B, t, dir);
+}
+// Charaktere: die Blickrichtung steht auch im Bogen (dort einstellbar und sichtbar)
+export function merkeBlick(B, t, dir) {
+  const pe = charOf(B, t);
+  if (pe?.char?.id && pe.owner && pe.char.facing !== dir) db.update(`users/${pe.owner}/characters`, pe.char.id, { facing: dir }).catch(() => {});
 }
 
 // Was hat sich seit dem letzten Stand geändert? Daraus entstehen die aufsteigenden Texte über den Tokens.
@@ -140,8 +238,8 @@ const sideOfTok = (B, t) => {
   const cb = cbOfTok(B, t);
   return cb?.team || (t.charId || cb?.isPC || cb?.ally ? 'pc' : 'npc');
 };
-const canControl = (B, t) => !!t && (B.gm || (!!t.ownerUid && t.ownerUid === B.me));
-const canControlCb = (B, cb) => !!cb && (B.gm || (!!cb.ownerUid && cb.ownerUid === B.me));
+const canControl = (B, t) => !!t && (B.gm || (!B.paused && !!t.ownerUid && t.ownerUid === B.me));
+const canControlCb = (B, cb) => !!cb && (B.gm || (!B.paused && !!cb.ownerUid && cb.ownerUid === B.me));
 const isTurnOf = (B, t) => !!(B.combat.active && B.combat.curId && cbOfTok(B, t)?.id === B.combat.curId);
 const tokenOfCb = (B, cb) => (cb ? B.tokens.find((t) => (t.combatantId && t.combatantId === cb.id) || (cb.charId && t.charId === cb.charId) || (cb.tokenId && cb.tokenId === t.id)) || null : null);
 const charLevelOf = (B, cb) => (cb ? E.statsOf(cb, B.ctx).level || 5 : 1);
@@ -449,7 +547,7 @@ function rollAmount(h, label, ev = null) {
   const dice = h.dice || '';
   const flat = Number(h.flat) || 0;
   const expr = `${dice}${flat ? (dice ? (flat > 0 ? `+${flat}` : `${flat}`) : `${flat}`) : ''}` || '0';
-  const r = doRoll(expr, { label, kind: 'heal' });
+  const r = doRoll(expr, { label, kind: 'heal', combat: true });
   if (r && ev) ev.amountDet = [A.detOf(r)];
   return r ? Math.max(0, r.total) : 0;
 }
@@ -648,7 +746,7 @@ function sichtbareInit(B, x) {
   const out = {};
   for (const c of offen) {
     const bonus = E.statsOf(c, ctx).init ?? (Number(c.initBonus) || 0);
-    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: c.name, kind: 'init' });
+    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: c.name, kind: 'init', combat: true });
     if (r) out[c.id] = r.total;
   }
   return out;
@@ -660,7 +758,6 @@ export async function startCombat(B) {
   if (toks.some((t) => t.mref?.src === 'srd') && !B.srd) B.srd = (await import('../data/monsters-srd.js')).MONSTERS;
   const links = [];
   await mutateCombat((x) => {
-    x.mapId = B.mapId;
     for (const t of toks) {
       const had = combatantForToken(t, x.combatants);
       if (had) { if (t.surprised) had.surprised = true; continue; }
@@ -699,9 +796,10 @@ export async function startCombat(B) {
     x.zones = [];
     x.results = [];
     x.prompts = [];
+    x.outcome = null;
     E.beginCombat(x, ctx);
     return x;
-  });
+  }, B.mapId);
   for (const [tid, c2] of links) await db.update(col('tokens'), tid, { combatantId: c2 }).catch(() => {});
   for (const t of toks) if (t.surprised) await db.update(col('tokens'), t.id, { surprised: false }).catch(() => {});
   toast('Kampf gestartet – Initiative ist gewürfelt.', 'success');
@@ -723,7 +821,7 @@ export async function addTokenToCombat(B, t, sbIn = null) {
     newId = c.id;
     E.log(x, `${c.name} betritt den Kampf`);
     return x;
-  });
+  }, B.mapId);
   if (newId && !t.charId) await db.update(col('tokens'), t.id, { combatantId: newId }).catch(() => {});
 }
 // Erlegte Monster merken – daraus entsteht das Bestiarium der Spieler (nur was die Gruppe besiegt hat)
@@ -772,25 +870,17 @@ export async function placeMonster(B, w, W, H) {
   const id = await db.add(col('tokens'), tok);
   if (B.combat.active) await addTokenToCombat(B, { ...tok, id }, m);
 }
-const prevTurn = () => mutateCombat((x) => {
+const prevTurn = (B) => mutateCombat((x) => {
   if (!x.combatants.length) return x;
   x.turn--;
   if (x.turn < 0) { x.turn = x.combatants.length - 1; x.round = Math.max(1, (x.round || 1) - 1); }
   return x;
-});
-async function endCombat(ohneFrage = false) {
+}, B.mapId);
+async function endCombat(B, ohneFrage = false) {
   if (!ohneFrage && !(await confirmDialog('Kampf beenden? Die Kämpferliste bleibt im Kampf-Tracker erhalten, Zonen verschwinden.', { ok: 'Beenden' }))) return;
-  await mutateCombat((x) => {
-    x.active = false;
-    x.turn = 0;
-    x.zones = [];
-    x.prompts = [];
-    for (const c of x.combatants) c.eco = null;
-    E.log(x, '🏁 Kampf beendet', 'round');
-    return x;
-  });
+  await mutateCombat((x) => finishCombat(x, ' (SL)'), B.mapId);
 }
-async function hpQuick(t, cb) {
+async function hpQuick(B, t, cb) {
   if (!cb) { toast('Erst in den Kampf aufnehmen.', 'error'); return; }
   const v = await promptDialog(`Trefferpunkte von ${t.label} ändern`, '', { title: 'Trefferpunkte', hint: 'z. B. -7 für Schaden oder +5 für Heilung (mit allen Regeln: Resistenz, 0 TP, Konzentration)', ok: 'Anwenden' });
   const n = parseInt(String(v || '').replace('−', '-'), 10);
@@ -801,10 +891,10 @@ async function hpQuick(t, cb) {
     if (n < 0) E.applyDamage(x, c, [{ amount: -n, type: null }], { source: 'SL' }, A.makeCtx(x));
     else E.applyHealing(x, c, n, { source: 'SL' });
     return x;
-  });
+  }, B.mapId);
 }
 const COND_MENU = [...Object.values(E.COND), E.XCOND.hidden];
-function condMenu(cb, e) {
+function condMenu(B, cb, e) {
   if (!cb) return;
   openMenu(e, COND_MENU.map((name) => {
     const on = (cb.conditions || []).some((k) => k.name === name);
@@ -816,24 +906,24 @@ function condMenu(cb, e) {
         if (on) E.removeCondition(x, c, name, 'SL');
         else if (E.addCondition(x, c, { name }, A.makeCtx(x))) E.log(x, `⛓ ${c.name}: ${name} (SL)`);
         return x;
-      }),
+      }, B.mapId),
     };
   }));
 }
-async function toggleSurprised(t, cb) {
-  if (cb) await mutateCombat((x) => { const c = x.combatants.find((y) => y.id === cb.id); if (c) c.surprised = !c.surprised; return x; });
+async function toggleSurprised(B, t, cb) {
+  if (cb) await mutateCombat((x) => { const c = x.combatants.find((y) => y.id === cb.id); if (c) c.surprised = !c.surprised; return x; }, B.mapId);
   else await db.update(col('tokens'), t.id, { surprised: !t.surprised }).catch(() => {});
 }
 function gmMenu(B, t, cb, e, editToken) {
   const items = [];
   if (cb) {
-    items.push({ label: 'Trefferpunkte ändern …', icon: 'heart', onClick: () => hpQuick(t, cb) });
-    items.push({ label: 'Zustand setzen …', icon: 'activity', onClick: () => condMenu(cb, e) });
+    items.push({ label: 'Trefferpunkte ändern …', icon: 'heart', onClick: () => hpQuick(B, t, cb) });
+    items.push({ label: 'Zustand setzen …', icon: 'activity', onClick: () => condMenu(B, cb, e) });
   }
   const sb = statFor(B, t);
   if (sb) items.push({ label: 'Statblock', icon: 'scroll', onClick: () => openModal(() => html`<div class="modal-body"><${Statblock} monster=${sb} /></div>`, { title: t.label, icon: 'ghost', size: 'lg' }) });
   if (!cb && (t.charId || t.mref)) items.push({ label: 'In den Kampf', icon: 'plus', onClick: () => addTokenToCombat(B, t) });
-  if (!B.combat.active || !cb) items.push({ label: (cb ? cb.surprised : t.surprised) ? 'Nicht überrascht' : 'Überrascht (Kampfbeginn)', icon: 'eye-off', onClick: () => toggleSurprised(t, cb) });
+  if (!B.combat.active || !cb) items.push({ label: (cb ? cb.surprised : t.surprised) ? 'Nicht überrascht' : 'Überrascht (Kampfbeginn)', icon: 'eye-off', onClick: () => toggleSurprised(B, t, cb) });
   if (editToken) items.push({ label: 'Token bearbeiten', icon: 'pencil', onClick: () => editToken(t) });
   openMenu(e, items);
 }
@@ -842,7 +932,7 @@ async function endConc(B, cb) {
   if (!(await confirmDialog(`Konzentration auf „${cb.concentration.name}“ beenden?`, { ok: 'Beenden' }))) return;
   const char = B.ctx.charOf(cb);
   if (char && cb.ownerUid) db.update(`users/${cb.ownerUid}/characters`, char.id, { concentration: null }).catch(() => {});
-  await sendEvent({ type: 'endConc', actor: cb.id }).catch(() => {});
+  await sendEvent({ type: 'endConc', actor: cb.id, mapId: B.mapId }).catch(() => {});
 }
 export async function clearTemplates(B, { mine = false } = {}) {
   for (const o of B.overlays.filter((x) => x.kind === 'tpl' && (!mine || x.uid === B.me))) await db.remove(col('party'), o.id).catch(() => {});
@@ -855,7 +945,7 @@ export async function ping(B, w) {
   B.redraw();
   try { await db.set(col('party'), `ping-${B.me}`, doc); } catch { /* egal */ }
 }
-export const animating = (B) => !!B && (B.combat.active || !!B.pending || [B.localPing, ...B.overlays.filter((o) => o.kind === 'ping')].some((p) => p && now() - p.ts < 2800));
+export const animating = (B) => !!B && (B.combat.active || !!B.pending || B.anim?.size > 0 || [B.localPing, ...B.overlays.filter((o) => o.kind === 'ping')].some((p) => p && now() - p.ts < 2800));
 
 // ───────────────────────── Zeichnen ─────────────────────────
 function disk(c, x, y, r, fill, stroke, lw) {
@@ -1068,11 +1158,14 @@ export function tokenPic(B, t, { tall = false, cb = null } = {}) {
 
 function drawToken(ctx, B, t, k, tm, selected) {
   const n = t.size || 1;
-  const x = t.dragX ?? t.x;
-  const y = t.dragY ?? t.y;
+  const lauf = t.dragX == null ? laufPos(B, t, tm) : null;
+  const x = t.dragX ?? lauf?.x ?? t.x;
+  const y = t.dragY ?? lauf?.y ?? t.y;
   const cx = x + n / 2;
   const cy = y + n / 2;
-  const r = n / 2 - 0.07;
+  const r = (n / 2 - 0.07) * (isSmallToken(B, t) ? 0.8 : 1);
+  const dir = lauf?.dir ?? tokenDir(B, t);
+  const dirRad = (dir * Math.PI) / 180;
   const cb = cbOfTok(B, t);
   const pe = charOf(B, t);
   const pc = !!(pe || cb?.isPC || t.charId);
@@ -1083,36 +1176,23 @@ function drawToken(ctx, B, t, k, tm, selected) {
     const pulse = 0.5 + 0.5 * Math.sin(tm / 260);
     disk(ctx, cx, cy, r + 0.12 + pulse * 0.08, 'rgba(224,178,74,.22)', '#e0b24a', (2 + pulse * 2) / k);
   }
-  const eckig = n === 1;                 // ein Feld = Quadrat, größere Kreaturen bleiben rund
-  const q = 0.45;                        // halbe Kantenlänge bei 90 % Feldbreite
-  const rad = 0.1;                       // leicht abgerundete Ecken
-  const formPfad = () => {
-    ctx.beginPath();
-    if (!eckig) { ctx.arc(cx, cy, r, 0, TAU); return; }
-    const x0 = cx - q;
-    const y0 = cy - q;
-    ctx.moveTo(x0 + rad, y0);
-    ctx.arcTo(x0 + q * 2, y0, x0 + q * 2, y0 + q * 2, rad);
-    ctx.arcTo(x0 + q * 2, y0 + q * 2, x0, y0 + q * 2, rad);
-    ctx.arcTo(x0, y0 + q * 2, x0, y0, rad);
-    ctx.arcTo(x0, y0, x0 + q * 2, y0, rad);
-    ctx.closePath();
-  };
-  if (eckig) {
-    ctx.save();
-    ctx.translate(0.03, 0.06);
-    formPfad();
-    ctx.fillStyle = 'rgba(0,0,0,.35)';
-    ctx.fill();
-    ctx.restore();
-  } else disk(ctx, cx + 0.03, cy + 0.06, r, 'rgba(0,0,0,.35)');
+  disk(ctx, cx + 0.03, cy + 0.06, r, 'rgba(0,0,0,.35)');
   const img = imageFor(tokenPic(B, t), B.redraw);
   ctx.save();
-  formPfad();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, TAU);
   ctx.clip();
-  const bw = eckig ? q : r;
-  if (img) ctx.drawImage(img, cx - bw, cy - bw, bw * 2, bw * 2);
-  else if (t.art?.icon) {
+  const bw = r;
+  if (img) {
+    // Das Bild dreht mit der Blickrichtung; zeigt sie nach links, wird es gespiegelt – so steht niemand kopf
+    const links = Math.cos(dirRad) < -1e-6;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(links ? dirRad - Math.PI : dirRad);
+    if (links) ctx.scale(-1, 1);
+    ctx.drawImage(img, -bw, -bw, bw * 2, bw * 2);
+    ctx.restore();
+  } else if (t.art?.icon) {
     const g = ctx.createRadialGradient(cx, cy - r * 0.3, r * 0.1, cx, cy, r);
     g.addColorStop(0, lighten(t.art.color));
     g.addColorStop(1, '#120e0a');
@@ -1127,12 +1207,23 @@ function drawToken(ctx, B, t, k, tm, selected) {
   }
   if (down) { ctx.fillStyle = 'rgba(20,20,20,.6)'; ctx.fillRect(cx - bw, cy - bw, bw * 2, bw * 2); }
   ctx.restore();
-  if (eckig) {
-    formPfad();
-    ctx.strokeStyle = t.ownerUid && t.ownerUid === B.me ? '#ffffff' : ring;
-    ctx.lineWidth = 0.032;                 // dünner Rand – das Bild soll wirken, nicht der Rahmen
+  disk(ctx, cx, cy, r, null, t.ownerUid && t.ownerUid === B.me ? '#ffffff' : ring, 0.032);   // dünner Rand – das Bild soll wirken
+  // Blickrichtung: gelb-goldener Viertelbogen am Rand
+  if (!down || !cb?.dead) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 0.045, dirRad - Math.PI / 4, dirRad + Math.PI / 4);
+    ctx.strokeStyle = 'rgba(255,200,60,.35)';
+    ctx.lineWidth = Math.max(0.13, 5 / k);
     ctx.stroke();
-  } else disk(ctx, cx, cy, r, null, t.ownerUid && t.ownerUid === B.me ? '#ffffff' : ring, 0.032);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 0.045, dirRad - Math.PI / 4, dirRad + Math.PI / 4);
+    ctx.strokeStyle = '#ffcf3f';
+    ctx.lineWidth = Math.max(0.055, 2.2 / k);
+    ctx.stroke();
+    ctx.restore();
+  }
   if (down) wtext(ctx, cb?.dead || !cb?.isPC ? '☠' : cb?.stable ? '✚' : '💀', cx, cy + 0.03, r * (cb?.dead || !cb?.isPC ? 1.1 : 0.8), '#f1f1f1', 'rgba(0,0,0,.6)');
   if (cb?.concentration) { ctx.setLineDash([0.12, 0.1]); disk(ctx, cx, cy, r + 0.1, null, '#f5c542', 0.05); ctx.setLineDash([]); }
   if (cb && (cb.hp != null || cb.hpState)) {
@@ -1272,6 +1363,7 @@ function TokenArt({ B, t, cb, size = 32, portrait = false }) {
   return html`<span class=${`bt-art bt-kuerzel${portrait ? ' hoch' : ''}`} style=${{ ...box, background: t?.color || cb?.color || '#7a7a7a' }}>${initials(t?.label || cb?.name || '?').slice(0, 2)}</span>`;
 }
 
+const INIT_GEWUERFELT = new Set();
 function TurnStrip({ B, s }) {
   const c = B.combat;
   const list = c.list.filter((x) => (B.gm || !x.hidden) && !x.vanish);
@@ -1280,17 +1372,16 @@ function TurnStrip({ B, s }) {
     const pe = B.party.find((p) => p.char?.id === myCb.charId);
     const bonus = pe ? E.statsOf(myCb, B.ctx).init ?? 0 : 0;
     const cm = pe?.char ? charMods(pe.char) : null;
-    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}${(cm?.initDice || []).map((d) => `+${d}`).join('')}`, { label: 'Initiative', character: myCb.name, kind: 'init', fx: cm?.initAdv ? { adv: true } : {} });
-    if (r) sendEvent({ type: 'init', value: r.total, charId: myCb.charId || null });
+    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}${(cm?.initDice || []).map((d) => `+${d}`).join('')}`, { label: 'Initiative', character: myCb.name, kind: 'init', combat: true, fx: cm?.initAdv ? { adv: true } : {} });
+    if (r) sendEvent({ type: 'init', value: r.total, charId: myCb.charId || null, mapId: B.mapId });
     if (pe?.char) A.regainOnInit(myCb, pe.char).then((got) => { if (got.length) toast(`Initiative: ${got.join(', ')} +1`, 'success'); });
   };
   // Beim Kampfbeginn würfelt jeder Spieler seine Initiative selbst – sichtbar auf dem eigenen Bildschirm
-  const initRef = useRef('');
   useEffect(() => {
     if (!c.active || !myCb || myCb.init != null) return;
-    const k = `${B.mapId}|${myCb.id}`;
-    if (initRef.current === k) return;
-    initRef.current = k;
+    const k = `${B.mapId}|${myCb.id}|${c.x?.startedAt || ''}`;
+    if (INIT_GEWUERFELT.has(k)) return;   // auch bei mehreren offenen Tabs derselben Karte nur einmal
+    INIT_GEWUERFELT.add(k);
     const id = setTimeout(() => rollMyInit(), 400);
     return () => clearTimeout(id);
   }, [c.active, myCb?.id, myCb?.init]);
@@ -1304,7 +1395,7 @@ function TurnStrip({ B, s }) {
         for (const o of x.combatants) if (o.init == null) E.rollInitiative(x, o, ctx);
         resort(x);
         return x;
-      });
+      }, B.mapId);
     }, 15000);
     return () => clearTimeout(id);
   }, [c.active, offen, B.gm]);
@@ -1325,7 +1416,7 @@ function TurnStrip({ B, s }) {
       </button>`;
     })}</div>
     <div class="bt-ctl">
-      ${B.gm && c.active ? html`<${IconBtn} icon="skip-back" title="Vorheriger Zug (ohne Regeln)" onClick=${prevTurn} /><${Btn} size="sm" kind="primary" icon="skip-forward" onClick=${() => { B.pending = null; sendEvent({ type: 'endTurn' }).catch(() => {}); }}>Nächster Zug<//><${IconBtn} icon="stop" title="Kampf beenden" onClick=${endCombat} /><${IconBtn} icon="list" title="Kampf-Tracker (Liste mit allen Werten)" onClick=${() => openView('combat')} />` : null}
+      ${B.gm && c.active ? html`<${IconBtn} icon="skip-back" title="Vorheriger Zug (ohne Regeln)" onClick=${() => prevTurn(B)} /><${Btn} size="sm" kind="primary" icon="skip-forward" onClick=${() => { B.pending = null; sendEvent({ type: 'endTurn', mapId: B.mapId }).catch(() => {}); }}>Nächster Zug<//><${IconBtn} icon="stop" title="Kampf beenden" onClick=${() => endCombat(B)} /><${IconBtn} icon="list" title="Kampf-Tracker (Liste mit allen Werten)" onClick=${() => openView('combat', { mapId: B.mapId })} />` : null}
       ${B.gm && !c.active ? html`<${Btn} size="sm" kind="primary" icon="swords" onClick=${() => startCombat(B)}>Kampf starten<//>` : null}
       ${!B.gm && myCb && myCb.init == null ? html`<${Btn} size="sm" icon="d20" onClick=${rollMyInit}>Initiative<//>` : null}
     </div>
@@ -1434,7 +1525,7 @@ function ResultCard({ r, B }) {
       const ev = A.rollDamage(x, actor, r, B.ctx, { sneak: sneakOk && sneak, smite, doRoll, opts: chosen });
       if (smite && char) await A.consumeSlot(actor, char, smite.slot, smite.pact);
       if (chosen.length && char) await A.consumeHitOpts(actor, char, chosen);
-      await sendEvent(ev);
+      await sendEvent({ ...ev, mapId: B.mapId });
     } finally { setBusy(false); }
   };
   const acShown = (t) => t.ac != null && (B.gm || cbById(B, t.id)?.isPC || cbById(B, t.id)?.known);
@@ -1473,36 +1564,16 @@ function ResultStack({ B }) {
   return html`<div class="bt-results">${shown.map((r) => html`<${ResultCard} key=${r.id} r=${r} B=${B} />`)}</div>`;
 }
 
-// Steht eine Seite noch? (lebt oder macht noch Todesrettungswürfe)
-const steht = (c) => !c.dead && !c.vanish && !(c.hp != null && c.hp <= 0 && (c.stable || !c.isPC));
-
-// Gewonnen / Verloren: 3 Sekunden einblenden, danach zurück ins Erkunden
-function Ausgang({ B, s }) {
+// Gewonnen / Verloren: entscheidet die SL-Seite (combat.js combatWinner) – 3 Sekunden Banner, danach endet der
+// Kampf von selbst und die Karte springt zurück ins Erkunden
+function Ausgang({ B }) {
   const c = B.combat;
-  const [zeig, setZeig] = useState(null);
-  useEffect(() => {
-    if (!c.active) return undefined;
-    const liste = c.list.filter((x) => !x.vanish);
-    // Seiten: von der SL gesetzte Teams schlagen die Einteilung Helden ↔ Gegner
-    const seite = (x) => x.team || (x.isPC || x.ally ? 'pc' : 'npc');
-    const ich = liste.find((x) => x.ownerUid && x.ownerUid === B.me) || liste.find((x) => x.isPC);
-    const meineSeite = ich ? seite(ich) : 'pc';
-    const meine = liste.filter((x) => seite(x) === meineSeite);
-    const gegner = liste.filter((x) => seite(x) !== meineSeite);
-    if (!meine.length || !gegner.length) return undefined;
-    const meineLeben = meine.some(steht);
-    const gegnerLeben = gegner.some(steht);
-    if (meineLeben && gegnerLeben) return undefined;
-    const sieg = meineLeben && !gegnerLeben;
-    setZeig(sieg ? 'Gewonnen' : 'Verloren');
-    const t = setTimeout(() => {
-      setZeig(null);
-      if (sieg && B.gm) endCombat(true);
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [c.list.map((x) => `${x.id}:${x.hp}:${x.dead ? 1 : 0}:${x.stable ? 1 : 0}`).join(','), c.active]);
-  if (!zeig) return null;
-  return html`<div class=${`bt-ausgang ${zeig === 'Gewonnen' ? 'sieg' : 'nieder'}`}><span>${zeig}</span></div>`;
+  const o = c.active ? c.outcome : null;
+  if (!o) return null;
+  const ich = c.list.find((x) => x.ownerUid && x.ownerUid === B.me && !x.vanish) || c.list.find((x) => x.isPC);
+  const meineSeite = ich ? sideOfCombatant(ich) : 'pc';
+  const text = o.winner === 'none' ? 'Kampf vorbei' : o.winner === meineSeite ? 'Gewonnen' : 'Verloren';
+  return html`<div class=${`bt-ausgang ${text === 'Gewonnen' ? 'sieg' : 'nieder'}`} key=${o.at}><span>${text}</span></div>`;
 }
 
 export function BattleHud({ B, s, editToken }) {
@@ -1534,7 +1605,7 @@ export function BattleHud({ B, s, editToken }) {
   const char = ctl ? B.ctx.charOf(selCb) : null;
   const isTurn = ctl && ((c.active && c.curId === selCb.id) || (!c.active && B.explore));
   const movedLocal = selCb ? B.localMove.get(`${c.turnKey}|${selCb.id}`) || 0 : 0;
-  return html`<${Ausgang} B=${B} s=${s} />
+  return html`<${Ausgang} B=${B} />
     ${showStrip ? html`<${TurnStrip} B=${B} s=${s} />` : null}
     ${B.condTip ? html`<div class="bt-condtip" style=${{ left: `${B.condTip.sx}px`, top: `${B.condTip.sy}px` }}>
       <b>${B.condTip.name}</b>${condText(B.condTip.name) ? html`<span>${condText(B.condTip.name)}</span>` : null}</div>` : null}
@@ -1551,9 +1622,10 @@ export function BattleHud({ B, s, editToken }) {
       ${ctl ? html`<${BattleBar} B=${B} cb=${selCb} char=${char} acts=${acts} turn=${isTurn} speedM=${speedOf(B, selT)} movedLocal=${movedLocal}
         pendingKey=${B.pending?.a?.key || null} portrait=${html`<${TokenArt} B=${B} t=${selT} cb=${selCb} size=${64} />`}
         onArm=${(a) => (B.pending?.a?.key === a.key ? arm(B, null) : armAction(B, selT, a))}
-        onEnd=${ctl && c.active && c.curId === selCb.id ? () => { B.pending = null; sendEvent({ type: 'endTurn' }).catch(() => {}); } : null}
+        onEnd=${ctl && c.active && c.curId === selCb.id ? () => { B.pending = null; sendEvent({ type: 'endTurn', mapId: B.mapId }).catch(() => {}); } : null}
         onGm=${B.gm ? (e) => gmMenu(B, selT, selCb, e, editToken) : null}
         onEndConc=${() => endConc(B, selCb)}
+        onTurn=${(d) => { turnToken(B, selT, d); B.redraw(); }}
         onClose=${() => selectToken(B, null)} />` : null}
     </div>`;
 }
@@ -1571,7 +1643,7 @@ export async function removeFigure(B, t) {
       if (x.turn >= x.combatants.length) x.turn = 0;
       E.log(x, `${cb.name} verlässt den Kampf`);
       return x;
-    }).catch(() => {});
+    }, B.mapId).catch(() => {});
   }
   if (B.sel === t.id) selectToken(B, null);
 }
@@ -1584,6 +1656,12 @@ export async function dropFigure(B, fig, cell, W, H) {
     if (!pe) return;
     const da = B.tokens.find((x) => x.charId === fig.id);
     if (da) { await db.update(col('tokens'), da.id, { x: cell.x, y: cell.y }); return; }
+    // Ein Charakter steht immer nur auf einer Karte: von anderen Karten (und deren Kampf) nehmen
+    const anderswo = (await db.list(col('tokens'), { where: [['charId', '==', fig.id]] }).catch(() => [])).filter((x) => x.mapId !== B.mapId);
+    for (const o of anderswo) {
+      await db.remove(col('tokens'), o.id).catch(() => {});
+      await mutateCombat((x) => { x.combatants = x.combatants.filter((c) => c.charId !== fig.id); if (x.turn >= x.combatants.length) x.turn = 0; return x; }, o.mapId).catch(() => {});
+    }
     await db.add(col('tokens'), {
       mapId: B.mapId, x: cell.x, y: cell.y, size: 1, label: pe.char.name, color: pe.char.color || '#4d8dff',
       ownerUid: pe.owner, charId: pe.char.id, visibility: 'players', createdAt: now(),

@@ -9,7 +9,7 @@ import { extractJSON } from '../core/ai.js';
 import { encounterSystemPrompt, buildEncounterPrompt } from '../core/prompts.js';
 import { saveToArchive } from '../core/archive.js';
 import { loadParty } from '../core/party.js';
-import { addToCombat, combatantsFromMonsters, combatantFromCharacter, loadCombat } from '../core/combat.js';
+import { addToCombat, combatantsFromMonsters, combatantFromCharacter, loadCombat, NO_MAP } from '../core/combat.js';
 import { calcEncounter, difficultyLabel, SRD_ATTRIBUTION } from '../data/rules5e.js';
 import { lootFor } from '../data/tables.js';
 import { ViewFrame } from '../ui/frame.js';
@@ -227,15 +227,15 @@ export function EncounterView({ tabId, params = {} }) {
 
   const updateMonster = (i, m) => setResult({ ...result, monsters: result.monsters.map((x, j) => (j === i ? { ...m, qty: x.qty } : x)) });
   const startCombat = async (withParty = true) => {
-    const st = await loadCombat();
+    const st = await loadCombat(NO_MAP);
     if (st.combatants.length && !(await confirmDialog(`Im Kampf-Tracker sind schon ${st.combatants.length} Kämpfer. Trotzdem hinzufügen?`, { ok: 'Hinzufügen' }))) return;
     const list = combatantsFromMonsters(result.monsters);
     if (withParty && !st.combatants.some((c) => c.isPC)) {
       const party = await loadParty();
       list.unshift(...party.map(combatantFromCharacter));
     }
-    await addToCombat(list, 'Encounter geladen');
-    openView('combat');
+    await addToCombat(list, 'Encounter geladen', NO_MAP);
+    openView('combat', { tracker: 1 });
   };
   const saveEncounter = async () => {
     await db.add(col('encounters'), { name: result.monsters.map((m) => `${m.qty}× ${m.name}`).join(', '), draft, result, ts: now() });
@@ -337,7 +337,7 @@ export function EncounterView({ tabId, params = {} }) {
               <${Statblock} monster=${m} twoCol=${true} tools=${html`
                 <${IconBtn} icon="ghost" title="Zum Bestiarium hinzufügen" onClick=${() => saveToBestiary(m)} />
                 <${IconBtn} icon="file-text" title="Als Notiz" onClick=${() => monsterToNote(m)} />
-                <${IconBtn} icon="sword" title="In den Kampf" onClick=${async () => { await addToCombat(combatantsFromMonsters([m]), `${m.qty}× ${m.name}`); toast('Im Kampf-Tracker', 'success', { action: { label: 'Öffnen', onClick: () => openView('combat') } }); }} />
+                <${IconBtn} icon="sword" title="In den Kampf" onClick=${async () => { await addToCombat(combatantsFromMonsters([m]), `${m.qty}× ${m.name}`); toast('Im Kampf-Tracker', 'success', { action: { label: 'Öffnen', onClick: () => openView('combat', { tracker: 1 }) } }); }} />
                 <${IconBtn} icon="pencil" title="JSON bearbeiten" onClick=${async () => { const nm = await editJson(m); if (nm) updateMonster(i, nm); }} />`} />
               ${m.tactics ? html`<div class="small muted" style="margin:-8px 0 14px"><b>Taktik:</b> ${m.tactics}</div>` : null}
             </div>`)}
@@ -442,7 +442,7 @@ export function BestiaryView({ tabId }) {
         </div>
         <div class="sticky">
           ${current ? html`<${Statblock} monster=${current} twoCol=${true} tools=${html`
-            <${IconBtn} icon="sword" title="In den Kampf" onClick=${async () => { await addToCombat(combatantsFromMonsters([current])); toast('Im Kampf-Tracker', 'success', { action: { label: 'Öffnen', onClick: () => openView('combat') } }); }} />
+            <${IconBtn} icon="sword" title="In den Kampf" onClick=${async () => { await addToCombat(combatantsFromMonsters([current])); toast('Im Kampf-Tracker', 'success', { action: { label: 'Öffnen', onClick: () => openView('combat', { tracker: 1 }) } }); }} />
             <${IconBtn} icon="file-text" title="Als Notiz" onClick=${() => monsterToNote(current)} />
             <${IconBtn} icon="pencil" title="Bearbeiten" onClick=${async () => { const nm = await editJson(current); if (nm) { const { id, ...rest } = normalizeMonster(nm); await db.set(col('monsters'), current.id, { ...rest, createdAt: current.createdAt || now() }); } }} />
             <${IconBtn} icon="trash" title="Löschen" onClick=${async () => { if (await confirmDialog(`„${current.name}“ aus dem Bestiarium löschen?`, { danger: true, ok: 'Löschen' })) { await db.remove(col('monsters'), current.id); setSel(null); } }} />`} />`

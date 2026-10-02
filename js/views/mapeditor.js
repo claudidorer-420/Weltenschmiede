@@ -11,14 +11,16 @@ import { setPanels, clearPanels } from '../core/panels.js';
 import { settings } from '../core/settings.js';
 import { fileUrl, saveFile, deleteFile } from '../core/files.js';
 import { loadParty } from '../core/party.js';
-import { loadCombat, mutateCombat } from '../core/combat.js';
+import { loadCombat, mutateCombat, NO_MAP } from '../core/combat.js';
 import { sizeCells } from '../core/tactics.js';
-import { lightMap, visibleCells, loadExplored, saveExplored, rememberSeen, cellsOf, darkMeters, loadRoofs, saveRoofs, roofAlpha } from '../core/sight.js';
+import { lightMap, visibleCells, loadExplored, saveExplored, rememberSeen, cellsOf, darkMeters, loadRoofs, saveRoofs, roofAlpha, ERKUNDET_DUNKEL } from '../core/sight.js';
 import { monsterIconName, creatureType } from '../ui/art.js';
 import {
   useBattle, drawBattle, BattleHud, MonsterPlacer, FigureList, FIG_MIME, dropFigure, onDown as battleDown, onTokenDrop, selectToken, arm, ping, animating, startCombat, clearTemplates, placeMonster, statFor,
+  walkFor, turnToken, tokenDir, merkeBlick, SICHTKEGEL, DREH_SCHRITT,
 } from './battle.js';
 import { ViewFrame } from '../ui/frame.js';
+import { WeatherLayer, WeatherForm, WEATHER_SIGHT } from '../ui/weather.js';
 import { Icon, IconBtn, Btn, Field, Select, Segmented, Toggle, NotePicker, openModal, promptDialog, confirmDialog, toast, pickFiles } from '../ui/components.js';
 import { useCol } from '../core/hooks.js';
 import { now, debounce, uid, colorFromString, download, randInt, clamp } from '../lib/util.js';
@@ -26,10 +28,10 @@ import { uploadImage } from './codex.js';
 import { STAMPS, TEXTURES } from '../data/mapassets.js';
 import { TEX_MODS, splitTex } from '../data/texvars.js';
 import {
-  PROC, FLUIDS, assetInfo, assetThumb, texUrl, texThumb, fluidOf, preloadMap, onAssets, assetsVersion,
+  PROC, FLUIDS, assetInfo, assetThumb, texUrl, texThumb, fluidOf, preloadMap, onAssets, assetsVersion, blocksSight,
   renderReal, renderObjects, drawObjects, renderLighting, drawStampPreview, texName, REAL_INK, drawRoofs,
 } from './maprender.js';
-import { STYLES, isReal, isImageMap, MATS, SETS, SCRAWL_GENERATORS, r2, rnd, pick, stampAt } from './mapgen.js';
+import { STYLES, isReal, isImageMap, MATS, SETS, SCRAWL_GENERATORS, GEN_OPTS, genSize, genFits, generate, r2, rnd, pick, stampAt } from './mapgen.js';
 import { userAssets, userAssetInfo, userThumb, importAssetFiles, deleteUserAssets, updateUserAsset, ensureUserImages } from '../core/userassets.js';
 
 const PX = 40; // Bildschirm-Pixel pro Feld bei Zoom 1
@@ -150,11 +152,28 @@ function drawObject(c, o, st) {
   c.restore();
 }
 
-function drawLabel(c, l, st) {
+export function drawLabel(c, l, st) {
   const size = l.size || 0.7;
   if (l.kind === 'room') {
     circ(c, l.x, l.y, size * 0.62, st.halo, st.ink, 0.05);
     utext(c, String(l.text), l.x, l.y + 0.02, size * 0.7, st.ink, null, 800);
+  } else if (l.kind === 'ort') {
+    // Ortsname: kleine Raute als Markierung, der Name darüber in Zierschrift mit dunklem Rand
+    const d = size * 0.26;
+    c.save();
+    c.beginPath();
+    c.moveTo(l.x, l.y - d);
+    c.lineTo(l.x + d, l.y);
+    c.lineTo(l.x, l.y + d);
+    c.lineTo(l.x - d, l.y);
+    c.closePath();
+    c.fillStyle = '#17120b';
+    c.fill();
+    c.lineWidth = size * 0.07;
+    c.strokeStyle = '#f6edd6';
+    c.stroke();
+    c.restore();
+    utext(c, String(l.text), l.x, l.y - size * 0.82, size, '#f6edd6', 'rgba(22,16,9,.9)', 700, 'Georgia, "Palatino Linotype", "Book Antiqua", serif');
   } else utext(c, String(l.text), l.x, l.y, size, st.ink, st.halo, 700, 'Georgia, "Palatino Linotype", serif');
   if (l.noteId) circ(c, l.x + size * 0.55, l.y - size * 0.5, 0.09, '#4d8dff');
 }
@@ -418,10 +437,13 @@ function renderImageMap(target, m, cs, img, bake, opts) {
 }
 
 
-// party = Zahl der Spielercharaktere (die Waldlichtung stellt so viele Zelte auf)
-export function newScrawlMap({ name, w = 36, h = 26, style = 'real', gen = 'dungeon', party = 4 }) {
-  const g = (SCRAWL_GENERATORS[gen] || SCRAWL_GENERATORS.leer).fn(w, h, { party });
-  const doc = { name, type: 'scrawl', w, h, style, gridOn: true, hatch: 1, ...g, fog: { enabled: false, revealed: '0'.repeat(w * h) }, visibility: 'gm', createdAt: now() };
+// party = Zahl der Spielercharaktere (die Waldlichtung stellt so viele Zelte auf); opts = Optionen des Generators
+// (GEN_OPTS) – die Größe wächst, wenn die gewünschten Anzahlen sonst nicht passen
+export function newScrawlMap({ name, w = 36, h = 26, style = 'real', gen = 'dungeon', party = 4, opts = {} }) {
+  const g = generate(gen, w, h, { party, ...opts });
+  w = g.w;
+  h = g.h;
+  const doc = { name, type: 'scrawl', style, gridOn: true, hatch: 1, ...g, w, h, fog: { enabled: false, revealed: '0'.repeat(w * h) }, visibility: 'gm', createdAt: now() };
   doc.thumb = thumbOf(doc);
   return doc;
 }
@@ -447,7 +469,7 @@ export function renderMapImage(m, cs, img, { lighting = true, bake = null, roofs
     if (on.glow) { c.globalCompositeOperation = 'lighter'; c.drawImage(gl, 0, 0, cv.width, cv.height); c.globalCompositeOperation = 'source-over'; }
   }
   c.setTransform(cs, 0, 0, cs, 0, 0);
-  for (const l of m.labels || []) drawLabel(c, l, st);
+  for (const l of m.labels || []) if (!l.gm) drawLabel(c, l, st);
   c.setTransform(1, 0, 0, 1, 0, 0);
   return cv;
 }
@@ -511,12 +533,12 @@ export function objMeta(o) {
     const i = assetInfo(o.a);
     const s = o.s || 1;
     if (!i) return { w: s, h: s, block: false, rough: false, door: false, layer: 'obj', name: 'Objekt' };
-    return { w: i.w * s, h: i.h * s, block: !!i.block, rough: !!i.rough, door: !!i.door, layer: o.layer || i.layer || 'obj', name: i.name, glow: !!i.glow };
+    return { w: i.w * s, h: i.h * s, block: !!i.block, rough: !!i.rough, door: !!i.door, layer: o.layer || i.layer || 'obj', name: i.name, glow: !!i.glow, sight: blocksSight({ ...i, hM: (Number(i.hM) || 0) * s }) };
   }
   const def = OBJ[o.t];
   if (!def) return null;
   const s = o.s || 1;
-  return { w: def.w * s, h: def.h * s, block: BLOCK_OBJ.has(o.t), rough: ROUGH_OBJ.has(o.t), door: DOORS.includes(o.t), layer: 'obj', name: def.label };
+  return { w: def.w * s, h: def.h * s, block: BLOCK_OBJ.has(o.t), rough: ROUGH_OBJ.has(o.t), door: DOORS.includes(o.t), layer: 'obj', name: def.label, sight: BLOCK_OBJ.has(o.t) && Math.min(def.w, def.h) * s >= 0.9 };
 }
 function objHit(o, x, y) {
   const m = objMeta(o);
@@ -632,9 +654,9 @@ export function buildGrid(d) {
       if (m.block) {
         walk[i] = 0;
         cover[i] = 1;
-        // Alles, was mindestens ein volles Feld ausfüllt, nimmt auch die Sicht (Schrank, Fels, Wagen …);
-        // Kleineres wie Fässer oder Stühle gibt nur Deckung.
-        if (Math.min(m.w, m.h) >= 0.9) opaque[i] = 1;
+        // Hohe Dinge (ab Augenhöhe, siehe HOEHE in maprender.js) nehmen die Sicht – Schrank, Regal, Säule, Statue,
+        // großer Fels; Niedriges wie Tische, Truhen, Altäre oder Brunnen und Durchsichtiges (Gitter, Zaun) gibt nur Deckung.
+        if (m.sight) opaque[i] = 1;
       } else cost[i] = Math.max(cost[i], 2);
     });
   }
@@ -642,8 +664,8 @@ export function buildGrid(d) {
 }
 
 // ───────────────────────── Objektbibliothek (Seitenleiste) ─────────────────────────
-const CAT_LABELS = { alle: 'Alle', tueren: 'Türen', bau: 'Bauwerk', dungeon: 'Dungeon', moebel: 'Möbel', behaelter: 'Behälter', licht: 'Licht & Feuer', kueche: 'Küche', deko: 'Deko', werkzeug: 'Werkzeug', natur: 'Pflanzen', fels: 'Felsen', eigene: 'Eigene' };
-const CAT_ORDER = ['alle', 'tueren', 'bau', 'dungeon', 'moebel', 'behaelter', 'licht', 'natur', 'fels', 'kueche', 'deko', 'werkzeug', 'eigene'];
+const CAT_LABELS = { alle: 'Alle', tueren: 'Türen', stadt: 'Stadt & Markt', bau: 'Bauwerk', dungeon: 'Dungeon', moebel: 'Möbel', behaelter: 'Behälter', licht: 'Licht & Feuer', kueche: 'Küche', deko: 'Deko', werkzeug: 'Werkzeug', natur: 'Pflanzen', fels: 'Felsen', eigene: 'Eigene' };
+const CAT_ORDER = ['alle', 'tueren', 'stadt', 'bau', 'dungeon', 'moebel', 'behaelter', 'licht', 'natur', 'fels', 'kueche', 'deko', 'werkzeug', 'eigene'];
 const CATALOG = [
   ...Object.entries(PROC).map(([id, p]) => ({ key: `p:${id}`, name: p.name, cat: p.cat, w: p.w, h: p.h, q: `${p.name} ${id}`.toLowerCase() })),
   ...STAMPS.map((s) => ({ key: `ph:${s.id}`, name: s.name, cat: s.cat, w: s.w, h: s.h, q: `${s.name} ${s.id} ${s.tags || ''}`.toLowerCase() })),
@@ -882,6 +904,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const [lightKind, setLightKind] = useState('warm');
   const [lightR, setLightR] = useState(5);
   const [textKind, setTextKind] = useState('room');
+  const [textGm, setTextGm] = useState(false);
   const [fogBrush, setFogBrush] = useState(2);
   const [sel, setSel] = useState([]);
   const [showLight, setShowLight] = useState(true);
@@ -908,7 +931,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   Object.assign(s, {
     gm, me, mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, shapeTex, doorKey, objKey,
     objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
-    textKind, fogBrush, sel, showLight, tokens, asPlayer: gm && asPlayer && mode !== 'build',
+    textKind, textGm, fogBrush, sel, showLight, tokens, asPlayer: gm && asPlayer && mode !== 'build',
   });
   s.viewGm = gm && !s.asPlayer;
 
@@ -929,6 +952,20 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const licht = useMemo(() => lightMap(s.doc, grid, { glows: glowSources(s.doc) }), [grid, s.geom, s.ver]);
   const B = useBattle({ cid, mapId: params.id, gm, me, tokens, grid, gridKey: s.geom, redraw: () => { s.dirty = true; }, rerender, explore: mode === 'explore', active });
   s.B = B;
+  // Pause der SL: Spieler dürfen nur noch schauen (verschieben/zoomen), nichts mehr tun
+  const pausiert = map.play === 'pause';
+  s.paused = pausiert && !gm;
+  B.paused = s.paused;
+  const wetterDialog = async () => {
+    const r = await openModal(({ close }) => html`<${WeatherForm} close=${close} weather=${map.weather} withSight />`, { title: 'Wetter auf der Karte', icon: 'cloud', size: 'sm' });
+    if (!r) return;
+    await db.update(col('maps'), params.id, { weather: r.weather, ...(r.sight ? { sightLimit: WEATHER_SIGHT[r.weather?.kind || ''] || 0 } : {}) }).catch((e) => toast(e.message, 'error'));
+  };
+  const umschaltenPause = async () => {
+    const next = pausiert ? 'live' : 'pause';
+    await db.update(col('maps'), params.id, { play: next }).catch((e) => toast(e.message, 'error'));
+    toast(next === 'pause' ? 'Karte pausiert – Spieler können hier gerade nichts tun.' : 'Karte ist wieder live.', 'info');
+  };
   useEffect(() => {
     if (!s.localDirty) {
       s.doc = pickDoc(map);
@@ -955,7 +992,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       const st = statFor(B, t);
       const held = t.charId ? (B.party || []).find((p) => p.char?.id === t.charId)?.char : null;
       const m = t.dark != null ? Number(t.dark) : darkMeters({ senses: st?.senses || '', feet: held?.darkvision || 0 });
-      return { x: t.x, y: t.y, size: t.size || 1, dark: cellsOf(m) };
+      return { x: t.x, y: t.y, size: t.size || 1, dark: cellsOf(m), dir: tokenDir(B, t), fov: SICHTKEGEL };
     });
     // Immer rechnen – auch ohne Späher. Dann ist alles dunkel, statt versehentlich die ganze Karte zu zeigen.
     s.sicht = visibleCells(grid, licht, späher, { limit: cellsOf(Number(s.doc.sightLimit) || 0) });
@@ -1481,7 +1518,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       for (const o of d.objects) if (!o.hidden) drawObject(ctx, o, st);
     }
     if (s.useBake && s.real) dachZeichnen(ctx, d);
-    for (const l of d.labels) drawLabel(ctx, l, st);
+    for (const l of d.labels) if (!l.gm || s.viewGm) drawLabel(ctx, l, st);
     if (s.mode === 'build' && s.rich) {
       for (const l of d.lights || []) {
         circ(ctx, l.x, l.y, 0.16, 'rgba(255,225,170,.95)', 'rgba(0,0,0,.65)', 0.04);
@@ -1502,7 +1539,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
         }
       }
-      // Spielersicht: nie gesehen = schwarz, schon erkundet aber gerade nicht im Blick = 75 % dunkel.
+      // Spielersicht: nie gesehen = schwarz, schon erkundet aber gerade nicht im Blick = 40 % dunkel (ERKUNDET_DUNKEL).
       // Solange das Sichtfeld noch nicht steht, bleibt alles schwarz – sonst blitzt die ganze Karte auf.
       if (!s.viewGm) {
         if (!s.sichtBereit) {
@@ -1511,7 +1548,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         } else if (s.sicht) {
           for (let i = 0; i < s.sicht.length; i++) {
             if (s.sicht[i]) continue;
-            ctx.fillStyle = s.erkundet?.[i] ? 'rgba(0,0,0,.75)' : '#05070a';
+            ctx.fillStyle = s.erkundet?.[i] ? `rgba(0,0,0,${ERKUNDET_DUNKEL})` : '#05070a';
             ctx.fillRect((i % d.w) - 0.01, Math.floor(i / d.w) - 0.01, 1.02, 1.02);
           }
         }
@@ -1834,6 +1871,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         return;
       }
       if (s.mode !== 'build') {
+        if (s.paused) { s.act = { kind: 'pan', sx: p.x, sy: p.y, tx: s.t.x, ty: s.t.y }; return; }
         if (e.altKey && e.button === 0) { ping(s.B, w); return; }
         if (s.B && battleDown(s.B, w, s.doc.w, s.doc.h)) return;
         if (tl === 'place' && s.gm) { await placeMonster(s.B, w, s.doc.w, s.doc.h); return; }
@@ -1985,8 +2023,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           const next = (nums.length ? Math.max(...nums) : 0) + 1;
           commit({ labels: [...s.doc.labels, { id: uid(6), kind: 'room', text: String(next), x: r2(w.x), y: r2(w.y), size: 0.65 }] }, { geom: false });
         } else {
-          const t = await promptDialog('Beschriftung', '', { title: 'Text setzen', placeholder: 'z. B. Krypta der Nebelkönige' });
-          if (t) commit({ labels: [...s.doc.labels, { id: uid(6), kind: 'text', text: t, x: r2(w.x), y: r2(w.y), size: 0.7 }] }, { geom: false });
+          const ort = s.textKind === 'ort';
+          const t = await promptDialog(ort ? 'Name des Ortes' : 'Beschriftung', '', { title: ort ? 'Ortsname setzen' : 'Text setzen', placeholder: ort ? 'z. B. Ratshalle, Zum Goldenen Kessel, Alter Hafen' : 'z. B. Krypta der Nebelkönige' });
+          if (t) commit({ labels: [...s.doc.labels, { id: uid(6), kind: ort ? 'ort' : 'text', text: t, x: r2(w.x), y: r2(w.y), size: ort ? 0.8 : 0.7, ...(s.textGm ? { gm: true } : {}) }] }, { geom: false });
         }
       }
     };
@@ -2201,10 +2240,14 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
           delete t.dragY;
           s.dirty = true;
           if (nx === t.x && ny === t.y) return;
+          const lauf = walkFor(s.B, t, nx, ny, d.w, d.h);
           if (s.B && !onTokenDrop(s.B, t, nx, ny, d.w, d.h)) return;
+          Object.assign(t, { walk: lauf.walk, dir: lauf.dir });
           t.x = nx;
           t.y = ny;
-          await db.update(col('tokens'), t.id, { x: nx, y: ny }).catch((err) => toast(err.message, 'error'));
+          s.B?.rerender();
+          await db.update(col('tokens'), t.id, { x: nx, y: ny, dir: lauf.dir, walk: lauf.walk }).catch((err) => toast(err.message, 'error'));
+          if (s.B) merkeBlick(s.B, t, lauf.dir);
         } else if (s.B) selectToken(s.B, t.id);
         void p;
       }
@@ -2257,6 +2300,12 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         s.dirty = true;
         return;
       }
+      // Drehen: Q = 1/16 gegen den Uhrzeigersinn, E = 1/16 im Uhrzeigersinn, W = Kehrtwende (Bild wird gespiegelt)
+      if (s.mode !== 'build' && !mod && !e.altKey && !s.paused && s.B?.sel && ['q', 'e', 'w'].includes(e.key.toLowerCase())) {
+        const t = s.tokens.find((x) => x.id === s.B.sel);
+        if (t) { e.preventDefault(); turnToken(s.B, t, { q: -DREH_SCHRITT, e: DREH_SCHRITT, w: 180 }[e.key.toLowerCase()]); s.dirty = true; }
+        return;
+      }
       if (s.mode !== 'build' || !s.gm) return;
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); const all = s.doc.objects.filter((o) => !o.hidden).map((o) => ({ kind: 'obj', id: o.id })); setSel(all); s.sel = all; s.dirty = true; return; }
       if (e.key === 'Escape') { s.draft = null; setSel([]); s.sel = []; s.dirty = true; return; }
@@ -2278,8 +2327,16 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
 
   // ── Aktionen ──
   const regenerate = async (k) => {
-    if ((s.doc.shapes.length || s.doc.objects.length) && !(await confirmDialog(`Karte durch „${SCRAWL_GENERATORS[k].label}“ ersetzen? (Rückgängig mit Strg+Z)`, { ok: 'Ersetzen' }))) return;
-    commit(SCRAWL_GENERATORS[k].fn(s.doc.w, s.doc.h, { party: (B.party || []).length || 4 }));
+    const wahl = await openModal(({ close }) => html`<${GenDialog} gen=${k} w=${s.doc.w} h=${s.doc.h} close=${close} ersetzt=${!!(s.doc.shapes.length || s.doc.objects.length)} />`, { title: SCRAWL_GENERATORS[k].label, icon: 'dices', size: 'sm' });
+    if (!wahl) return;
+    const g = generate(k, s.doc.w, s.doc.h, { party: (B.party || []).length || 4, ...wahl.opts });
+    const gross = g.w !== s.doc.w || g.h !== s.doc.h;
+    commit(g);
+    if (gross) {
+      s.fog = '0'.repeat(g.w * g.h).split('');
+      await db.update(col('maps'), params.id, { fog: { ...(map.fog || {}), revealed: s.fog.join('') } }).catch(() => {});
+      toast(`Karte auf ${g.w} × ${g.h} Felder vergrößert.`, 'info');
+    }
     setSel([]);
     fit();
   };
@@ -2349,17 +2406,24 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     }
     toast(i ? `${i} Tokens gesetzt` : 'Keine (neuen) Charaktere gefunden', i ? 'success' : 'error');
   };
+  // Gegner aus dem Kampf-Tracker (ohne Karte) auf diese Karte holen – sie wechseln damit in den Kampf dieser Karte
   const addCombatTokens = async () => {
-    const stc = await loadCombat();
+    const stc = await loadCombat(NO_MAP);
+    const moved = [];
     let i = 0;
     for (const c of stc.combatants) {
       if (c.isPC || (tokensRaw || []).some((t) => t.combatantId === c.id)) continue;
       const n = c.statblock ? sizeCells(c.statblock) : 1;
       const art = c.statblock ? { icon: monsterIconName(c.statblock), color: creatureType(c.statblock.type).color } : null;
-      await db.add(col('tokens'), { mapId: params.id, x: Math.max(0, s.doc.w - 1 - n - (i % 5)), y: 1 + Math.floor(i / 5) * n, label: c.name, color: art?.color || '#ef5a5f', size: n, ...(art ? { art } : {}), ownerUid: null, combatantId: c.id, visibility: c.hidden ? 'gm' : 'players', createdAt: now() });
+      const tid = await db.add(col('tokens'), { mapId: params.id, x: Math.max(0, s.doc.w - 1 - n - (i % 5)), y: 1 + Math.floor(i / 5) * n, label: c.name, color: art?.color || '#ef5a5f', size: n, ...(art ? { art } : {}), ownerUid: null, combatantId: c.id, visibility: c.hidden ? 'gm' : 'players', createdAt: now() });
+      moved.push({ ...c, tokenId: tid });
       i++;
     }
-    if (i) await mutateCombat((x) => { x.mapId = params.id; return x; }).catch(() => {});
+    if (moved.length) {
+      await mutateCombat((x) => { for (const c of moved) if (!x.combatants.some((o) => o.id === c.id)) x.combatants.push(c); return x; }, params.id).catch(() => {});
+      const ids = new Set(moved.map((c) => c.id));
+      await mutateCombat((x) => { x.combatants = x.combatants.filter((c) => !ids.has(c.id)); return x; }, NO_MAP).catch(() => {});
+    }
     toast(i ? `${i} Gegner-Tokens gesetzt` : 'Keine Gegner im Kampf-Tracker', i ? 'success' : 'error');
   };
   const editToken = async (t) => {
@@ -2374,10 +2438,11 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   };
   // Beginnt ein Kampf, springt die Karte in den Kampfmodus – danach zurück ins Erkunden
   const warKampf = useRef(false);
+  const selbstGewählt = useRef(false);
   useEffect(() => {
     if (B.combat.active) {
       warKampf.current = true;
-      if (mode === 'explore') {
+      if (mode === 'explore' || (mode === 'build' && !selbstGewählt.current)) {
         setMode('play');
         setTool('pan');
       }
@@ -2392,6 +2457,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   }, [B.combat.active]);
 
   const switchMode = (v) => {
+    selbstGewählt.current = true;
     setMode(v);
     setTool(v === 'build' ? 'select' : 'pan');
     s.draft = null;
@@ -2485,8 +2551,9 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     }
     if (tool === 'text') {
       return html`<${Sec} title="Beschriftung" icon="hash" open=${true}>
-        <${Segmented} value=${textKind} onChange=${setTextKind} options=${[{ value: 'room', label: 'Raumnummer', icon: 'hash' }, { value: 'text', label: 'Text', icon: 'quote' }]} />
-        <div class="tiny faint">${HINTS.text}</div>
+        <${Segmented} value=${textKind} onChange=${setTextKind} options=${[{ value: 'room', label: 'Nummer', icon: 'hash' }, { value: 'ort', label: 'Ortsname', icon: 'map-pin' }, { value: 'text', label: 'Text', icon: 'quote' }]} />
+        ${textKind !== 'room' ? html`<${Toggle} checked=${textGm} onChange=${setTextGm} label="Nur für die SL sichtbar" />` : null}
+        <div class="tiny faint">${textKind === 'ort' ? 'Antippen = Ortsname mit Raute setzen (wie auf Stadtkarten). Später unter „Auswählen“ verschieben, umbenennen oder mit einer Notiz verknüpfen.' : HINTS.text}</div>
       <//>`;
     }
     return html`<${Sec} title=${tool === 'select' ? 'Auswählen' : 'Ansicht'} icon=${tool === 'select' ? 'pointer' : 'hand'} open=${true}>
@@ -2521,6 +2588,8 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
         <${Slider} label="Stärke" value=${it.i ?? 1} min=${0.2} max=${1.6} onInput=${(v) => updSel({ i: v })} />` : null}
       ${!many && kind === 'label' && it ? html`
         <${Field} label="Text"><input class="input" value=${it.text} onInput=${(e) => updSel({ text: e.target.value })} /><//>
+        <${Segmented} value=${it.kind || 'text'} onChange=${(v) => updSel({ kind: v })} options=${[{ value: 'room', label: 'Nummer' }, { value: 'ort', label: 'Ortsname' }, { value: 'text', label: 'Text' }]} />
+        <${Toggle} checked=${!!it.gm} onChange=${(v) => updSel({ gm: v || undefined })} label="Nur für die SL sichtbar" />
         <${Slider} label="Größe" value=${it.size || 0.7} min=${0.3} max=${3} step=${0.1} onInput=${(v) => updSel({ size: v })} />
         <${Field} label="Notiz verknüpfen (im Spielmodus antippbar)">${it.noteId && noteById(it.noteId) ? html`<span class="chip accent">${noteById(it.noteId).title}<span class="x" onClick=${() => updSel({ noteId: null })}><${Icon} name="x" size=${12} /></span></span>` : html`<${NotePicker} onPick=${(n) => updSel({ noteId: n.id })} />`}<//>` : null}
       ${!many && (kind === 'shape' || kind === 'terrain') && it ? html`
@@ -2667,7 +2736,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
     const lights = (d.lights || []).filter(() => match('licht'));
     if (lights.length) rows.push(html`<div class="mw-lgroup" key="li"><div class="mw-lgroup-t"><${Icon} name="sun" size=${12} />Lichter<span class="badge">${lights.length}</span></div>${lights.map((l) => simpleRow('light', l, 'sun', `Licht ${r2(l.r || 4)} Felder`))}</div>`);
     const labels = d.labels.filter((l) => match(l.text));
-    if (labels.length) rows.push(html`<div class="mw-lgroup" key="la"><div class="mw-lgroup-t"><${Icon} name="hash" size=${12} />Beschriftung<span class="badge">${labels.length}</span></div>${labels.map((l) => simpleRow('label', l, l.kind === 'room' ? 'hash' : 'quote', l.text))}</div>`);
+    if (labels.length) rows.push(html`<div class="mw-lgroup" key="la"><div class="mw-lgroup-t"><${Icon} name="hash" size=${12} />Beschriftung<span class="badge">${labels.length}</span></div>${labels.map((l) => simpleRow('label', l, l.kind === 'room' ? 'hash' : l.kind === 'ort' ? 'map-pin' : 'quote', l.text))}</div>`);
     const terr = d.terrain.filter((x) => match(matLabel(x.mat)));
     if (terr.length) rows.push(html`<div class="mw-lgroup" key="te"><div class="mw-lgroup-t"><${Icon} name="brush" size=${12} />Belag & Gelände<span class="badge">${terr.length}</span></div>${terr.slice(0, 200).map((x) => simpleRow('terrain', x, 'brush', `${matLabel(x.mat)}${x.op === 'sub' ? ' (abgezogen)' : ''}`))}</div>`);
     const shapes = d.shapes.filter((x) => match(x.wall ? 'wand' : 'raum'));
@@ -2688,7 +2757,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   const panelSig = [
     mode, tool, shape, matShape, op, snap, width, brushW, wallThick, mat, matCat, shapeTex, doorKey, objKey,
     objScale, objRandom, objAlpha, objBlur, objShadow, objLayer, scatterSet, scatterR, scatterN, lightKind, lightR,
-    textKind, fogBrush, showLight, layerQ, lDrag.id || '', lDrag.over || '', lDrag.zone || '', busy, gm, real, matMod, sidebarOpen, s.ver, s.geom, s.undo.length, s.redo.length,
+    textKind, textGm, fogBrush, showLight, layerQ, lDrag.id || '', lDrag.over || '', lDrag.zone || '', busy, gm, real, matMod, sidebarOpen, s.ver, s.geom, s.undo.length, s.redo.length,
     sel.map((x) => `${x.kind}:${x.id}`).join(','), map.fileId || '', map.bake?.fileId || '', map.fog?.enabled ? 1 : 0, B.combat?.active ? 1 : 0, B.showNames ? 1 : 0,
   ].join('|');
   useEffect(() => {
@@ -2700,6 +2769,10 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   // Der Modusumschalter steht in der Seitenleiste – in der Kopfzeile wäre er doppelt
   const actions = html`<div class="row nowrap" style="gap:2px">
     ${mode === 'build' ? html`<${IconBtn} icon="undo" title="Rückgängig (Strg+Z)" disabled=${!s.undo.length} onClick=${undo} />` : null}
+    ${gm ? html`<button type="button" class=${`map-live${pausiert ? ' pause' : ''}`} onClick=${umschaltenPause}
+      title=${pausiert ? 'Pausiert: Spieler können auf dieser Karte nichts tun – antippen, um sie wieder live zu schalten' : 'Live: Spieler können hier erkunden und kämpfen – antippen für Pause'}>
+      <i></i>${pausiert ? 'Pause' : 'Live'}</button>` : null}
+    ${gm ? html`<${IconBtn} icon="cloud" title=${map.weather?.kind ? 'Wetter ändern' : 'Wetter (Wolken, Regen, Nebel …)'} active=${!!map.weather?.kind} onClick=${wetterDialog} />` : null}
     <${IconBtn} icon="maximize" title="Einpassen" onClick=${fit} />
     ${gm && mode !== 'build' ? html`<${IconBtn} icon=${asPlayer ? 'eye-off' : 'eye'} title=${asPlayer ? 'Spielersicht beenden' : 'Spielersicht: sehen, was die Spieler gerade sehen'} active=${asPlayer} onClick=${() => { setAsPlayer(!asPlayer); s.dirty = true; }} />` : null}
     ${gm ? html`<${IconBtn} icon="settings" title="Karteneinstellungen" onClick=${settingsDialog} />` : null}
@@ -2727,6 +2800,7 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
   return html`<${ViewFrame} tabId=${tabId} title=${map.name} noScroll actions=${actions}>
     <div class="map-stage scrawl" ref=${wrapRef} style=${{ background: st.bg }} onDragOver=${figDragOver} onDrop=${figDrop}>
       <canvas ref=${cvRef} class=${`tool-${tool}`}></canvas>
+      ${mode !== 'build' ? html`<${WeatherLayer} weather=${map.weather} seed=${params.id} active=${active} size=${{ w: s.doc.w, h: s.doc.h }} view=${() => ({ x: s.t.x, y: s.t.y, k: s.t.k * PX })} />` : null}
       ${!sidebarOpen ? html`<div class="map-toolbar">
         ${tools.map(([id, icon, label]) => html`<${IconBtn} key=${id} icon=${icon} title=${label} active=${tool === id} onClick=${() => pickTool(id)} />`)}
         ${mode === 'build' && (tool === 'land' || tool === 'terrain') ? html`<div class="sep"></div>
@@ -2737,10 +2811,49 @@ export function DungeonMapView({ map, params, active, tabId, settingsDialog }) {
       ${mode !== 'build' ? html`<${BattleHud} B=${B} s=${s} editToken=${gm ? editToken : null} />` : null}
       ${gm && asPlayer && mode !== 'build' ? html`<button type="button" class="map-pv" onClick=${() => { setAsPlayer(false); s.dirty = true; }}><${Icon} name="eye" size=${15} /> Spielersicht – so sehen es die Spieler gerade <span class="x">×</span></button>` : null}
       ${measureText ? html`<div class="map-pop" style="left:60px;top:10px;width:auto"><${Icon} name="ruler" size=${14} /> <b>${measureText}</b></div>` : null}
+      ${pausiert && mode !== 'build' ? html`<div class=${`map-pause${gm ? ' sl' : ''}`}><div><b>Pause</b><span>${gm ? 'Spieler können auf dieser Karte gerade nichts tun.' : 'Die Spielleitung hat die Karte angehalten.'}</span></div></div>` : null}
     </div>
   <//>`;
 }
 const usesOwnAssets = (d) => (d.objects || []).some((o) => o.t === 'stamp' && String(o.a).startsWith('u:'));
+
+// Optionen eines Generators (Anzahl Räume, Gebäude, Fluss ja/nein …). Leer = der Generator entscheidet nach der Größe.
+export function GenOptions({ gen, value, onChange, w, h }) {
+  const spec = GEN_OPTS[gen];
+  if (!spec) return null;
+  const set = (k, v) => onChange({ ...value, [k]: v });
+  return html`<div class="gen-opts">${spec.opts.map((o) => {
+    if (o.type === 'int') {
+      const passt = genFits(o, w, h);
+      return html`<label key=${o.k} class="gen-opt"><span>${o.label}</span>
+        <input class="input sm" type="number" min=${o.min} max=${o.max} placeholder=${passt != null ? `auto (≈ ${passt})` : 'auto'} value=${value[o.k] ?? ''}
+          onInput=${(e) => set(o.k, e.target.value === '' ? '' : clamp(Number(e.target.value) || 0, o.min, o.max))} />
+        <small class="faint">${o.min}–${o.max}</small></label>`;
+    }
+    if (o.type === 'tri') {
+      const v = value[o.k] === true ? 'ja' : value[o.k] === false ? 'nein' : '';
+      return html`<label key=${o.k} class="gen-opt"><span>${o.label}</span>
+        <${Segmented} value=${v} onChange=${(x) => set(o.k, x === 'ja' ? true : x === 'nein' ? false : '')} options=${[{ value: '', label: 'Zufall' }, { value: 'ja', label: 'Ja' }, { value: 'nein', label: 'Nein' }]} /></label>`;
+    }
+    return html`<label key=${o.k} class="gen-opt"><span>${o.label}</span>
+      <${Select} value=${value[o.k] || ''} options=${[{ value: '', label: 'Zufall' }, ...o.options.map(([v, l]) => ({ value: v, label: l }))]} onChange=${(x) => set(o.k, x)} /></label>`;
+  })}</div>`;
+}
+// Hinweis, wenn die Karte für die Wünsche wachsen muss
+export function GenSizeHint({ gen, w, h, opts }) {
+  const g = genSize(gen, w, h, opts);
+  if (g.w === w && g.h === h) return html`<div class="tiny faint">Kartengröße ${w} × ${h} Felder passt.</div>`;
+  return html`<div class="gen-size"><${Icon} name="maximize" size=${14} /> Die Karte wird auf <b>${g.w} × ${g.h}</b> Felder vergrößert – ${g.grund}.</div>`;
+}
+function GenDialog({ gen, w, h, close, ersetzt }) {
+  const [opts, setOpts] = useState({});
+  return html`<div class="modal-body stack">
+    <${GenOptions} gen=${gen} value=${opts} onChange=${setOpts} w=${w} h=${h} />
+    <${GenSizeHint} gen=${gen} w=${w} h=${h} opts=${opts} />
+    ${ersetzt ? html`<div class="small muted">Ersetzt die ganze Karte – mit Strg+Z zurückholbar.</div>` : null}
+    <div class="btn-row"><span class="grow"></span><${Btn} kind="ghost" onClick=${() => close(null)}>Abbrechen<//><${Btn} kind="primary" icon="dices" onClick=${() => close({ opts })}>Generieren<//></div>
+  </div>`;
+}
 
 // Token-Formular (auch von maps.js genutzt)
 export function TokenForm({ close, token, members }) {

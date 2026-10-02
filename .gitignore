@@ -12,3 +12,4 @@ tools/sdxl/*.png
 # Veröffentlichung (tools/deploy.ps1)
 .deploy/
 .wrangler/
+tools/sdxl/*.err

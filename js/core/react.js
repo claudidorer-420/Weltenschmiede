@@ -2,6 +2,7 @@
 // Die SL-Seite stellt die Frage und wartet auf die Antwort – lokal als Dialog oder beim Spieler über den Kampfzustand.
 import { createStore } from './store.js';
 import { now, uid } from '../lib/util.js';
+import { combatMap } from './combat.js';
 
 export const promptStore = createStore({ items: [] });
 const pending = new Map();
@@ -19,7 +20,7 @@ export function setRemotePrompts(post, drop) {
 export function askPrompt(p) {
   const id = uid(8);
   const timeout = p.timeout || 30000;
-  const pr = { id, ts: now(), expires: now() + timeout, ...p };
+  const pr = { id, ts: now(), expires: now() + timeout, mapId: combatMap() || null, ...p };
   delete pr.local;
   const local = !!p.local || !remotePost;
   receivers.set(id, p.to || null);

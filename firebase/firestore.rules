@@ -98,7 +98,8 @@ service cloud.firestore {
         allow create, delete: if isGM(cid);
         allow update: if isGM(cid)
           || (isMember(cid) && resource.data.ownerUid == me()
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'y']));
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['x', 'y', 'dir', 'walk'])
+              && get(/databases/$(database)/documents/campaigns/$(cid)/maps/$(resource.data.mapId)).data.get('play', 'live') != 'pause');
       }
 
       // Anhänge (Bilder), in Stücken gespeichert
@@ -128,9 +129,10 @@ service cloud.firestore {
       match /rules/{id}      { allow read: if isMember(cid); allow write: if isGM(cid); }
       match /encounters/{id} { allow read, write: if isGM(cid); }
 
-      // Kampf: vollständiger Zustand nur SL, öffentliche Projektion für alle Mitglieder
+      // Kampf (je Karte einer): vollständiger Zustand gm~<karte> nur SL, Projektion pub~<karte> und das
+      // Verzeichnis „public“ (laufende Kämpfe, Rückfragen) für alle Mitglieder
       match /combat/{id} {
-        allow read: if isGM(cid) || (isMember(cid) && id == 'public');
+        allow read: if isGM(cid) || (isMember(cid) && (id == 'public' || id.matches('pub~.*')));
         allow write: if isGM(cid);
       }
 

@@ -106,7 +106,7 @@ export function showRollAnimated(r) {
 }
 rollBridge.show = (r) => showRollAnimated(r);
 
-const KIND = { attack: 'Angriff', damage: 'Schaden', check: 'Probe', save: 'Rettungswurf', init: 'Initiative', free: 'Wurf' };
+const KIND = { attack: 'Angriff', damage: 'Schaden', check: 'Probe', save: 'Rettungswurf', init: 'Initiative', free: 'Wurf', heal: 'Heilung', death: 'Todesrettungswurf' };
 const dText = (s) => String(s || '').replace(/(\d*)d(\d|%|F)/gi, '$1W$2');
 function RollCard({ c }) {
   const r = c.r;
@@ -114,7 +114,7 @@ function RollCard({ c }) {
   const i = lab.indexOf(': ');
   const who = i > 0 ? lab.slice(0, i) : r.character || '';
   const what = i > 0 ? lab.slice(i + 2) : lab || dText(r.input);
-  return html`<div class=${`roll-card${r.crit ? ' crit' : r.fumble ? ' fumble' : ''}`} onClick=${() => dropCard(c.id)} title="Antippen zum Schließen">
+  return html`<div class=${`roll-card${r.special === 'death' ? ' death' : ''}${r.crit ? ' crit' : r.fumble ? ' fumble' : ''}`} onClick=${() => dropCard(c.id)} title="Antippen zum Schließen">
     <div class="rc-left">
       <span class="rc-what">${what}</span>
       <span class="rc-kind">${[KIND[r.kind], who].filter(Boolean).join(' · ') || 'Wurf'}${r.crit ? ' · Natürliche 20!' : r.fumble ? ' · Patzer' : ''}</span>

@@ -16,7 +16,7 @@ import { scrollRef, tierOf } from '../data/scrolls.js';
 import { creatureType, monsterIconName } from '../ui/art.js';
 import { parseAttacks, lineOfSight, coverBetween, cellDistance, tokenCenter, tokensInArea, templateFor, areaReaches, pointInSight, inArea, sizeCells, CELL_M } from './tactics.js';
 import * as E from './engine.js';
-import { loadCombat, mutateCombat, setTurnEngine, resort, combatantsFromMonsters } from './combat.js';
+import { loadCombat, mutateCombat, setTurnEngine, resort, combatantsFromMonsters, pubDocId, advanceTurn } from './combat.js';
 import { askPrompt } from './react.js';
 import { loadParty } from './party.js';
 
@@ -36,13 +36,18 @@ export const cbOf = (x, id) => (x?.combatants || x?.list || []).find((c) => c.id
 export const edNow = () => (app.get().campaign?.settings?.rulesVersion === '2024' ? '2024' : '2014');
 
 // ───────────────────────── Kontext (Karte, Tokens, Charakterbögen) ─────────────────────────
+// Kampfkontext der sichtbaren Karte (die offene Kampfkarte schreibt hinein) …
 export const battle = { tokens: [], grid: null, party: [], mapId: null };
 export function setBattleContext(p) { Object.assign(battle, p); }
+// … und geladene Kontexte anderer Karten (je Karte läuft ein eigener Kampf; ensureBattleContext lädt sie)
+const loaded = new Map();
+const baseFor = (mapId) => (!mapId || (battle.live && battle.mapId === mapId) ? battle : loaded.get(mapId) || (battle.mapId === mapId ? battle : { tokens: [], grid: null, party: battle.party || [], mapId }));
 export function makeCtx(x, extra = {}) {
   const ed = edNow();
-  const tokens = extra.tokens || battle.tokens || [];
+  const base = baseFor(x?.mapId);
+  const tokens = extra.tokens || base.tokens || [];
   const list = x?.combatants || x?.list || [];
-  let grid = extra.grid !== undefined ? extra.grid : battle.grid;
+  let grid = extra.grid !== undefined ? extra.grid : base.grid;
   // Wände aus Zaubern (Steinwand, Kraftwand, Feuerwand …) blockieren Sichtlinie und Flächen wie echte Wände
   const walls = (x?.zones || []).filter((z) => (z.barrier || z.opaque) && z.tpl);
   if (grid && walls.length) {
@@ -50,7 +55,7 @@ export function makeCtx(x, extra = {}) {
     for (const z of walls) for (let y = 0; y < grid.h; y++) for (let xx = 0; xx < grid.w; xx++) if (inArea(z.tpl, xx + 0.5, y + 0.5)) opaque[y * grid.w + xx] = 1;
     grid = { ...grid, opaque };
   }
-  const party = extra.party || battle.party || [];
+  const party = extra.party || base.party || battle.party || [];
   // override: { kämpferId: { x, y } } – z. B. Position beim Verlassen der Reichweite (Gelegenheitsangriff)
   const override = extra.override || null;
   const tokenOf = (cb) => {
@@ -60,7 +65,7 @@ export function makeCtx(x, extra = {}) {
   };
   const charOf = (cb) => (cb?.charId ? party.find((p) => p.char?.id === cb.charId)?.char || null : null);
   // explore: „Erkunden“ – kein Kampf, keine Züge, aber alles darf gewirkt werden
-  const ctx = { ed, tokens, tokenOf, charOf, grid, list, explore: extra.explore ?? battle.explore ?? false };
+  const ctx = { ed, tokens, tokenOf, charOf, grid, list, mapId: x?.mapId || null, explore: extra.explore ?? (base === battle ? battle.explore : !x?.active) ?? false };
   const blocks = new Set();
   if (grid) {
     for (const z of x?.zones || []) {
@@ -744,7 +749,7 @@ export function rollParts(parts, { crit = false, label = '', doRoll } = {}) {
     terms.push({ i, n: p.dice ? p.dice.split('+').length : 0 });
     expr += (expr ? '+' : '') + piece;
   }
-  const r = doRoll ? doRoll(expr, { label, kind: 'damage', fx: crit ? { crit: true } : {} }) : null;
+  const r = doRoll ? doRoll(expr, { label, kind: 'damage', combat: true, fx: crit ? { crit: true } : {} }) : null;
   const res = r || rollDetailed(expr, { kind: 'damage', fx: crit ? { crit: true } : {} });
   const groups = new Map();
   const faces = new Map();
@@ -828,7 +833,7 @@ export function sneakEligible(x, c, a, hit, ctx) {
 // Angriffswurf beim Handelnden: W20 (mit Vorteil/Nachteil) – die SL rechnet den Rest nach
 export function rollAttack(a, plan, { label, doRoll }) {
   const bonus = a.attack?.bonus ?? 0;
-  const r = doRoll(`1d20${fmtS(bonus).replace('−', '-')}`, { label, kind: 'attack', fx: plan?.mode === 'adv' ? { adv: true } : plan?.mode === 'dis' ? { dis: true } : {} });
+  const r = doRoll(`1d20${fmtS(bonus).replace('−', '-')}`, { label, kind: 'attack', combat: true, fx: plan?.mode === 'adv' ? { adv: true } : plan?.mode === 'dis' ? { dis: true } : {} });
   if (!r) return null;
   const mains = (r.dice || []).filter((d) => d.main);
   const kept = mains.find((d) => !d.dropped) || mains[0];
@@ -2503,6 +2508,7 @@ export async function consumeOnUse(cb, char, a, ev) {
 let gridCache = { mapId: null, grid: null };
 export async function ensureBattleContext(mapId) {
   if (!mapId || (battle.live && battle.mapId === mapId)) return;
+  // Andere Karte: eigenen Kontext laden (Tokens immer frisch – sie bewegen sich), die sichtbare Karte bleibt unberührt
   const gm = app.get().role === 'gm';
   const where = gm ? [['mapId', '==', mapId]] : [['mapId', '==', mapId], ['visibility', '==', 'players']];
   const [tokens, party, map] = await Promise.all([
@@ -2520,8 +2526,8 @@ export async function ensureBattleContext(mapId) {
     }
     gridCache = { mapId, grid };
   }
-  if (battle.live && battle.mapId === mapId) return;
-  Object.assign(battle, { tokens: tokens || [], party: party || [], grid: gridCache.grid, mapId, live: false });
+  loaded.set(mapId, { tokens: tokens || [], party: party || [], grid: gridCache.grid, mapId, live: false });
+  if (!battle.live && (!battle.mapId || battle.mapId === mapId)) Object.assign(battle, { tokens: tokens || [], party: party || [], grid: gridCache.grid, mapId, live: false });
 }
 
 // ───────────────────────── Beim Handelnden: Zielanzahl, Schaden, Niederstrecken, Reaktionen ─────────────────────────
@@ -2668,9 +2674,9 @@ export function rollDamage(x, c, rec, ctx, { sneak = true, smite = null, doRoll,
   };
 }
 // Gelegenheitsangriff eines Charakters (nach „Ja“ in der Rückfrage): bester Nahkampfangriff gegen den Fliehenden
-export async function reactionAttack(cbId, targetId, pos = null) {
+export async function reactionAttack(cbId, targetId, pos = null, mapId = null) {
   const gm = app.get().role === 'gm';
-  const raw = gm ? await loadCombat() : await db.get(col('combat'), 'public');
+  const raw = gm ? await loadCombat(mapId || undefined) : await db.get(col('combat'), pubDocId(mapId));
   if (!raw) return;
   const x = raw.combatants ? raw : { ...raw, combatants: raw.list || [], turn: -1 };
   await ensureBattleContext(x.mapId);
@@ -2687,6 +2693,18 @@ export async function reactionAttack(cbId, targetId, pos = null) {
   if (!r) return;
   const { sendEvent } = await import('./relay.js');
   await sendEvent({ type: 'act', actor: c.id, key: a.key, targets: [t.id], rolls: [r], reaction: true, mapId: x.mapId || null, ...(pos ? { pos } : {}) });
+}
+// Todesrettungswurf (sichtbar gewürfelt): Regeln anwenden; bleibt der Charakter bei 0 TP, ist sein Zug vorbei
+export async function handleDeathSave(ev) {
+  await ensureBattleContext(ev.mapId || null);
+  await mutateCombat((x) => {
+    const c = cbOf(x, ev.actor);
+    if (!c || !c.dsPending || !c.isPC || c.dead || c.stable || (Number(c.hp) || 0) > 0) return x;
+    const ctx = makeCtx(x);
+    E.deathSave(x, c, ctx, { a: ev.a, b: ev.b });
+    if (x.active && x.combatants[x.turn]?.id === c.id && (Number(c.hp) || 0) <= 0) advanceTurn(x, ctx);
+    return x;
+  });
 }
 export async function handleEndConc(ev) {
   await mutateCombat((x) => {

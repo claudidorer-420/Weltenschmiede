@@ -751,12 +751,20 @@ export function stabilize(x, c, source = '') {
   log(x, `🩹 ${c.name} ist stabilisiert${source ? ` (${source})` : ''}`);
   return true;
 }
-export function deathSave(x, c, ctx = {}) {
+// Vorteil beim Todesrettungswurf? (Leuchtfeuer der Hoffnung, Wirkungen) – der Würfelnde braucht das vorher
+export function deathSaveAdv(c, ctx = {}) {
   const F = fxOf(c, ctx);
-  const adv = hasEff(c, 'beacon') || [...F.s.saveAdv, ...F.d.saveAdv].some((f) => !f.dis && ((f.k || []).includes('death') || f.vs === 'death'));
+  return hasEff(c, 'beacon') || [...F.s.saveAdv, ...F.d.saveAdv].some((f) => !f.dis && ((f.k || []).includes('death') || f.vs === 'death'));
+}
+// rolled = { a, b } aus dem sichtbaren Wurf des Spielers; ohne Angabe würfelt die Engine selbst
+export function deathSave(x, c, ctx = {}, rolled = null) {
+  const F = fxOf(c, ctx);
+  const adv = deathSaveAdv(c, ctx);
   const plus = (F.s.saveBonusAb.death || 0) + (F.d.saveBonusAb.death || 0);
-  const a = rollDie(20);
-  const b = adv ? rollDie(20) : null;
+  const ok20 = (v) => (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 20 ? Number(v) : null);
+  const a = ok20(rolled?.a) ?? rollDie(20);
+  const b = adv ? ok20(rolled?.b) ?? rollDie(20) : null;
+  c.dsPending = null;
   const nat = adv ? Math.max(a, b) : a;
   const n = nat === 20 || nat === 1 ? nat : Math.min(19, nat + plus);
   const ds = (c.deathSaves ||= { s: 0, f: 0 });
@@ -1031,7 +1039,11 @@ export function beginTurn(x, c, ctx = {}) {
     applyDamage(x, c, [{ amount: r.total, type: e.data?.type }], { magical: true, source: e.name }, ctx);
     if (e.data?.save) { const sv = savingThrow(x, c, e.data.save.ab, e.data.save.dc, { spell: true, what: e.name }, ctx); if (sv.ok) removeEffect(x, c, e.id, 'Rettungswurf geschafft'); }
   }
-  if (c.isPC && atZero(c) && !isDead(c) && !c.stable) deathSave(x, c, ctx);
+  // Todesrettungswurf: wird sichtbar gewürfelt (beim Besitzer, sonst bei der SL) – bis dahin wartet der Zug
+  if (c.isPC && atZero(c) && !isDead(c) && !c.stable) {
+    c.dsPending = { at: now(), adv: deathSaveAdv(c, ctx) };
+    log(x, `💀 ${c.name} liegt im Sterben – Todesrettungswurf!`, '', '', { e: { t: 'dsave', o: who(c), w: 'würfelt …' } });
+  }
   zoneTrigger(x, c, 'start', ctx);
   if (has(c, XCOND.confused) && !incapacitated(c)) {
     const n = rollDie(10);
@@ -1046,6 +1058,11 @@ export function beginTurn(x, c, ctx = {}) {
 }
 export function finishTurn(x, c, ctx = {}) {
   if (!c) return;
+  // Zug endet, ohne dass der Todesrettungswurf gewürfelt wurde (z. B. „Nächster Zug“ der SL): dann würfelt die Engine
+  if (c.dsPending) {
+    if (c.isPC && atZero(c) && !isDead(c) && !c.stable) deathSave(x, c, ctx);
+    c.dsPending = null;
+  }
   statusDot(x, c, 'end', ctx);
   for (const k of [...(c.conditions || [])]) {
     if (!k.save || (k.save.at || 'end') !== 'end' || isDead(c)) continue;
@@ -1123,6 +1140,7 @@ export function beginCombat(x, ctx = {}) {
   const ed = ctx.ed || '2014';
   x.active = true;
   x.round = 1;
+  x.startedAt = now();
   x.log = x.log || [];
   for (const c of x.combatants) {
     c.turnNo = 0;

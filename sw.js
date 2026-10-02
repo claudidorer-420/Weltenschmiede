@@ -2,7 +2,7 @@
 // - App-Dateien: "network first" (Updates greifen sofort), offline aus dem Cache
 // - CDN-Bibliotheken (versionierte URLs): "cache first"
 // tools/publish.ps1 erhöht bei jeder Veröffentlichung die VERSION und aktualisiert die Dateiliste.
-const VERSION = 'ws-2026-09-30-1959';
+const VERSION = 'ws-2026-10-02-1213';
 const CDN_CACHE = 'ws-cdn-v1';
 // Kartenbausteine (Texturen, Stempel) sind unveränderlich und überleben Updates
 const ASSET_CACHE = 'ws-assets-v1';
@@ -31,6 +31,7 @@ const SHELL = [
   './js/core/hooks.js',
   './js/core/keyvault.js',
   './js/core/monsterlib.js',
+  './js/core/packformat.js',
   './js/core/panels.js',
   './js/core/party.js',
   './js/core/prompts.js',
@@ -85,8 +86,10 @@ const SHELL = [
   './js/ui/clock.js',
   './js/ui/combatlog.js',
   './js/ui/components.js',
+  './js/ui/deathsave.js',
   './js/ui/dice3d.js',
   './js/ui/dicetray.js',
+  './js/ui/facing.js',
   './js/ui/frame.js',
   './js/ui/fxtext.js',
   './js/ui/palette.js',
@@ -95,6 +98,7 @@ const SHELL = [
   './js/ui/prompthost.js',
   './js/ui/shell.js',
   './js/ui/statblock.js',
+  './js/ui/weather.js',
   './js/views/archive.js',
   './js/views/auth.js',
   './js/views/battle.js',

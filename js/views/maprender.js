@@ -571,12 +571,34 @@ export const LEGACY = {
   crate: 'ph:wooden_crate_01', bookshelf: 'p:bookshelf', coffin: 'p:coffin', rug: 'p:rugRound', cauldron: 'p:cauldron', brazier: 'p:brazier', campfire: 'p:campfire', tree: 'ph:island_tree_03',
   bush: 'ph:shrub_02_a', rock: 'ph:namaqualand_boulder_05', rubble: 'p:rubble', bones: 'p:bones', web: 'p:web',
 };
+// Höhe in Metern (Schattenlänge und Sicht): Was mindestens SICHT_HOEHE hoch ist und den Weg versperrt, nimmt die
+// Sicht (Schränke, Regale, Säulen, Statuen, große Felsen, Zelte, Kamine). Niedrigeres gibt nur Deckung (Tische, Truhen,
+// Altäre, Brunnen, Särge, Theken). DURCHSICHTIG sind Gitter, Zäune und Gerüste – hoch, aber man sieht hindurch.
+export const SICHT_HOEHE = 1.7;
+export const HOEHE = {
+  'ph:gothiccabinet_01': 2, 'ph:gothiccommode_01': 0.9, 'ph:chinese_cabinet': 1.9, 'ph:painted_wooden_cabinet': 1, 'ph:painted_wooden_cabinet_02': 1.9,
+  'ph:vintage_cabinet_01': 1.8, 'ph:shelf_01': 1.8, 'ph:painted_wooden_shelves': 1.2, 'ph:wooden_bookshelf_worn': 1.9, 'ph:vintage_grandfather_clock_01': 2,
+  'ph:drawer_cabinet': 1.2, 'ph:gothic_statue': 2.4, 'ph:cannon_01': 1, 'ph:quiver_tree_01': 3.5, 'ph:dead_tree_trunk_02': 0.7,
+  'ph:boulder_01': 1.3, 'ph:namaqualand_boulder_02': 0.7, 'ph:namaqualand_boulder_03': 2.2, 'ph:namaqualand_boulder_04': 2, 'ph:coast_rocks_05': 2.5,
+  'ph:rock_face_01': 4, 'ph:rock_face_02': 2.5, 'ph:namaqualand_cliff_01': 5, 'ph:mountainside': 8, 'ph:coast_land_rocks_02': 4, 'ph:coast_land_rocks_03': 4,
+  'ph:coast_land_rocks_04': 4, 'ph:coast_rocks_01': 6, 'ph:coast_rocks_02': 6, 'ph:coast_rocks_03': 6, 'ph:gate_latch_01': 0.3, 'ph:large_iron_gate': 2.5,
+  'ph:modular_chainlink_fence': 2, 'ph:moon_rock_01': 0.2, 'ph:moon_rock_02': 0.2, 'ph:namaqualand_rocks_01_a': 0.2, 'ph:namaqualand_rocks_01_b': 0.2,
+  'ph:namaqualand_rocks_01_c': 0.2, 'ph:namaqualand_rocks_01_d': 0.2, 'ph:rock_07': 0.2, 'ph:galgen': 3, 'ph:katapult': 2.5, 'ph:opferaltar': 1,
+  'ph:stand_gemuese': 1, 'ph:stand_brot': 1, 'ph:stand_toepfer': 0.8, 'ph:stand_gewuerze': 0.9, 'ph:stand_stoffe': 2.4, 'ph:stand_fisch': 2.4, 'ph:stand_waffen': 2.4, 'ph:stand_fleisch': 2.4,
+  'ph:haendlerzelt': 3, 'ph:handkarren': 1, 'ph:planwagen': 2.6, 'ph:kornsaecke': 0.8, 'ph:kistenstapel': 1.2, 'ph:hackklotz': 0.6, 'ph:pferdetraenke': 0.8, 'ph:stadtbrunnen': 1.4,
+  'ph:gemuesebeet': 0.3, 'ph:grab_platte': 0.1, 'ph:grab_huegel': 0.6, 'ph:windmuehle': 10, 'ph:segelboot': 1.5, 'ph:pavillon': 3.5, 'ph:heuhaufen': 1.8, 'ph:heuballen': 1, 'ph:holzstapel': 1.2,
+  'ph:amboss': 0.9, 'ph:schmiedeesse': 1.1, 'ph:denkmal': 3.5, 'ph:laternenpfahl': 3, 'ph:bienenstoecke': 0.7, 'ph:huehnerstall': 1.5, 'ph:wasserrad': 3, 'ph:glockenturm': 12,
+  'p:pillar': 3.5, 'p:pillarSq': 3.5, 'p:altar': 1, 'p:well': 1, 'p:fountain': 1.2, 'p:sarcophagus': 1, 'p:fireplace': 2.2, 'p:bookshelf': 2, 'p:counter': 1.1, 'p:tent': 2.2,
+};
+export const DURCHSICHTIG = new Set(['ph:large_iron_gate', 'ph:modular_chainlink_fence', 'ph:galgen', 'ph:katapult', 'p:fence', 'ph:pavillon', 'ph:laternenpfahl']);
+// Nimmt dieses Objekt die Sicht? (nur Objekte, die auch den Weg versperren)
+export const blocksSight = (info) => !!info?.block && !DURCHSICHTIG.has(info.key) && (Number(info.hM) || 0) >= SICHT_HOEHE;
 const split = (key) => { const i = String(key).indexOf(':'); return i < 0 ? ['', key] : [key.slice(0, i), key.slice(i + 1)]; };
 export function assetInfo(key) {
   if (!key) return null;
   const [src, id] = split(key);
-  if (src === 'ph') { const s = STAMP_BY_ID.get(id); return s ? { ...s, key, src, hM: s.hM ?? (s.block ? 2 : 0.8) } : null; }
-  if (src === 'p') { const p = PROC[id]; return p ? { id, key, src, name: p.name, cat: p.cat, w: p.w, h: p.h, block: !!p.block, rough: !!p.rough, layer: p.layer || 'obj', hM: p.hM ?? 0.3, glow: p.glow || null, door: !!p.door } : null; }
+  if (src === 'ph') { const s = STAMP_BY_ID.get(id); return s ? { ...s, key, src, hM: HOEHE[key] ?? s.hM ?? (s.block ? 2 : 0.8) } : null; }
+  if (src === 'p') { const p = PROC[id]; return p ? { id, key, src, name: p.name, cat: p.cat, w: p.w, h: p.h, block: !!p.block, rough: !!p.rough, layer: p.layer || 'obj', hM: HOEHE[key] ?? p.hM ?? 0.3, glow: p.glow || null, door: !!p.door } : null; }
   if (src === 'u') { const u = userAssetInfo(id); return u ? { ...u, key, src, hM: u.hM ?? 0.8 } : null; }
   return null;
 }

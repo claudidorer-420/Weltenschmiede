@@ -14,6 +14,7 @@ import {
   confirmDialog, toast, Empty, Avatar, pickFiles, openLightbox,
 } from '../ui/components.js';
 import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
+import { INDEX_DOC, pubDocId, NO_MAP } from '../core/combat.js';
 import { now, fmtTime, fmtRelative, sortBy, esc } from '../lib/util.js';
 import { uploadImage } from './codex.js';
 import { useTip, RollTip } from '../ui/combatlog.js';
@@ -107,16 +108,20 @@ function PartyStrip() {
   })}</div>`;
 }
 
+// Laufender Kampf (je Karte einer – gezeigt wird der zuletzt aktive)
 function InitiativeStrip() {
   const cid = useStore(app, (s) => s.cid);
-  const pub = useDoc(cid ? col('combat') : null, 'public');
+  const ix = useDoc(cid ? col('combat') : null, INDEX_DOC);
+  const lauf = Object.entries(ix?.maps || {}).filter(([, v]) => v.active).sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0))[0];
+  const mapKey = lauf ? lauf[0] : null;
+  const pub = useDoc(cid && mapKey ? col('combat') : null, pubDocId(mapKey));
   const me = myUid();
   if (!pub?.active || !pub.list?.length) return null;
   const cur = pub.list.find((c) => c.id === pub.currentId);
   const mine = cur?.ownerUid === me;
   return html`<div class="card tight stack sm">
     <div class="row"><span class="round-badge">Runde ${pub.round}</span><b>Kampf</b><span class="grow"></span>
-      ${mine ? html`<${Btn} kind="primary" size="sm" icon="check" onClick=${() => sendEvent({ type: 'endTurn' }).then(() => toast('Zug beendet', 'success'))}>Mein Zug ist fertig<//>` : null}
+      ${mine ? html`<${Btn} kind="primary" size="sm" icon="check" onClick=${() => sendEvent({ type: 'endTurn', mapId: mapKey === NO_MAP ? null : mapKey }).then(() => toast('Zug beendet', 'success'))}>Mein Zug ist fertig<//>` : null}
       <${Btn} size="sm" kind="ghost" icon="swords" onClick=${() => import('./maps.js').then((m) => m.openBattle())}>Zum Kampf<//></div>
     <div class="turn-strip">${pub.list.map((c) => html`<span class=${`turn-pill${c.id === pub.currentId ? ' current' : ''}${c.down ? ' down' : ''}`}>${c.init ?? '–'} · ${c.name}${c.hp != null ? ` (${c.hp})` : ''}</span>`)}</div>
   </div>`;

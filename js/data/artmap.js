@@ -442,6 +442,25 @@ export const UI_ART = [
   'bullseye', 'teleport', 'heart-bottle', 'boot-prints', 'death-skull', 'heavy-fall', 'invisible', 'third-eye', 'fire-breath', 'hourglass',
 ];
 
+// Kartensymbole für Welt- und Stadtkarten (Krieg, Gefahr, Orte, Reise …) – [id, Name, Symbol, Gruppe]
+export const MAP_SYMBOLS = [
+  ['krieg', 'Krieg', 'crossed-swords', 'Konflikt'], ['gefecht', 'Gefecht', 'sword-clash', 'Konflikt'], ['belagerung', 'Belagerung', 'siege-tower', 'Konflikt'],
+  ['heer', 'Heer / Front', 'flying-flag', 'Konflikt'], ['heerlager', 'Heerlager', 'barracks-tent', 'Konflikt'], ['pluenderer', 'Plünderer', 'black-flag', 'Konflikt'],
+  ['brand', 'Brand', 'burning-forest', 'Konflikt'], ['feuer', 'Feuer', 'fire', 'Konflikt'],
+  ['gefahr', 'Gefahr', 'hazard-sign', 'Gefahr'], ['tod', 'Tod / Fluch', 'death-skull', 'Gefahr'], ['seuche', 'Seuche', 'plague-doctor-profile', 'Gefahr'],
+  ['drache', 'Drache', 'dragon-head', 'Gefahr'], ['bestien', 'Wilde Bestien', 'wolf-head', 'Gefahr'], ['orks', 'Orks', 'orc-head', 'Gefahr'], ['riese', 'Riese', 'giant', 'Gefahr'],
+  ['spuk', 'Spuk', 'ghost', 'Gefahr'], ['untote', 'Untote', 'shambling-zombie', 'Gefahr'], ['spinnen', 'Spinnen', 'hanging-spider', 'Gefahr'],
+  ['unwetter', 'Unwetter', 'lightning-storm', 'Gefahr'], ['sturm', 'Sturm', 'tornado', 'Gefahr'], ['schnee', 'Schnee', 'snowflake-2', 'Gefahr'], ['vulkan', 'Vulkan', 'volcano', 'Gefahr'],
+  ['hauptstadt', 'Hauptstadt', 'crown', 'Orte'], ['burg', 'Burg', 'castle', 'Orte'], ['ruine', 'Ruine', 'castle-ruins', 'Orte'], ['alte_ruinen', 'Alte Ruinen', 'ancient-ruins', 'Orte'],
+  ['turm', 'Turm', 'watchtower', 'Orte'], ['dorf', 'Dorf', 'village', 'Orte'], ['huette', 'Hütte', 'hut', 'Orte'], ['kirche', 'Kirche', 'church', 'Orte'], ['tempel', 'Tempel', 'greek-temple', 'Orte'],
+  ['taverne', 'Taverne', 'tavern-sign', 'Orte'], ['mine', 'Mine', 'gold-mine', 'Orte'], ['hoehle', 'Höhle', 'cave-entrance', 'Orte'], ['leuchtturm', 'Leuchtturm', 'lighthouse', 'Orte'],
+  ['hafen', 'Hafen', 'anchor', 'Orte'], ['muehle', 'Mühle', 'windmill', 'Orte'], ['friedhof', 'Friedhof', 'graveyard', 'Orte'], ['portal', 'Portal', 'magic-portal', 'Orte'],
+  ['lager', 'Lager', 'camping-tent', 'Orte'], ['rast', 'Rastplatz', 'campfire', 'Orte'], ['bruecke', 'Brücke', 'stone-bridge', 'Orte'], ['tor', 'Tor / Pass', 'gate', 'Orte'], ['kreuzung', 'Kreuzung', 'crossroad', 'Orte'],
+  ['schiff', 'Schiff', 'galleon', 'Reise'], ['boot', 'Boot', 'sailboat', 'Reise'], ['wagen', 'Karawane', 'old-wagon', 'Reise'], ['reiter', 'Reiter', 'horse-head', 'Reise'], ['spuren', 'Spuren', 'footprint', 'Reise'],
+  ['handel', 'Handel', 'coins', 'Reise'], ['schatz', 'Schatz', 'open-treasure-chest', 'Reise'], ['karte', 'Schatzkarte', 'treasure-map', 'Reise'],
+  ['quest', 'Auftrag', 'scroll-unfurled', 'Sonstiges'], ['heilig', 'Heiliger Ort', 'holy-symbol', 'Sonstiges'], ['beobachtung', 'Beobachtung', 'all-seeing-eye', 'Sonstiges'], ['buendnis', 'Bündnis', 'shaking-hands', 'Sonstiges'], ['stern', 'Wichtiger Ort', 'falling-star', 'Sonstiges'],
+];
+
 export function allIconNames() {
   const out = new Set(UI_ART);
   for (const o of [SCHOOL_ART, DAMAGE_ART]) for (const v of Object.values(o)) out.add(v.icon);
@@ -452,5 +471,6 @@ export function allIconNames() {
   out.add(MAGIC_DEFAULT);
   for (const v of Object.values(MAGIC_ITEM_ART)) out.add(v);
   out.add(CREATURE_DEFAULT.icon);
+  for (const [, , icon] of MAP_SYMBOLS) out.add(icon);
   return [...out];
 }

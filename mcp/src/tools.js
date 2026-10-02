@@ -10,6 +10,7 @@ import { SPELLS as SPELLS_2024 } from '../../js/data/spells-2024.js';
 import { DND } from '../../js/data/origins.js';
 import { cleanPath, newId } from './firestore.js';
 import { registerMapTools } from './maps.js';
+import { registerRuleTools } from './rules.js';
 
 const now = () => Date.now();
 const low = (s) => String(s ?? '').toLowerCase();
@@ -630,22 +631,36 @@ tool('zauber_suchen', 'Zauber suchen', 'Sucht Zauber im SRD (deutsch, Regeln 201
 });
 
 // ───────────────────────── Kampf & Karten ─────────────────────────
-tool('kampf_status', 'Kampf ansehen', 'Zeigt den laufenden Kampf: Runde, wer am Zug ist, Initiative, TP/Zustände/Konzentration, letzte Protokollzeilen. Die SL sieht alle Werte, Spieler die öffentliche Ansicht. Mit roh=true der vollständige Kampfzustand mit allen Feldern (auch künftigen).', S({
-  kampagne: KAMPAGNE, protokoll: num('Anzahl Protokollzeilen (Standard 20)'), roh: bool('true = kompletter gespeicherter Kampfzustand (combat/gm bzw. combat/public)'),
+tool('kampf_status', 'Kampf ansehen', 'Zeigt einen Kampf: Runde, wer am Zug ist, Initiative, TP/Zustände/Konzentration, letzte Protokollzeilen. Je Karte läuft ein eigener Kampf – ohne „karte“ der zuletzt aktive (die Liste aller Kämpfe steht unter „kaempfe“). Die SL sieht alle Werte, Spieler die öffentliche Ansicht. Mit roh=true der vollständige Kampfzustand mit allen Feldern (auch künftigen).', S({
+  kampagne: KAMPAGNE, karte: str('Karte (ID oder Name) des Kampfes; „_“ = Kampf-Tracker ohne Karte'), protokoll: num('Anzahl Protokollzeilen (Standard 20)'), roh: bool('true = kompletter gespeicherter Kampfzustand (combat/gm~<karte> bzw. combat/pub~<karte>)'),
   ergebnisse: num('Mit roh: Anzahl Ergebniskarten (Standard 3)'),
 }), RO, async (ctx, a) => {
   const k = await ctx.campaign(a.kampagne);
-  const st = await ctx.fs.get(k.p(k.gm ? 'combat/gm' : 'combat/public'));
-  if (!st) return { aktiv: false };
+  const ix = await ctx.fs.get(k.p('combat/public')).catch(() => null);
+  const kaempfe = Object.entries(ix?.maps || {}).map(([m, v]) => ({ karte: m, aktiv: !!v.active, runde: v.round || 1, amZug: v.cur || null, geaendert: date(v.updatedAt) })).sort((x, y) => String(y.geaendert).localeCompare(String(x.geaendert)));
+  let key = null;
+  if (a.karte) {
+    if (a.karte === '_') key = '_';
+    else {
+      const maps = await ctx.visibleList(k, 'maps');
+      const r = low(a.karte).trim();
+      const m = maps.find((x) => x.id === a.karte) || maps.find((x) => low(x.name) === r) || maps.find((x) => low(x.name).includes(r));
+      if (!m) throw new Error(`Karte „${a.karte}“ nicht gefunden.`);
+      key = m.id;
+    }
+  } else key = (kaempfe.find((x) => x.aktiv) || kaempfe[0])?.karte || null;
+  if (!key) return { aktiv: false, kaempfe };
+  const st = await ctx.fs.get(k.p(`combat/${k.gm ? 'gm' : 'pub'}~${key}`));
+  if (!st) return { aktiv: false, karte: key, kaempfe };
   const n = a.protokoll ?? 20;
   if (a.roh) {
     const r = a.ergebnisse ?? 3;
-    return { pfad: k.p(k.gm ? 'combat/gm' : 'combat/public'), ...st, log: n > 0 ? (st.log || []).slice(-n) : [], ...(st.results ? { results: r > 0 ? st.results.slice(-r) : [] } : {}) };
+    return { pfad: k.p(`combat/${k.gm ? 'gm' : 'pub'}~${key}`), ...st, log: n > 0 ? (st.log || []).slice(-n) : [], ...(st.results ? { results: r > 0 ? st.results.slice(-r) : [] } : {}) };
   }
-  if (!k.gm) return { aktiv: st.active, runde: st.round, amZug: st.list?.find((c) => c.id === st.currentId)?.name || null, kaempfer: st.list, protokoll: (n > 0 ? (st.log || []).slice(-n) : []) };
+  if (!k.gm) return { kaempfe, karte: key, aktiv: st.active, runde: st.round, amZug: st.list?.find((c) => c.id === st.currentId)?.name || null, kaempfer: st.list, protokoll: (n > 0 ? (st.log || []).slice(-n) : []) };
   const cur = st.combatants?.[st.turn];
   return {
-    aktiv: !!st.active, runde: st.round, amZug: cur?.name || null, karteId: st.mapId || null,
+    kaempfe, aktiv: !!st.active, runde: st.round, amZug: cur?.name || null, karteId: st.mapId || null,
     kaempfer: (st.combatants || []).map((c) => ({
       id: c.id, name: c.name, ini: c.init, sc: !!c.isPC, verbuendet: !!c.ally, tp: c.hp, maxTp: c.maxHp, tempTp: c.tempHp || 0, rk: c.ac,
       zustaende: (c.conditions || []).map((x) => x.name || x), konzentration: c.concentration?.name || null, tot: !!c.dead, versteckt: !!c.hidden,
@@ -663,6 +678,7 @@ tool('karten', 'Karten', 'Listet Welt-, Raster- und Dungeon-Karten (Name, Typ, G
 });
 
 registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, needGM });
+registerRuleTools({ tool, S, str, bool, KAMPAGNE, RO, RW, DEL, needGM });
 
 // ───────────────────────── Direkter Datenzugriff ─────────────────────────
 const PFAD = str('Firestore-Pfad, z. B. „campaigns/{kampagnenId}/encounters“ oder „users/{uid}/notes/{id}“ (siehe Datenmodell der App)');
@@ -711,7 +727,7 @@ Alle Werkzeuge arbeiten mit dem verbundenen Konto; Änderungen erscheinen sofort
 - Codex = Markdown-Notizen (Obsidian-kompatibel) mit [[Wikilinks]], #Tags und Frontmatter (typ, tags, aliases). Vor dem Bearbeiten lesen; für kleine Änderungen „ersetzungen“ oder „anhaengen“ statt den ganzen Text neu zu schreiben.
 - Sichtbarkeit: „gm“ = nur Spielleitung, „players“ = Spieler sehen es. Neue Inhalte standardmäßig „gm“; nichts ohne Wunsch für Spieler freigeben.
 - Spieler-Konten dürfen nur lesen, was freigegeben ist, und nur eigene Dinge ändern.
-- Die App wächst: Fehlt einem Werkzeug ein Feld, „felder“ nutzen (wird unverändert gespeichert); beim Lesen stehen unbekannte Felder unter „weitere“. Für neue Sammlungen/Datenformate app_doku (Datenmodell) lesen und daten_lesen/daten_schreiben verwenden. Karten: karten_katalog.
+- Die App wächst: Fehlt einem Werkzeug ein Feld, „felder“ nutzen (wird unverändert gespeichert); beim Lesen stehen unbekannte Felder unter „weitere“. Für neue Sammlungen/Datenformate app_doku (Datenmodell) lesen und daten_lesen/daten_schreiben verwenden. Karten: karten_katalog. Regelwerke (eigene Spezies, Klassen, Unterklassen, Talente, Zauber, Gegenstände, Zustände, Grundregeln): regelwerke, regelwerk_format, regelwerk_lesen, regelwerk_speichern, regelwerk_aktivieren.
 - Antworte dem Nutzer auf Deutsch.`;
 
 export async function callTool(fs, user, name, args) {

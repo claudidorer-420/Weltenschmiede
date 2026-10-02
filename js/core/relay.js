@@ -1,8 +1,9 @@
 // Signale zwischen Spielern und Spielleitung: Spieler melden Aktionen (mit ihren Würfen), Schadenswürfe, Bewegung,
-// Zugende, Initiative und Antworten auf Rückfragen; die SL wertet sie hier der Reihe nach aus – egal, welche Ansicht offen ist.
+// Zugende, Initiative, Todesrettungswürfe und Antworten auf Rückfragen; die SL wertet sie hier der Reihe nach aus –
+// egal, welche Ansicht offen ist. Jedes Kampfereignis trägt die Karte (mapId): je Karte läuft ein eigener Kampf.
 import { db } from './db.js';
 import { app, col, myUid } from './app.js';
-import { mutateCombat, loadCombat, advanceTurn, resort } from './combat.js';
+import { mutateCombat, loadCombat, advanceTurn, resort, setCombatMap, combatMap, INDEX_DOC } from './combat.js';
 import { answerPrompt, promptTarget, setRemotePrompts } from './react.js';
 import { now, uid } from '../lib/util.js';
 
@@ -14,7 +15,7 @@ let chain = Promise.resolve();
 // sonst würde eine wartende Reaktionsfrage die eigene Antwort blockieren.
 function dispatch(from, e) {
   if (e.type === 'answer') return handleEvent(from, e);
-  const run = chain.then(() => handleEvent(from, e));
+  const run = chain.then(() => { setCombatMap(e.mapId || null); return handleEvent(from, e); });
   chain = run.catch((err) => console.warn('[Signal]', err));
   return run;
 }
@@ -40,7 +41,15 @@ async function owns(from, cbId) {
   return !!c && !!c.ownerUid && c.ownerUid === from;
 }
 
+// Pausierte Karte (map.play = 'pause'): Aktionen der Spieler werden nicht ausgewertet
+const SPERRBAR = new Set(['act', 'move', 'endTurn', 'dmg', 'endConc']);
+async function pausiert(e) {
+  if (!e.mapId) return false;
+  const m = await db.get(col('maps'), e.mapId).catch(() => null);
+  return m?.play === 'pause';
+}
 async function handleEvent(from, e) {
+  if (from !== myUid() && SPERRBAR.has(e.type) && (await pausiert(e))) return;
   if (e.type === 'answer') {
     const to = promptTarget(e.promptId);
     if (to === undefined || (to && to !== from && from !== myUid())) return;
@@ -64,6 +73,11 @@ async function handleEvent(from, e) {
       }
       return x;
     });
+  } else if (e.type === 'dsave') {
+    // Todesrettungswurf, sichtbar gewürfelt beim Besitzer (oder bei der SL) – die Regeln wendet die SL-Seite an
+    if (!(await owns(from, e.actor))) return;
+    const A = await actions();
+    await A.handleDeathSave({ ...e, uid: from });
   } else if (e.type === 'act' || e.type === 'move' || e.type === 'endConc') {
     if (!(await owns(from, e.actor))) return;
     const A = await actions();
@@ -88,9 +102,12 @@ async function handleEvent(from, e) {
 export function startGmRelay() {
   const { cid } = app.get();
   if (!cid || db.mode !== 'cloud') return () => {};
+  // Rückfragen an Spieler stehen im Verzeichnis combat/public (lesen alle Mitglieder) – mit der Karte des Kampfes
+  let offen = [];
+  const schreib = () => db.set(col('combat'), INDEX_DOC, { prompts: offen }, { merge: true });
   setRemotePrompts(
-    (p) => mutateCombat((x) => { x.prompts = [...(x.prompts || []).filter((q) => (q.expires || 0) > now()), p]; return x; }),
-    (id) => mutateCombat((x) => { x.prompts = (x.prompts || []).filter((q) => q.id !== id && (q.expires || 0) > now()); return x; }),
+    (p) => { offen = [...offen.filter((q) => (q.expires || 0) > now()), { ...p, mapId: p.mapId || combatMap() || null }]; return schreib(); },
+    (id) => { offen = offen.filter((q) => q.id !== id && (q.expires || 0) > now()); return schreib(); },
   );
   const key = `ws.sigev.${cid}`;
   let handled;

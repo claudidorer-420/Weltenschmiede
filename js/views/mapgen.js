@@ -33,6 +33,9 @@ export const r2 = (v) => Math.round(v * 100) / 100;
 export const rnd = (a, b) => a + Math.random() * (b - a);
 export const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const chance = (p) => Math.random() < p;
+// Ja/Nein-Optionen der Generatoren: nicht gesetzt = Zufall mit Wahrscheinlichkeit p
+const jaNein = (v, p) => (v === true || v === 'ja' ? true : v === false || v === 'nein' ? false : Math.random() < p);
+const anzahl = (v, auto) => (Number.isFinite(Number(v)) && v !== '' && v != null ? Math.max(0, Math.round(Number(v))) : auto);
 const TAU = Math.PI * 2;
 export const stampAt = (a, x, y, o = {}) => ({ id: uid(6), t: 'stamp', a, x: r2(x), y: r2(y), r: Math.round(o.r || 0), s: r2(o.s ?? 1), ...(o.fx ? { fx: 1 } : {}), ...(o.layer ? { layer: o.layer } : {}) });
 export const ids = (re) => STAMPS.filter((s) => re.test(s.id)).map((s) => `ph:${s.id}`);
@@ -521,16 +524,18 @@ const DUNGEON_FUELLE = {
 };
 const skal = (key) => (String(key).startsWith('p:') ? 1 : dimsOf(key)[0] < 0.7 ? 1.35 : dimsOf(key)[0] > 1.3 ? 0.9 : 1.05);
 
-function genDungeon(W, H) {
+function genDungeon(W, H, opts = {}) {
   const shapes = [];
   const objects = [];
   const labels = [];
   const rooms = [];
   const big = Math.sqrt(W * H);
-  const maxW = clamp(Math.round(big / 4), 7, 11);
-  const maxH = clamp(Math.round(big / 5), 6, 9);
-  const target = Math.max(5, Math.round((W * H) / 110));
-  for (let i = 0; i < 600 && rooms.length < target; i++) {
+  const target = anzahl(opts.raeume, Math.max(5, Math.round((W * H) / 110)));
+  // viele Räume auf wenig Fläche: kleinere Räume
+  const dicht = clamp((W * H) / Math.max(1, target) / 110, 0.55, 1);
+  const maxW = clamp(Math.round((big / 4) * dicht), 4, 11);
+  const maxH = clamp(Math.round((big / 5) * dicht), 4, 9);
+  for (let i = 0; i < 3000 && rooms.length < target; i++) {
     const w = randInt(3, maxW);
     const h = randInt(3, maxH);
     if (W - w - 2 < 1 || H - h - 2 < 1) break;
@@ -552,7 +557,9 @@ function genDungeon(W, H) {
     done.push(best.b);
     rest.splice(rest.indexOf(best.b), 1);
   }
-  if (rooms.length > 5) conns.push({ a: rooms[1], b: rooms[rooms.length - 1] });
+  // Rundgänge: zusätzliche Verbindungen, damit nicht alles eine Sackgasse ist
+  const rund = opts.rundgang == null || opts.rundgang === '' ? (rooms.length > 5 ? 1 : 0) : jaNein(opts.rundgang, 0.5) ? Math.max(1, Math.round(rooms.length / 5)) : 0;
+  for (let i = 0; i < rund; i++) { const a = rooms[1 + ((i * 3) % Math.max(1, rooms.length - 1))]; const b = rooms[rooms.length - 1 - ((i * 2) % Math.max(1, rooms.length - 2))]; if (a && b && a !== b) conns.push({ a, b }); }
   const floors = ['stone_tiles', 'slab_tiles', 'monastery_stone_floor', 'worn_brick_floor', 'rock_tile_floor', 'mossy_brick_floor', 'kryptastein'];
   rooms.forEach((r, i) => {
     shapes.push({ id: uid(6), op: 'add', kind: 'rect', pts: [r.x, r.y, r.x + r.w, r.y + r.h], ...(chance(0.4) ? { tex: pick(floors) } : {}) });
@@ -636,16 +643,16 @@ function genDungeon(W, H) {
 }
 
 // ───────────────────────── Höhle ─────────────────────────
-function genCave(W, H) {
+function genCave(W, H, opts = {}) {
   const shapes = [];
   const terrain = [];
   const objects = [];
   const labels = [];
   const area = W * H;
-  const n = clamp(Math.round(area / 150), 3, 16);
-  const rMax = clamp(Math.round(Math.sqrt(area) / 7), 3, 7);
+  const n = anzahl(opts.kammern, clamp(Math.round(area / 150), 3, 16));
+  const rMax = clamp(Math.round((Math.sqrt(area) / 7) * clamp(area / Math.max(1, n) / 150, 0.6, 1)), 2.6, 7);
   const kammern = [];
-  for (let t = 0; t < 400 && kammern.length < n; t++) {
+  for (let t = 0; t < 2500 && kammern.length < n; t++) {
     const rx = rnd(2.2, rMax);
     const ry = rnd(2, rMax * 0.85);
     const x = rnd(rx + 1.2, W - rx - 1.2);
@@ -691,7 +698,9 @@ function genCave(W, H) {
   const boden = pick(['dry_riverbed_rock', 'embedded_rock_floor', 'rock_ground', 'brown_mud_rocks_01']);
   const boeden = ['tex:gravel_ground_01', 'tex:mossy_rock', 'tex:lichen_rock', 'tex:river_small_rocks', 'tex:rocks_ground_02', 'tex:dry_riverbed_rock', 'tex:embedded_rock_floor'].filter((x) => x !== 'tex:' + boden);
   for (const c of kammern) for (let i = 0, m = randInt(1, 2) + Math.floor(c.rx * c.ry / 10); i < m; i++) { const p = inKammer(c, 0, 0.8)(); if (p) terrain.push(fleck(pick(boeden), p.x, p.y, rnd(1, c.rx * 0.55), rnd(0.8, c.ry * 0.55))); }
-  const themen = mischen(['see', 'lager', 'nest', 'mine', 'schrein', 'spinnen', 'leer', 'leer', 'see', 'kristall', 'leer', 'nest']);
+  let themen = mischen(['see', 'lager', 'nest', 'mine', 'schrein', 'spinnen', 'leer', 'leer', 'see', 'kristall', 'leer', 'nest']);
+  if (opts.see === false || opts.see === 'nein') themen = themen.filter((x) => x !== 'see');
+  else if ((opts.see === true || opts.see === 'ja') && kammern.length > 1) themen = ['see', ...themen.filter((x) => x !== 'see')];
   kammern.forEach((c, i) => {
     const th = i === 0 ? 'eingang' : themen[i % themen.length];
     const fl = Math.PI * c.rx * c.ry;
@@ -733,7 +742,7 @@ function genCave(W, H) {
     }
   });
   // Eine Kluft in großen Höhlen
-  if (area > 1200 && chance(0.5)) {
+  if (opts.kluft === true || opts.kluft === 'ja' ? kammern.length > 1 : opts.kluft === false || opts.kluft === 'nein' ? false : area > 1200 && chance(0.5)) {
     const c = pick(kammern.slice(1));
     if (c) terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: 1.2, mat: 'pit', pts: flat(wander([c.x - c.rx * 0.6, c.y + rnd(-1, 1)], [c.x + c.rx * 0.6, c.y + rnd(-1, 1)], { bend: 0.3, steps: 4 })) });
   }
@@ -741,7 +750,7 @@ function genCave(W, H) {
 }
 
 // ───────────────────────── Taverne ─────────────────────────
-function genTavern(W, H) {
+function genTavern(W, H, opts = {}) {
   const w = clamp(W - 4, 10, 46);
   const h = clamp(H - 4, 8, 34);
   const x0 = Math.floor((W - w) / 2);
@@ -754,7 +763,7 @@ function genTavern(W, H) {
   // Küche (rechts) und bei großen Tavernen ein Lager darunter
   const kw = clamp(Math.round(w * 0.24), 4, 9);
   const kx = x0 + w - kw;
-  const lagerH = h >= 12 && w * h >= 220 ? clamp(Math.round(h * 0.35), 4, 8) : 0;
+  const lagerH = (opts.lager === true || opts.lager === 'ja' ? h >= 10 : opts.lager === false || opts.lager === 'nein' ? false : h >= 12 && w * h >= 220) ? clamp(Math.round(h * 0.35), 4, 8) : 0;
   const ly = y0 + h - lagerH;
   shapes.push({ id: uid(6), op: 'add', kind: 'rect', pts: [kx, y0, x0 + w, lagerH ? ly : y0 + h], tex: pick(['terracotta_floor_tiles', 'slate_floor', 'brick_floor']) });
   const kd = y0 + randInt(1, Math.max(1, (lagerH ? ly - y0 : h) - 3));
@@ -791,10 +800,11 @@ function genTavern(W, H) {
   P.nimm([barX - 1.7, ya - 0.3, kx, ya + 3 * nC + 0.3]);
   labels.push({ id: uid(6), kind: 'text', text: 'Theke', x: barX, y: ya - 0.5, size: 0.45 });
   // Séparées oben in großen Schankräumen
-  if (T.w >= 16 && h >= 13) {
+  const sepSoll = anzahl(opts.separees, T.w >= 16 && h >= 13 ? Math.floor(T.w / 7) : 0);
+  if (sepSoll > 0 && h >= 11) {
     let sx = x0 + 4;
     let nS = 0;
-    while (sx + 4 <= kx - 3 && nS < Math.floor(T.w / 7)) {
+    while (sx + 4 <= kx - 3 && nS < sepSoll) {
       const rw = Math.min(randInt(4, 5), kx - 3 - sx);
       if (rw < 4) break;
       const dx = sx + Math.floor(rw / 2);
@@ -832,11 +842,11 @@ function genTavern(W, H) {
     setze(objects, P, 'ph:side_table_01', mx + fx2 * 1.1, my + fy2 * 1.1, { s: 1.3 });
     P.nimm([mx - 1.2, my - 1.2, mx + 1.2, my + 1.2]);
   }
-  if (T.w * h >= 260) {
+  if (opts.buehne === true || opts.buehne === 'ja' || (opts.buehne !== false && opts.buehne !== 'nein' && T.w * h >= 260)) {
     // Bühne an der Nordwand (bzw. mittig oben, wenn dort Séparées sind, weiter unten links)
     const bw = clamp(Math.round(T.w * 0.28), 4, 7);
     const bx = x0 + Math.round((T.w - bw) / 2);
-    const by = T.w >= 16 && h >= 13 ? y0 + 5 : y0;
+    const by = sepSoll > 0 && h >= 11 ? y0 + 5 : y0;
     if (P.frei([bx, by, bx + bw, by + 3])) {
       shapes.push({ id: uid(6), op: 'add', kind: 'rect', pts: [bx, by, bx + bw, by + 3], tex: 'wood_floor_deck' });
       for (const k of [0.3, 0.7]) objects.push(stampAt(pick(HOCKER), bx + bw * k, by + 1.4, { s: 1.4, r: 0 }));
@@ -899,8 +909,8 @@ function genTavern(W, H) {
 }
 
 // ───────────────────────── Tempel, Krypta, Gruft ─────────────────────────
-function genTemple(W, H) {
-  const art = W * H < 400 ? pick(['tempel', 'krypta']) : pick(['tempel', 'krypta', 'gruft']);
+function genTemple(W, H, opts = {}) {
+  const art = ['tempel', 'krypta', 'gruft'].includes(opts.art) ? opts.art : W * H < 400 ? pick(['tempel', 'krypta']) : pick(['tempel', 'krypta', 'gruft']);
   return art === 'tempel' ? genTempel(W, H) : art === 'krypta' ? genKrypta(W, H) : genGruft(W, H);
 }
 // Kirchenschiff mit Apsis, Säulenreihen, Bänken und (bei Breite) Seitenkapellen
@@ -1081,7 +1091,7 @@ function genGruft(W, H) {
 // ───────────────────────── Waldlichtung mit Lager ─────────────────────────
 // opts.party = Zahl der Spielercharaktere → so viele Zelte stehen um das Feuer
 function genClearing(W, H, opts = {}) {
-  const party = clamp(Math.round(Number(opts.party) || 4), 1, 8);
+  const party = clamp(Math.round(Number(opts.zelte ?? opts.party) || 4), 0, 12);
   const cx = W / 2 + rnd(-W, W) * 0.06;
   const cy = H / 2 + rnd(-H, H) * 0.06;
   const rx = Math.max(5, W * rnd(0.3, 0.37));
@@ -1113,7 +1123,8 @@ function genClearing(W, H, opts = {}) {
   sperreWeg(P, pfad, 1.4);
   // Wasser: Bach am Rand der Lichtung oder ein Teich
   let wasser = null;
-  if (chance(0.45)) {
+  const wahl = ['bach', 'teich', 'keins'].includes(opts.wasser) ? opts.wasser : chance(0.45) ? 'bach' : chance(0.5) ? 'teich' : 'keins';
+  if (wahl === 'bach') {
     const quer = chance(0.5);
     const off = (quer ? ry : rx) * rnd(0.55, 0.8) * (chance(0.5) ? 1 : -1);
     const a = quer ? [-1, cy + off + rnd(-2, 2)] : [cx + off + rnd(-2, 2), -1];
@@ -1122,7 +1133,7 @@ function genClearing(W, H, opts = {}) {
     terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: 2.6, mat: 'tex:river_small_rocks', pts: flat(wasser) });
     terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(rnd(1.2, 1.7)), mat: 'water', pts: flat(wasser) });
     sperreWeg(P, wasser, 2.4);
-  } else if (chance(0.5)) {
+  } else if (wahl === 'teich') {
     const a = rnd(0, TAU);
     const tx = cx + Math.cos(a) * rx * 0.62;
     const ty = cy + Math.sin(a) * ry * 0.62;
@@ -1192,7 +1203,7 @@ function genClearing(W, H, opts = {}) {
 }
 
 // ───────────────────────── Dichter Wald ─────────────────────────
-function genForest(W, H) {
+function genForest(W, H, opts = {}) {
   const terrain = [];
   const objects = [];
   // Boden in vielen Flecken: Laub, Moos, Schlamm, Nadeln
@@ -1203,13 +1214,14 @@ function genForest(W, H) {
   const s2 = pick(SEITEN.filter((x) => x !== s1));
   const pw = r2(rnd(1.6, 2.4));
   const wegMat = pick(['tex:dirt', 'tex:rocky_trail', 'tex:forrest_ground_01']);
-  const wege = [wander(randPunkt(W, H, s1), randPunkt(W, H, s2), { bend: 0.32, steps: 8 })];
-  if (chance(0.45)) { const p = aufWeg(wege[0], rnd(0.3, 0.7)); wege.push(wander([p.x, p.y], chance(0.5) ? randPunkt(W, H, pick(SEITEN.filter((x) => x !== s1 && x !== s2))) : [rnd(W * 0.2, W * 0.8), rnd(H * 0.2, H * 0.8)], { bend: 0.35, steps: 5 })); }
+  const mitWeg = jaNein(opts.weg, 1);
+  const wege = mitWeg ? [wander(randPunkt(W, H, s1), randPunkt(W, H, s2), { bend: 0.32, steps: 8 })] : [];
+  if (mitWeg && chance(0.45)) { const p = aufWeg(wege[0], rnd(0.3, 0.7)); wege.push(wander([p.x, p.y], chance(0.5) ? randPunkt(W, H, pick(SEITEN.filter((x) => x !== s1 && x !== s2))) : [rnd(W * 0.2, W * 0.8), rnd(H * 0.2, H * 0.8)], { bend: 0.35, steps: 5 })); }
   wege.forEach((w, i) => terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: i ? r2(pw * 0.75) : pw, mat: wegMat, pts: flat(w) }));
   const amWeg = (x, y, d) => wege.some((w, i) => distPath(w, x, y) < (i ? pw * 0.75 : pw) / 2 + d);
   // Kleine Lichtungen, Tümpel oder Moor
   const lichtungen = [];
-  for (let i = 0, n = randInt(1, 2 + Math.floor((W * H) / 1200)); i < n; i++) {
+  for (let i = 0, n = anzahl(opts.lichtungen, randInt(1, 2 + Math.floor((W * H) / 1200))); i < n; i++) {
     const x = rnd(W * 0.15, W * 0.85);
     const y = rnd(H * 0.15, H * 0.85);
     const r = rnd(2, 3.6);
@@ -1217,14 +1229,15 @@ function genForest(W, H) {
     terrain.push(fleck(pick(['tex:sparse_grass', 'tex:leafy_grass', 'tex:withered_grass']), x, y, r, r * 0.8));
   }
   let tuempel = null;
-  if (chance(0.4)) {
+  if (jaNein(opts.tuempel, 0.4)) {
     const x = rnd(W * 0.15, W * 0.85);
     const y = rnd(H * 0.15, H * 0.85);
     if (!amWeg(x, y, 3.5)) { tuempel = { x, y, r: rnd(1.8, 3) }; terrain.push({ id: uid(6), op: 'add', kind: 'poly', mat: chance(0.5) ? 'swamp' : 'water', pts: blob(x, y, tuempel.r, tuempel.r * 0.75, { j: 0.3 }) }); }
   }
   const frei = (x, y, d = 0) => !amWeg(x, y, d) && !lichtungen.some((l) => Math.hypot(l.x - x, l.y - y) < l.r * 0.8 + d) && !(tuempel && Math.hypot(tuempel.x - x, tuempel.y - y) < tuempel.r + d);
   // Bäume dicht an dicht, Unterholz überall
-  baeume(objects, W, H, Math.round((W * H) / 3.2), { min: 1.75, ok: (x, y) => frei(x, y, 0.9), sets: [['nadelbaum', 0.45], ['laubbaum', 0.33], ['jungbaum', 0.22]] });
+  const dichte = { licht: [6.5, 2.6], mittel: [3.2, 1.75], dicht: [2.3, 1.45] }[opts.dichte] || [3.2, 1.75];
+  baeume(objects, W, H, Math.round((W * H) / dichte[0]), { min: dichte[1], ok: (x, y) => frei(x, y, 0.9), sets: [['nadelbaum', 0.45], ['laubbaum', 0.33], ['jungbaum', 0.22]] });
   const irgendwo = (d) => () => { const x = rnd(0, W); const y = rnd(0, H); return frei(x, y, d) ? { x, y } : null; };
   streue(objects, null, irgendwo(0.4), SETS.busch.keys, Math.round((W * H) / 9), { s: [0.9, 1.7], tries: 3 });
   streue(objects, null, irgendwo(0.2), SETS.farn.keys, Math.round((W * H) / 6), { s: [1, 2.2], tries: 3 });
@@ -1288,7 +1301,7 @@ const HAUS_EINRICHTUNG = {
   },
 };
 
-function genVillage(W, H) {
+function genVillage(W, H, opts = {}) {
   const shapes = [];
   const terrain = [];
   const objects = [];
@@ -1311,14 +1324,17 @@ function genVillage(W, H) {
   }
   const mat1 = pick(['tex:cobblestone_floor_01', 'tex:stone_pathway', 'tex:grassy_cobblestone', 'tex:cobblestone_05']);
   const mat2 = pick(['tex:rocky_trail', 'tex:dirt', 'tex:gravel_ground_01']);
+  // Fluss quer zur Hauptstraße – Brücken, wo Straßen ihn kreuzen
+  const fluss = jaNein(opts.fluss, area >= 1400 ? 0.3 : 0.12) ? flussLegen(terrain, P, W, H, quer ? 'senkrecht' : 'waagrecht', { breite: clamp(Math.sqrt(area) / 14, 2.4, 4.2) }) : null;
   strassen.forEach((s, i) => { terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: s.w, mat: i ? mat2 : mat1, pts: flat(s.pts) }); sperreWeg(P, s.pts, s.w + 0.3); });
+  if (fluss) for (const s of strassen) brueckenSetzen(terrain, objects, fluss, s);
   // Dorfplatz an der ersten Abzweigung (sonst mitten an der Hauptstraße)
   const sp = strassen[1] ? { x: strassen[1].pts[0][0], y: strassen[1].pts[0][1] } : aufWeg(haupt, 0.5);
   const pr = clamp(Math.sqrt(area) / 7, 3, 6);
   terrain.push({ id: uid(6), op: 'add', kind: 'poly', mat: pick(['tex:mossy_cobblestone', 'tex:cobblestone_floor_01', 'tex:patterned_cobblestone']), pts: blob(sp.x, sp.y, pr, pr * 0.85, { j: 0.15 }) });
   P.nimm([sp.x - pr, sp.y - pr * 0.85, sp.x + pr, sp.y + pr * 0.85]);
   // Häuser an den Straßen
-  const soll = clamp(Math.round(area / 75), 4, 26);
+  const soll = anzahl(opts.haeuser, clamp(Math.round(area / 75), 4, 26));
   const haeuser = [];
   const kandidaten = [];
   strassen.forEach((s) => { let L = 0; for (let i = 1; i < s.pts.length; i++) L += Math.hypot(s.pts[i][0] - s.pts[i - 1][0], s.pts[i][1] - s.pts[i - 1][1]); for (let d = 1; d < L - 1; d += 1.1) kandidaten.push({ s, t: d / L }); });
@@ -1417,7 +1433,7 @@ function genVillage(W, H) {
   streue(objects, PP, amPlatz(0.9, 1.3), ['ph:island_tree_01', 'ph:island_tree_02'], 1, { s: [0.9, 1.1] });
   labels.push({ id: uid(6), kind: 'text', text: 'Dorfplatz', x: sp.x, y: sp.y + pr * 0.85 + 0.4, size: 0.5 });
   // Pferch in großen Dörfern
-  if (area >= 1100) {
+  if (jaNein(opts.pferch, area >= 1100 ? 1 : 0)) {
     for (let t = 0; t < 30; t++) {
       const pw = randInt(5, 7);
       const ph = randInt(4, 5);
@@ -1432,7 +1448,7 @@ function genVillage(W, H) {
     }
   }
   // Teich am Dorfrand
-  if (chance(0.35)) {
+  if (jaNein(opts.teich, 0.35)) {
     for (let t = 0; t < 20; t++) {
       const x = rnd(3, W - 3);
       const y = rnd(3, H - 3);
@@ -1452,6 +1468,63 @@ function genVillage(W, H) {
   streue(objects, null, frei, SETS.blume.keys, Math.round(area / 14), { s: [1.2, 2.4], tries: 3 });
   streue(objects, P, frei, [...SETS.fels.keys, 'ph:tree_stump_01'], Math.round(area / 150), { s: [0.7, 1.1], tries: 4 });
   return base({ shapes, terrain, objects, labels, outdoor: true, ground: gras, floorTex: 'old_wood_floor', wallTex: pick(['wood_plank_wall', 'beam_wall_01', 'wood_trunk_wall', 'clay_plaster']), dark: 0.1, soft: 0.35 });
+}
+// Fluss quer über die Karte: Ufer aus Kies, Wasser in der Mitte, ein Stück gesperrt. richtung: senkrecht | waagrecht
+function flussLegen(terrain, P, W, H, richtung, { breite = 3, durch = null, bend = 0.12 } = {}) {
+  const senk = richtung === 'senkrecht';
+  const t0 = durch ? (senk ? durch[0] / W : durch[1] / H) : rnd(0.3, 0.7);
+  const a = senk ? [W * clamp(t0 + rnd(-0.08, 0.08), 0.15, 0.85), -2] : [-2, H * clamp(t0 + rnd(-0.08, 0.08), 0.15, 0.85)];
+  const b = senk ? [W * clamp(t0 + rnd(-0.08, 0.08), 0.15, 0.85), H + 2] : [W + 2, H * clamp(t0 + rnd(-0.08, 0.08), 0.15, 0.85)];
+  const pts = wander(a, b, { bend, steps: 8 });
+  terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(breite + 1.6), mat: 'tex:river_small_rocks', pts: flat(pts) });
+  terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(breite), mat: 'water', pts: flat(pts) });
+  if (breite >= 3.6) terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(breite * 0.45), mat: 'deepwater', pts: flat(pts) });
+  sperreWeg(P, pts, breite + 1.4);
+  return { pts, w: breite };
+}
+// Wo eine Straße den Fluss kreuzt: Holzbrücke (begehbar) mit Geländer
+function brueckenSetzen(terrain, objects, fluss, strasse) {
+  const S = strasse.pts;
+  let letzte = null;
+  let gebaut = 0;
+  for (let i = 1; i < S.length; i++) {
+    const [ax, ay] = S[i - 1];
+    const [bx, by] = S[i];
+    const mx = (ax + bx) / 2;
+    const my = (ay + by) / 2;
+    if (distPath(fluss.pts, mx, my) > fluss.w / 2 + 0.3) continue;
+    if (letzte && Math.hypot(mx - letzte[0], my - letzte[1]) < fluss.w + 4) continue;
+    letzte = [mx, my];
+    gebaut++;
+    // Brücke entlang der Straße: von Ufer zu Ufer (auch bei schräger Querung), dazu gut ein Feld aufs Land
+    const dx = bx - ax;
+    const dy = by - ay;
+    const n = Math.hypot(dx, dy) || 1;
+    const ux = dx / n;
+    const uy = dy / n;
+    const imFluss = (x, y) => distPath(fluss.pts, x, y) <= fluss.w / 2 + 0.2;
+    const bis = (sg) => { let k = 0; while (k < 24 && imFluss(mx + ux * k * sg, my + uy * k * sg)) k += 0.25; return k + 1.1; };
+    const a = bis(-1);
+    const b = bis(1);
+    const len = a + b;
+    const zx = mx + (ux * (b - a)) / 2;
+    const zy = my + (uy * (b - a)) / 2;
+    const bw = Math.max(1.8, strasse.w);
+    // Holzdeck darunter (macht die Felder normal begehbar) – schmaler und kürzer als die Bohlen, damit es samt
+    // weichem Rand und runden Enden darunter verschwindet; darüber Bohlen mit Geländer (p:bridge, Länge in y-Richtung)
+    const dw = Math.max(1.2, bw - 0.6);
+    const dl = Math.max(0.5, len / 2 - dw / 2 - 0.4);
+    terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(dw), mat: 'tex:wood_floor_deck', pts: flat([[zx - ux * dl, zy - uy * dl], [zx + ux * dl, zy + uy * dl]]) });
+    const s = (bw + 0.9) / 2;
+    const stueck = 4 * s;
+    const teile = Math.max(1, Math.ceil(len / stueck - 0.15));
+    const rot = Math.round((Math.atan2(uy, ux) * 180) / Math.PI) - 90;
+    for (let k = 0; k < teile; k++) {
+      const t = teile === 1 ? 0 : -len / 2 + stueck / 2 + ((len - stueck) * k) / (teile - 1);
+      objects.push(stampAt('p:bridge', zx + ux * t, zy + uy * t, { r: rot, s }));
+    }
+  }
+  return gebaut > 0;
 }
 function streuPunkt(R) {
   const t = Math.random();
@@ -1502,6 +1575,643 @@ function garten(objects, terrain, P, h, W, H) {
   if (chance(0.5)) objects.push(stampAt('ph:wooden_bucket_01', R.x + 0.4, R.y + 0.4, { s: 1.4 }));
 }
 
+// ───────────────────────── Stadt ─────────────────────────
+// Stadtarten: Marktstadt (offen, großer Markt), Mauerstadt (Ringmauer mit Toren und Türmen, Wassergraben), Hafenstadt
+// (Küste mit Stegen, Booten, Lagerhäusern), Flussstadt (Fluss mit Brücken und Mühle), Tempelstadt (großer Tempelbezirk).
+// Straßen führen von den Toren bzw. Rändern zum Marktplatz, Häuser stehen dicht an den Straßen (mit Gassen dazwischen,
+// damit jedes Haus seine eigenen Wände hat), große Bauten am Markt. Jedes Gebäude ist begehbar und nach seiner Nutzung
+// eingerichtet; wichtige Orte tragen Namen (Ortsname mit Raute). Mindestgröße STADT_MIN × STADT_MIN Felder.
+export const STADT_ARTEN = { markt: 'Marktstadt', mauer: 'Mauerstadt (Ringmauer & Tore)', hafen: 'Hafenstadt', fluss: 'Flussstadt', tempel: 'Tempelstadt' };
+export const STADT_MIN = 60;
+// Hausgrößen [entlang der Straße, Tiefe] – übliche zuerst (zufällig gemischt), kleine nur als Lückenfüller
+const HAUS_GROESSEN = [[4, 3], [4, 4], [5, 3], [5, 4], [5, 5], [6, 4], [6, 5], [4, 5]];
+const HAUS_KLEIN = [[3, 3], [4, 2], [3, 2]];
+const STADT_NAMEN = {
+  gasthaus: ['Zum Goldenen Hirsch', 'Zur Krummen Laterne', 'Das Fröhliche Fass', 'Zum Schlafenden Drachen', 'Zur Silbernen Gans', 'Die Rastende Wanderin', 'Zum Roten Keiler', 'Zur Alten Brücke', 'Der Bunte Krug', 'Zum Grünen Kessel', 'Zum Tanzenden Bären', 'Die Leere Kanne'],
+  schmiede: ['Schmiede Eisenfaust', 'Hammer & Glut', 'Funkenschmiede', 'Schmiede am Tor'],
+  alchemist: ['Kessel & Kolben', 'Die Grüne Phiole', 'Tinkturen & Tränke', 'Alchemie Wendelstein'],
+  magier: ['Arkane Kammer', 'Runen & Ringe', 'Haus der Zauberkunst', 'Der Sternenturm'],
+  haendler: ['Krämerei am Markt', 'Waren aus aller Welt', 'Handelshaus Brandt', 'Gemischtwaren Holt'],
+  juwelier: ['Funkelstein', 'Gold & Granat', 'Juwelier Silberglanz'],
+  baecker: ['Backstube Honigkruste', 'Zum Warmen Laib', 'Bäckerei Mehltau'],
+  schneider: ['Nadel & Faden', 'Schneiderei Seidenfein'],
+  metzger: ['Metzgerei am Tor', 'Fleischerei Hackstock'],
+  kraeuter: ['Kräuterstube', 'Salbei & Mistel'],
+  rathaus: ['Ratshalle', 'Haus der Zünfte', 'Rathaus'],
+  tempel: ['Tempel des Lichts', 'Halle der Morgenröte', 'Schrein der Sterne', 'Tempel der Ernte'],
+  kaserne: ['Stadtwache', 'Wachhaus', 'Kaserne'],
+  bibliothek: ['Bibliothek', 'Archiv der Gelehrten'],
+  lagerhaus: ['Lagerhaus', 'Speicher am Kai', 'Kontor'],
+  herrenhaus: ['Herrenhaus', 'Villa Rosenhag', 'Anwesen der Ältesten'],
+  stall: ['Mietstall', 'Pferdestall'],
+};
+const nimmName = (art, benutzt) => {
+  const liste = (STADT_NAMEN[art] || []).filter((n) => !benutzt.has(n));
+  const n = liste.length ? pick(liste) : null;
+  if (n) benutzt.add(n);
+  return n;
+};
+// Einrichtung der Stadtgebäude (dazu die Häuser aus HAUS_EINRICHTUNG)
+const STADT_EINRICHTUNG = {
+  baecker(o, P, R, tuer) {
+    anWand(o, P, R, 'p:fireplace', { seite: GEGEN[tuer], s: 0.95 }) || anWand(o, P, R, 'p:fireplace', { s: 0.95 });
+    anWand(o, P, R, 'p:counter', { seite: tuer === 'n' || tuer === 's' ? pick(['w', 'e']) : pick(['n', 's']), s: 0.8 });
+    anWand(o, P, R, 'ph:stand_brot', { s: 0.9 });
+    for (let i = 0; i < 2; i++) inEcke(o, P, R, 'ph:kornsaecke', { s: 0.9 });
+    streue(o, P, R, [...SACK, 'ph:wooden_bowl_01'], randInt(1, 3), { s: [1.2, 1.4] });
+  },
+  alchemist(o, P, R, tuer) {
+    setze(o, P, 'ph:hexenkessel_feuer', R.x + R.w / 2, R.y + R.h / 2, { s: 0.85 });
+    if (tischGruppe(o, P, R.x + 1.5, R.y + 1.5, { tisch: 'ph:woodentable_01', n: 1, s: 1.2, kerze: false, deko: false })) o.push(stampAt('ph:chemistry_set', R.x + 1.5, R.y + 1.5, { s: 1.1 }));
+    for (let i = 0; i < 3; i++) anWand(o, P, R, pick(['p:bookshelf', 'ph:painted_wooden_shelves', 'ph:wooden_bookshelf_worn', 'ph:shelf_01']), { s: 1, seite: i ? null : GEGEN[tuer] });
+    streue(o, P, R, ['ph:ceramic_pot', 'ph:antique_ceramic_vase_01', 'ph:brass_vase_01', 'ph:planter_pot_clay', 'ph:kristallkugel'], randInt(3, 5), { s: [1.1, 1.4] });
+  },
+  magier(o, P, R, tuer) {
+    o.push(stampAt('p:rugBlue', R.x + R.w / 2, R.y + R.h / 2, { s: Math.min(R.w, R.h) / 4, layer: 'floor' }));
+    reihe(o, P, R, 'p:bookshelf', GEGEN[tuer], { s: 0.9, max: 3 });
+    if (tischGruppe(o, P, R.x + R.w / 2, R.y + R.h / 2, { tisch: 'ph:gothic_coffee_table', n: 2, s: 1.2, kerze: true, deko: false })) o.push(stampAt('ph:zauberbuch', R.x + R.w / 2, R.y + R.h / 2, { s: 0.9 }));
+    anWand(o, P, R, 'ph:kristallkugel', { s: 1.3 });
+    for (let i = 0; i < 2; i++) inEcke(o, P, R, KERZEN[0], { s: 0.9 });
+  },
+  juwelier(o, P, R, tuer) {
+    anWand(o, P, R, 'p:counter', { seite: GEGEN[tuer], s: 0.8 });
+    anWand(o, P, R, 'ph:vintage_cabinet_01', { s: 1.1 });
+    anWand(o, P, R, 'ph:juwelentruhe', { s: 0.9 });
+    inEcke(o, P, R, 'ph:goldhaufen', { s: 0.8 });
+    inEcke(o, P, R, 'ph:treasure_chest', { s: 1.1 });
+    streue(o, P, R, ['ph:brass_vase_01', 'ph:ornate_mirror_01'], 1, { s: [1.1, 1.3] });
+  },
+  schneider(o, P, R, tuer) {
+    anWand(o, P, R, 'ph:spinning_wheel_01', { s: 1.3 });
+    anWand(o, P, R, pick(['ph:chinese_screen_panels_a', 'ph:chinese_screen_panels_b']), { s: 1 });
+    anWand(o, P, R, 'ph:ornate_mirror_01', { s: 1.2 });
+    tischGruppe(o, P, R.x + R.w / 2, R.y + R.h / 2, { tisch: 'ph:painted_wooden_table', n: 2, s: 1.2, kerze: false });
+    anWand(o, P, R, pick(SCHRANK), { s: 1.1, seite: GEGEN[tuer] });
+  },
+  metzger(o, P, R, tuer) {
+    anWand(o, P, R, 'p:counter', { seite: GEGEN[tuer], s: 0.8 });
+    const t = anWand(o, P, R, 'ph:woodentable_01', { s: 1.4 });
+    if (t) o.push(stampAt('ph:wooden_cutting_board', t.x, t.y, { s: 1.4, r: randInt(0, 359) }));
+    for (let i = 0; i < 2; i++) inEcke(o, P, R, pick(FASS), { s: 1.3 });
+    streue(o, P, R, ['ph:wooden_bucket_01', 'ph:hackklotz'], 2, { s: [0.9, 1.2] });
+  },
+  rathaus(o, P, R, tuer) {
+    const hinten = GEGEN[tuer];
+    anWand(o, P, R, 'ph:chinese_armchair', { seite: hinten, s: 1.4, at: 0.5 });
+    for (const k of [0.15, 0.85]) anWand(o, P, R, pick(['ph:kite_shield', 'ph:marble_bust_01']), { seite: hinten, at: k, s: 1.3, tries: 3 });
+    const langs = Math.max(1, Math.floor(Math.min(R.w, R.h) / 4));
+    for (let i = 0; i < langs; i++) tischGruppe(o, P, R.x + R.w / 2 + (R.w > R.h ? 0 : (i - (langs - 1) / 2) * 3.4), R.y + R.h / 2 + (R.w > R.h ? (i - (langs - 1) / 2) * 3.4 : 0), { tisch: 'ph:dining_table', s: 1.5, dreh: R.w > R.h ? 0 : 90 });
+    for (let i = 0; i < 3; i++) anWand(o, P, R, pick(['p:bookshelf', 'ph:wooden_bookshelf_worn', 'ph:vintage_grandfather_clock_01']), { s: 1 });
+    for (let i = 0, n = Math.max(1, Math.round((R.w * R.h) / 40)); i < n; i++) o.push(stampAt(pick(LEUCHTER), R.x + R.w * rnd(0.3, 0.7), R.y + R.h * rnd(0.3, 0.7), { s: 1.6, layer: 'top' }));
+  },
+  tempel(o, P, R, tuer) {
+    const hinten = GEGEN[tuer];
+    anWand(o, P, R, 'p:altar', { seite: hinten, s: 1 });
+    for (const k of [0.2, 0.8]) anWand(o, P, R, pick(['ph:gothic_statue', 'p:brazier']), { seite: hinten, at: k, s: 0.9, tries: 3 });
+    const quer = tuer === 'n' || tuer === 's';
+    const reihen = Math.max(1, Math.floor(((quer ? R.h : R.w) - 4) / 1.6));
+    for (let i = 0; i < reihen; i++) {
+      for (const sd of [-1, 1]) {
+        const t = (i + 1.4) * 1.6;
+        const x = quer ? R.x + R.w / 2 + sd * (R.w / 4) : (tuer === 'w' ? R.x + t : R.x + R.w - t);
+        const y = quer ? (tuer === 'n' ? R.y + t : R.y + R.h - t) : R.y + R.h / 2 + sd * (R.h / 4);
+        setze(o, P, 'ph:painted_wooden_bench', x, y, { r: WAND[hinten] + 180, s: 1.2 });
+      }
+    }
+    for (let i = 0; i < 4; i++) inEcke(o, P, R, KERZEN[0], { s: 0.9 });
+  },
+  kaserne(o, P, R, tuer) {
+    reihe(o, P, R, pick(BETT), GEGEN[tuer], { s: 1, gap: 0.4, max: 5 });
+    anWand(o, P, R, 'ph:waffenstaender', { s: 0.75 });
+    anWand(o, P, R, 'ph:waffenstaender', { s: 0.75 });
+    tischGruppe(o, P, R.x + R.w / 2, R.y + R.h / 2 + (tuer === 'n' ? 1 : -1), { tisch: pick(ECKTISCH), n: 4, s: 1.3 });
+    for (let i = 0; i < 2; i++) inEcke(o, P, R, 'ph:treasure_chest', { s: 1.1 });
+  },
+  bibliothek(o, P, R, tuer) {
+    reihe(o, P, R, 'p:bookshelf', GEGEN[tuer], { s: 0.9, max: 4 });
+    for (const sd of SEITEN) if (sd !== tuer && sd !== GEGEN[tuer]) reihe(o, P, R, 'p:bookshelf', sd, { s: 0.9, max: 3 });
+    for (let i = 0, ok = 0; i < 20 && ok < 2; i++) if (tischGruppe(o, P, rnd(R.x + 2, R.x + R.w - 2), rnd(R.y + 2, R.y + R.h - 2), { tisch: 'ph:painted_wooden_table', n: 2, s: 1.2 })) ok++;
+  },
+  lagerhaus(o, P, R) {
+    for (let i = 0; i < 4; i++) { const e = inEcke(o, P, R, pick(KISTE), { s: 1.4 }); if (e) haufen(o, P, e.x, e.y, [...KISTE, ...FASS, 'ph:kornsaecke'], 3, { s: [1.2, 1.5], rad: 1.2 }); }
+    for (let i = 0; i < 4; i++) anWand(o, P, R, pick([...FASS, ...KISTE, 'ph:kistenstapel']), { s: 1.1 });
+    anWand(o, P, R, 'ph:wooden_ladder', { s: 1.3 });
+    streue(o, P, R, ['ph:kornsaecke', 'ph:handkarren'], 2, { s: [0.9, 1] });
+  },
+  herrenhaus(o, P, R, tuer) {
+    o.push(stampAt(pick(['p:rug', 'p:rugGreen', 'p:rugBlue']), R.x + R.w / 2, R.y + R.h / 2, { s: Math.min(R.w, R.h) / 4, layer: 'floor' }));
+    anWand(o, P, R, 'ph:gothicbed_01', { seite: GEGEN[tuer], s: 1.05 });
+    anWand(o, P, R, 'p:fireplace', { s: 0.9 });
+    anWand(o, P, R, pick(['ph:sofa_01', 'ph:chinese_sofa', 'ph:painted_wooden_sofa']), { s: 1.1 });
+    tischGruppe(o, P, R.x + R.w / 2, R.y + R.h / 2, { tisch: pick(RUNDTISCH), n: 4, s: 1.3 });
+    anWand(o, P, R, pick(['ph:gothic_statue', 'ph:marble_bust_01', 'ph:vintage_grandfather_clock_01']), { s: 1 });
+    anWand(o, P, R, pick(SCHRANK), { s: 1.1 });
+    inEcke(o, P, R, 'ph:potted_plant_01', { s: 1.2 });
+  },
+  stall(o, P, R) {
+    anWand(o, P, R, 'ph:pferdetraenke', { s: 0.9 });
+    for (let i = 0; i < 2; i++) inEcke(o, P, R, 'ph:kornsaecke', { s: 1 });
+    haufen(o, P, R.x + R.w / 2, R.y + R.h / 2, SETS.reisig.keys, randInt(4, 7), { s: [1.6, 2.6], rad: 1.4 });
+    anWand(o, P, R, 'ph:wooden_ladder', { s: 1.3 });
+  },
+};
+const EINRICHTEN = (art) => STADT_EINRICHTUNG[art] || HAUS_EINRICHTUNG[art] || HAUS_EINRICHTUNG.wohnhaus;
+
+function genCity(W, H, opts = {}) {
+  const art = STADT_ARTEN[opts.art] ? opts.art : pick(Object.keys(STADT_ARTEN));
+  const shapes = [];
+  const terrain = [];
+  const objects = [];
+  const labels = [];
+  const area = W * H;
+  const M = Math.min(W, H);
+  const P = new Platz(W, H);
+  const namen = new Set();
+  const ort = (text, x, y, size = 0.85) => labels.push({ id: uid(6), kind: 'ort', text, x: r2(x), y: r2(y), size });
+  // Boden draußen: Wiese mit Flecken
+  for (let i = 0, n = Math.round(area / 140) + 3; i < n; i++) terrain.push(fleck(pick(['tex:withered_grass', 'tex:sparse_grass', 'tex:forrest_ground_01']), rnd(0, W), rnd(0, H), rnd(3, 7), rnd(2.5, 5), 0.3));
+  // Mittelpunkt und Ausdehnung der Stadt
+  let cx = W / 2 + rnd(-1, 1) * W * 0.03;
+  let cy = H / 2 + rnd(-1, 1) * H * 0.03;
+  let kuesteSeite = null;
+  if (art === 'hafen') {
+    kuesteSeite = pick(SEITEN);
+    // Stadt rückt vom Meer weg
+    if (kuesteSeite === 'n') cy += H * 0.1; else if (kuesteSeite === 's') cy -= H * 0.1; else if (kuesteSeite === 'w') cx += W * 0.1; else cx -= W * 0.1;
+  }
+  const mitMauer = art === 'mauer' || jaNein(opts.mauer, art === 'tempel' ? 0.35 : art === 'markt' ? 0.25 : 0.15);
+  let rx = W * (mitMauer ? 0.41 : 0.44);
+  let ry = H * (mitMauer ? 0.41 : 0.44);
+  // Hafen: die Stadt rückt vom Meer weg – auf der Landseite muss sie trotzdem auf die Karte passen
+  if (kuesteSeite === 'e') rx = Math.min(rx, cx - 3); else if (kuesteSeite === 'w') rx = Math.min(rx, W - 3 - cx); else if (kuesteSeite === 'n') ry = Math.min(ry, H - 3 - cy); else if (kuesteSeite === 's') ry = Math.min(ry, cy - 3);
+  const inStadt = (x, y, f = 1) => ((x - cx) / (rx * f)) ** 2 + ((y - cy) / (ry * f)) ** 2 <= 1;
+
+  // ── Wasser: Meer (Hafen), Fluss (Fluss-/Mauerstadt) ──
+  let meer = null;
+  if (art === 'hafen') {
+    const tief = (kuesteSeite === 'n' || kuesteSeite === 's' ? H : W) * rnd(0.2, 0.26);
+    const pts = [];
+    const L = kuesteSeite === 'n' || kuesteSeite === 's' ? W : H;
+    for (let i = 0; i <= 16; i++) {
+      const t = (i / 16) * (L + 4) - 2;
+      const d = tief + Math.sin(i * 0.9 + rnd(0, 1)) * 1.6 + rnd(-0.8, 0.8);
+      pts.push(kuesteSeite === 'n' ? [t, d] : kuesteSeite === 's' ? [t, H - d] : kuesteSeite === 'w' ? [d, t] : [W - d, t]);
+    }
+    const ecken = kuesteSeite === 'n' ? [[W + 2, -2], [-2, -2]] : kuesteSeite === 's' ? [[W + 2, H + 2], [-2, H + 2]] : kuesteSeite === 'w' ? [[-2, H + 2], [-2, -2]] : [[W + 2, H + 2], [W + 2, -2]];
+    const poly = [...pts, ...(kuesteSeite === 'w' || kuesteSeite === 'e' ? ecken : ecken)];
+    // Strand bzw. Kaimauer, flaches und tiefes Wasser
+    terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: 3.2, mat: 'tex:coast_sand_02', pts: flat(pts) });
+    terrain.push({ id: uid(6), op: 'add', kind: 'poly', mat: 'water', pts: flat(poly) });
+    const tiefPts = pts.map(([x, y]) => (kuesteSeite === 'n' ? [x, y - 4] : kuesteSeite === 's' ? [x, y + 4] : kuesteSeite === 'w' ? [x - 4, y] : [x + 4, y]));
+    terrain.push({ id: uid(6), op: 'add', kind: 'poly', mat: 'deepwater', pts: flat([...tiefPts, ...ecken]) });
+    meer = { pts, poly };
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (inPoly(flat(poly), x + 0.5, y + 0.5)) P.nimm([x - 0.6, y - 0.6, x + 1.6, y + 1.6]);
+  }
+  let fluss = null;
+  if (art === 'fluss' || (art !== 'hafen' && jaNein(opts.fluss, art === 'mauer' ? 0.6 : 0.25))) {
+    if (art === 'mauer') {
+      // Wassergraben: der Fluss umfließt die Mauer auf einer Seite (wie bei vielen alten Städten)
+      const a0 = rnd(0, TAU);
+      const bogen = [];
+      for (let i = 0; i <= 14; i++) {
+        const a = a0 + (i / 14) * Math.PI * 1.15;
+        bogen.push([cx + Math.cos(a) * (rx + 3.2), cy + Math.sin(a) * (ry + 3.2)]);
+      }
+      const rein = [bogen[0][0] + Math.cos(a0 - 0.8) * M, bogen[0][1] + Math.sin(a0 - 0.8) * M];
+      const raus = [bogen[14][0] + Math.cos(a0 + Math.PI * 1.15 + 0.8) * M, bogen[14][1] + Math.sin(a0 + Math.PI * 1.15 + 0.8) * M];
+      const pts = chaikin([rein, ...bogen, raus], 2);
+      const breite = clamp(M / 22, 2.8, 4.4);
+      terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(breite + 1.6), mat: 'tex:river_small_rocks', pts: flat(pts) });
+      terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: r2(breite), mat: 'water', pts: flat(pts) });
+      sperreWeg(P, pts, breite + 1.4);
+      fluss = { pts, w: breite };
+    } else {
+      fluss = flussLegen(terrain, P, W, H, chance(0.5) ? 'senkrecht' : 'waagrecht', { breite: clamp(M / 16, 3, 5.5), durch: [cx + rnd(-4, 4), cy + rnd(-4, 4)], bend: 0.1 });
+    }
+  }
+
+  // ── Marktplatz ──
+  const pr = clamp(Math.sqrt(area) / 9, 4.5, 10) * (art === 'markt' ? 1.25 : 1);
+  let mp = { x: cx, y: cy };
+  if (fluss && distPath(fluss.pts, mp.x, mp.y) < pr + fluss.w) {
+    // Markt neben den Fluss rücken
+    for (let t = 0; t < 40; t++) { const q = { x: cx + rnd(-rx, rx) * 0.4, y: cy + rnd(-ry, ry) * 0.4 }; if (distPath(fluss.pts, q.x, q.y) > pr + fluss.w / 2 + 1.5) { mp = q; break; } }
+  }
+  if (art === 'hafen') {
+    // Markt zwischen Stadtmitte und Hafen
+    const k = meer.pts[Math.floor(meer.pts.length / 2)];
+    mp = { x: cx + (k[0] - cx) * 0.35, y: cy + (k[1] - cy) * 0.35 };
+  }
+  const platz = blob(mp.x, mp.y, pr, pr * 0.85, { j: 0.12 });
+  terrain.push({ id: uid(6), op: 'add', kind: 'poly', mat: pick(['tex:cobblestone_large_01', 'tex:patterned_cobblestone', 'tex:cobblestone_floor_01']), pts: platz });
+  P.nimm([mp.x - pr, mp.y - pr * 0.85, mp.x + pr, mp.y + pr * 0.85]);
+
+  // ── Mauer mit Toren und Türmen ──
+  const tore = [];
+  let mauerRing = null;
+  if (mitMauer) {
+    const n = 56;
+    const ring = [];
+    for (let i = 0; i <= n; i++) { const a = (i / n) * TAU; ring.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+    // Tore in Richtung der Kartenränder (nicht zum Meer), 2–4 Stück
+    const torWinkel = mischen([0, Math.PI / 2, Math.PI, Math.PI * 1.5]).filter((a) => {
+      if (!kuesteSeite) return true;
+      const seite = Math.abs(Math.cos(a)) > 0.5 ? (Math.cos(a) > 0 ? 'e' : 'w') : Math.sin(a) > 0 ? 's' : 'n';
+      return seite !== kuesteSeite;
+    }).slice(0, clamp(Math.round(M / 30) + 1, 2, 4));
+    for (const a0 of torWinkel) {
+      const a = a0 + rnd(-0.15, 0.15);
+      tore.push({ a, x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+    }
+    // Wo Wasser ist (Hafen, Fluss), bleibt die Mauer offen
+    const imWasser = (x, y) => (meer && inPoly(flat(meer.poly), x, y)) || (fluss && distPath(fluss.pts, x, y) < fluss.w / 2 + 1.2);
+    let teil = [];
+    const teile = [];
+    for (const p of ring) { if (imWasser(p[0], p[1])) { if (teil.length > 1) teile.push(teil); teil = []; } else teil.push(p); }
+    if (teil.length > 1) teile.push(teil);
+    if (teile.length > 1 && !imWasser(ring[0][0], ring[0][1])) { const last = teile.pop(); teile[0] = [...last, ...teile[0]]; }
+    for (const t of teile) shapes.push({ id: uid(6), op: 'add', kind: 'path', w: 1.4, pts: flat(t), tex: 'slab_tiles' });
+    mauerRing = ring;
+    void imWasser;
+    // Torlücken (die Straße läuft hindurch) mit zwei Tortürmen
+    for (const t of tore) {
+      shapes.push({ id: uid(6), op: 'sub', kind: 'ellipse', pts: [r2(t.x - 1.8), r2(t.y - 1.8), r2(t.x + 1.8), r2(t.y + 1.8)] });
+      const tx = -Math.sin(t.a);
+      const ty = Math.cos(t.a);
+      for (const sd of [-1, 1]) {
+        const x = t.x + tx * sd * 2.9;
+        const y = t.y + ty * sd * 2.9;
+        shapes.push({ id: uid(6), op: 'add', kind: 'ellipse', pts: [r2(x - 1.3), r2(y - 1.3), r2(x + 1.3), r2(y + 1.3)], tex: 'slab_tiles', roof: 'roof_slates_02' });
+      }
+      objects.push(stampAt('p:torch', t.x + tx * 1.4 + Math.cos(t.a) * 1.2, t.y + ty * 1.4 + Math.sin(t.a) * 1.2, { s: 1.4 }), stampAt('p:torch', t.x - tx * 1.4 + Math.cos(t.a) * 1.2, t.y - ty * 1.4 + Math.sin(t.a) * 1.2, { s: 1.4 }));
+      const sd = Math.abs(Math.cos(t.a)) > 0.7 ? (Math.cos(t.a) > 0 ? 'Osttor' : 'Westtor') : Math.sin(t.a) > 0 ? 'Südtor' : 'Nordtor';
+      labels.push({ id: uid(6), kind: 'text', text: sd, x: r2(t.x + Math.cos(t.a) * 3.2), y: r2(t.y + Math.sin(t.a) * 3.2), size: 0.6 });
+    }
+    // Türme entlang der Mauer
+    const turmN = Math.round((Math.PI * (rx + ry)) / 13);
+    for (let i = 0; i < turmN; i++) {
+      const a = (i / turmN) * TAU + 0.2;
+      if (tore.some((t) => Math.abs(Math.atan2(Math.sin(a - t.a), Math.cos(a - t.a))) < 0.35)) continue;
+      const x = cx + Math.cos(a) * rx;
+      const y = cy + Math.sin(a) * ry;
+      if ((meer && inPoly(flat(meer.poly), x, y)) || (fluss && distPath(fluss.pts, x, y) < fluss.w / 2 + 1.5)) continue;
+      shapes.push({ id: uid(6), op: 'add', kind: 'ellipse', pts: [r2(x - 1.1), r2(y - 1.1), r2(x + 1.1), r2(y + 1.1)], tex: 'slab_tiles', roof: 'roof_slates_02' });
+    }
+    sperreWeg(P, ring, 3.2);
+  }
+
+  // ── Straßen: Hauptstraßen vom Markt zu den Toren/Rändern, Ringstraßen um den Markt, Gassen dazwischen ──
+  const strassen = [];
+  const mat1 = pick(['tex:cobblestone_floor_01', 'tex:cobblestone_05', 'tex:stone_pathway', 'tex:cobblestone_large_01']);
+  const mat2 = pick(['tex:grassy_cobblestone', 'tex:cobblestone_02', 'tex:cobblestone_03']);
+  const meerFlat = meer ? flat(meer.poly) : null;
+  const nass = (x, y) => (meerFlat && inPoly(meerFlat, x, y)) || (fluss && distPath(fluss.pts, x, y) < fluss.w / 2 + 0.6);
+  const ziele = mitMauer ? tore.map((t) => [t.x + Math.cos(t.a) * (M * 0.6), t.y + Math.sin(t.a) * (M * 0.6)]) : mischen(SEITEN.filter((s) => s !== kuesteSeite)).slice(0, art === 'markt' ? 4 : 3).map((s) => randPunkt(W, H, s, rnd(0.35, 0.65)));
+  for (const z of ziele) strassen.push({ pts: wander([mp.x, mp.y], z, { bend: 0.1, steps: 7 }), w: 3, haupt: true });
+  if (art === 'hafen') {
+    const k = meer.pts[Math.floor(meer.pts.length * rnd(0.35, 0.65))];
+    strassen.push({ pts: wander([mp.x, mp.y], k, { bend: 0.06, steps: 5 }), w: 3, haupt: true });
+  }
+  for (const s of strassen) sperreWeg(P, s.pts, s.w + 0.4);
+
+  // ── Große Bauten am Markt und an besonderen Stellen ──
+  const bauten = [];
+  // Rechteck möglichst nah an einem Punkt, Tür zeigt zu ihm
+  const platziere = (zx, zy, bw, bh, artB, { innen = true, rad0 = 0, rad1 = M * 0.35 } = {}) => {
+    for (let t = 0; t < 400; t++) {
+      const a = rnd(0, TAU);
+      const d = rnd(rad0, rad1) * Math.min(1, 0.35 + t / 250);
+      const x = Math.round(zx + Math.cos(a) * d - bw / 2);
+      const y = Math.round(zy + Math.sin(a) * d - bh / 2);
+      if (x < 1 || y < 1 || x + bw > W - 1 || y + bh > H - 1) continue;
+      if (innen && !(inStadt(x, y, 0.95) && inStadt(x + bw, y + bh, 0.95) && inStadt(x + bw, y, 0.95) && inStadt(x, y + bh, 0.95))) continue;
+      if (!P.frei([x - 0.2, y - 0.2, x + bw + 0.2, y + bh + 0.2])) continue;
+      P.nimm([x - 0.6, y - 0.6, x + bw + 0.6, y + bh + 0.6]);
+      const vx = zx - (x + bw / 2);
+      const vy = zy - (y + bh / 2);
+      const b = { x, y, w: bw, h: bh, art: artB, tuer: Math.abs(vx) / bw > Math.abs(vy) / bh ? (vx > 0 ? 'e' : 'w') : (vy > 0 ? 's' : 'n') };
+      bauten.push(b);
+      return b;
+    }
+    return null;
+  };
+  const gross = (k) => Math.round(k * clamp(M / 70, 0.85, 1.25));
+  if (art === 'tempel') platziere(mp.x, mp.y, gross(15), gross(10), 'tempel', { rad0: pr + 2, rad1: pr + 12 });
+  platziere(mp.x, mp.y, gross(10), gross(7), 'rathaus', { rad0: pr + 2, rad1: pr + 9 });
+  if (art !== 'tempel') platziere(mp.x, mp.y, gross(9), gross(7), 'tempel', { rad0: pr + 3, rad1: pr + 14 });
+  platziere(mp.x, mp.y, gross(9), gross(6), 'gasthaus', { rad0: pr + 1.5, rad1: pr + 8 });
+  if (M >= 70) platziere(mp.x, mp.y, gross(8), gross(6), 'bibliothek', { rad0: pr + 5, rad1: M * 0.3 });
+  const tor0 = tore[0] || (ziele[0] ? { x: clamp(ziele[0][0], 6, W - 6), y: clamp(ziele[0][1], 6, H - 6) } : { x: cx, y: cy });
+  platziere(tor0.x, tor0.y, gross(8), gross(6), 'kaserne', { rad0: 4, rad1: M * 0.22 });
+  platziere(cx, cy, gross(8), gross(7), 'herrenhaus', { rad0: M * 0.15, rad1: M * 0.33 });
+  if (art === 'hafen') {
+    const k = meer.pts[Math.floor(meer.pts.length / 2)];
+    for (let i = 0; i < clamp(Math.round(M / 25), 2, 5); i++) platziere(k[0], k[1], gross(8), gross(5), 'lagerhaus', { innen: false, rad0: 4, rad1: M * 0.3 });
+  }
+  if (tore[1]) platziere(tore[1].x, tore[1].y, gross(7), gross(5), 'stall', { rad0: 3, rad1: M * 0.2 });
+
+  // ── Ringstraßen und Gassen (um die großen Bauten herum) ──
+  const imBau = (x, y) => bauten.some((b) => x > b.x - 0.8 && x < b.x + b.w + 0.8 && y > b.y - 0.8 && y < b.y + b.h + 0.8);
+  const vorRing = strassen.length;
+  // Linienzug in Stücke teilen, wo er ins Wasser, aus der Stadt oder von der Karte läuft
+  const stuecke = (pts, ok) => {
+    const out = [];
+    let cur = [];
+    for (const p of pts) {
+      if (ok(p[0], p[1], p)) cur.push(p);
+      else { if (cur.length >= 4) out.push(cur); cur = []; }
+    }
+    if (cur.length >= 4) out.push(cur);
+    return out;
+  };
+  const inKarte = (x, y) => x > 1 && y > 1 && x < W - 1 && y < H - 1;
+  // Ringe um den Markt, gleichmäßig bis zum Stadtrand verteilt (~13 Felder = zwei Häuserreihen plus Straße),
+  // leicht unregelmäßig; große Bauten umfahren sie (Punkt nach außen bzw. innen schieben), statt abzubrechen
+  const verh = ry / rx;
+  // Mittelpunkt der Ringe: der Markt, wenn er mittig liegt – sonst nahe der Stadtmitte (Markt am Fluss oder Hafen)
+  const abMitte = Math.hypot(mp.x - cx, (mp.y - cy) / verh);
+  const rc = abMitte < 4 ? { x: mp.x, y: mp.y } : { x: cx + (mp.x - cx) * 0.2, y: cy + (mp.y - cy) * 0.2 };
+  const rIn = abMitte < 4 ? pr : 5;
+  const hindernis = (x, y) => imBau(x, y) || inPoly(platz, x, y);
+  const rAus = mitMauer ? rx - 3.4 : rx * 0.84;
+  const ringN = Math.max(1, Math.round((rAus - rIn) / 12));
+  const ringAbstand = (rAus - rIn) / ringN;
+  const ringe = [];
+  for (let k = 1; k <= ringN - (mitMauer ? 1 : 0); k++) {
+    const R = rIn + k * ringAbstand - (k === 1 ? ringAbstand * 0.2 : 0);
+    const ph = rnd(0, TAU);
+    const pts = [];
+    for (let i = 0; i <= 120; i++) {
+      const t = (i / 120) * TAU;
+      const f = 1 + 0.05 * Math.sin(3 * t + ph);
+      const at = (r) => [rc.x + Math.cos(t) * r, rc.y + Math.sin(t) * r * verh];
+      let p = at(R * f);
+      for (let d = 1; d <= 12 && hindernis(p[0], p[1]); d++) { const a = at(R * f + d); const b = at(R * f - d); p = !hindernis(a[0], a[1]) ? a : !hindernis(b[0], b[1]) ? b : p; }
+      pts.push(p);
+    }
+    // Über den Fluss führen Brücken (brueckenSetzen) – aber nur bei einer Querung; läuft der Ring ein Stück im Wasser
+    // entlang, wird er dort unterbrochen. Am Meer endet er immer.
+    const imWasser = new Set();
+    for (let i = 0; i < pts.length; i++) {
+      if (!nass(pts[i][0], pts[i][1])) continue;
+      let j = i;
+      let len = 0;
+      while (j + 1 < pts.length && nass(pts[j + 1][0], pts[j + 1][1])) { len += Math.hypot(pts[j + 1][0] - pts[j][0], pts[j + 1][1] - pts[j][1]); j++; }
+      if (!fluss || len > fluss.w * 1.6 + 2) for (let k = i; k <= j; k++) imWasser.add(pts[k]);
+      i = j;
+    }
+    for (const s of stuecke(pts, (x, y, p) => inKarte(x, y) && inStadt(x, y, 0.98) && !(meerFlat && inPoly(meerFlat, x, y)) && !imWasser.has(p) && !hindernis(x, y))) { strassen.push({ pts: s, w: 2.2 }); ringe.push({ R, pts: s }); }
+  }
+  // innen an der Mauer entlang
+  if (mitMauer) {
+    const rr = [];
+    for (let i = 0; i <= 64; i++) { const t = (i / 64) * TAU; rr.push([cx + Math.cos(t) * (rx - 3.4), cy + Math.sin(t) * (ry - 3.4)]); }
+    for (const s of stuecke(rr, (x, y) => inKarte(x, y) && !nass(x, y) && !imBau(x, y))) { strassen.push({ pts: s, w: 2.2, ring: true }); ringe.push({ R: rx - 3.4, pts: s, mauer: true }); }
+  }
+  // Gassen: kurze Verbindungen nach außen, verteilt über den Umfang
+  const radR = [rIn + 0.5, ...[...new Set(ringe.map((r) => Math.round(r.R * 10) / 10))].sort((p, q) => p - q)];
+  const hauptWinkel = strassen.filter((s) => s.haupt).map((s) => { const q = s.pts[Math.min(3, s.pts.length - 1)]; return Math.atan2((q[1] - rc.y) / verh, q[0] - rc.x); });
+  for (let k = 0; k + 1 < radR.length; k++) {
+    const r0 = radR[k];
+    const r1 = radR[k + 1];
+    const n = Math.max(3, Math.round((TAU * r1) / 19));
+    const off = rnd(0, TAU);
+    for (let i = 0; i < n; i++) {
+      const t = off + (i / n) * TAU + rnd(-0.15, 0.15);
+      if (hauptWinkel.some((h) => Math.abs(Math.atan2(Math.sin(t - h), Math.cos(t - h))) < 0.3)) continue;
+      const p0 = [rc.x + Math.cos(t) * r0, rc.y + Math.sin(t) * r0 * verh];
+      const p1 = [rc.x + Math.cos(t) * r1, rc.y + Math.sin(t) * r1 * verh];
+      const pts = wander(p0, p1, { bend: 0.15, steps: 3 });
+      for (const s of stuecke(pts, (x, y) => inKarte(x, y) && inStadt(x, y, mitMauer ? 0.93 : 1) && !nass(x, y) && !imBau(x, y))) strassen.push({ pts: s, w: 1.8 });
+    }
+  }
+  strassen.forEach((s, i) => {
+    terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: s.w, mat: s.w >= 3 ? mat1 : mat2, pts: flat(s.pts) });
+    if (i >= vorRing) sperreWeg(P, s.pts, s.w + 0.4);
+  });
+  if (fluss) for (const s of strassen) brueckenSetzen(terrain, objects, fluss, s);
+
+  // ── Häuser: dicht an allen Straßen, ein Feld Gasse dazwischen ──
+  // Feldraster: Straßen/Platz (S), Gesperrtes (Wasser, Mauer, große Bauten, Straßen) und Häuser (G)
+  const soll = anzahl(opts.gebaeude, clamp(Math.round((Math.PI * rx * ry) / 36), 12, 200));
+  const haeuser = [...bauten];
+  const S = new Uint8Array(W * H);
+  const G = new Uint8Array(W * H);
+  const idx = (x, y) => y * W + x;
+  const markiere = (pts, w) => {
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1];
+      const [bx, by] = pts[i];
+      const n = Math.ceil(Math.hypot(bx - ax, by - ay) / 0.3) + 1;
+      for (let k = 0; k <= n; k++) {
+        const px = ax + ((bx - ax) * k) / n;
+        const py = ay + ((by - ay) * k) / n;
+        for (let y = Math.floor(py - w / 2); y <= Math.ceil(py + w / 2); y++) for (let x = Math.floor(px - w / 2); x <= Math.ceil(px + w / 2); x++) {
+          if (x < 0 || y < 0 || x >= W || y >= H) continue;
+          if (Math.hypot(x + 0.5 - px, y + 0.5 - py) <= w / 2 + 0.1) S[idx(x, y)] = 1;
+        }
+      }
+    }
+  };
+  for (const s of strassen) markiere(s.pts, s.w);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (inPoly(platz, x + 0.5, y + 0.5)) S[idx(x, y)] = 1;
+  const gesperrt = new Uint8Array(W * H);
+  // gesperrt: Straßen, Wasser, Mauer (die Belegung P ist um Straßen großzügiger – hier zählt das Feld selbst)
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (S[idx(x, y)] || nass(x + 0.5, y + 0.5) || (mauerRing && distPath(mauerRing, x + 0.5, y + 0.5) < 2.3)) gesperrt[idx(x, y)] = 1;
+  for (const h of bauten) for (let y = h.y - 1; y <= h.y + h.h; y++) for (let x = h.x - 1; x <= h.x + h.w; x++) if (x >= 0 && y >= 0 && x < W && y < H) G[idx(x, y)] = 2;
+  const feldFrei = (x, y) => x >= 1 && y >= 1 && x < W - 1 && y < H - 1 && !gesperrt[idx(x, y)] && !G[idx(x, y)];
+  const DIR = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] };
+  // Startfelder: frei, mit einer Straße direkt daneben – die Tür zeigt dorthin
+  const saat = [];
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (!feldFrei(x, y) || !inStadt(x + 0.5, y + 0.5, mitMauer ? 0.96 : 1.02)) continue;
+    for (const [sd, [dx, dy]] of Object.entries(DIR)) if (S[idx(x + dx, y + dy)]) saat.push({ x, y, sd });
+  }
+  const versuche = (x0, y0, w, h) => {
+    if (x0 < 1 || y0 < 1 || x0 + w > W - 1 || y0 + h > H - 1) return false;
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) if (!feldFrei(x, y) || !inStadt(x + 0.5, y + 0.5, mitMauer ? 0.96 : 1.04)) return false;
+    // ein Feld Abstand zu anderen Häusern (Gasse), Straßen dürfen angrenzen
+    for (let y = y0 - 1; y <= y0 + h; y++) for (let x = x0 - 1; x <= x0 + w; x++) if (x >= 0 && y >= 0 && x < W && y < H && G[idx(x, y)] === 1) return false;
+    return true;
+  };
+  for (const sd0 of mischen(saat)) {
+    if (haeuser.length >= soll) break;
+    const { x, y, sd } = sd0;
+    if (!feldFrei(x, y)) continue;
+    const quer = sd === 'n' || sd === 's';
+    let ok = null;
+    // erst übliche Größen in zufälliger Reihenfolge, dann kleinere – je Größe alle Versätze entlang der Straße
+    for (const [entlang, tief] of [...mischen(HAUS_GROESSEN), ...HAUS_KLEIN]) {
+      const w = quer ? entlang : tief;
+      const h = quer ? tief : entlang;
+      for (const off of mischen([...Array(entlang).keys()])) {
+        const x0 = quer ? x - off : sd === 'w' ? x : x - w + 1;
+        const y0 = quer ? (sd === 'n' ? y : y - h + 1) : y - off;
+        if (versuche(x0, y0, w, h)) { ok = { x: x0, y: y0, w, h, tuer: sd, tx: x, ty: y }; break; }
+      }
+      if (ok) break;
+    }
+    if (!ok) continue;
+    for (let yy = ok.y; yy < ok.y + ok.h; yy++) for (let xx = ok.x; xx < ok.x + ok.w; xx++) G[idx(xx, yy)] = 1;
+    P.nimm([ok.x - 0.2, ok.y - 0.2, ok.x + ok.w + 0.2, ok.y + ok.h + 0.2]);
+    haeuser.push(ok);
+  }
+  // Nutzung: Läden am Markt und an den Hauptstraßen, sonst Wohnhäuser
+  const LADEN = ['schmiede', 'baecker', 'haendler', 'metzger', 'schneider', 'alchemist', 'magier', 'juwelier', 'kraeuter', 'gasthaus', 'haendler', 'baecker', 'schmiede'];
+  const nahMarkt = haeuser.filter((h) => !h.art).sort((a, b) => Math.hypot(a.x + a.w / 2 - mp.x, a.y + a.h / 2 - mp.y) - Math.hypot(b.x + b.w / 2 - mp.x, b.y + b.h / 2 - mp.y));
+  const ladenN = Math.round(nahMarkt.length * 0.35);
+  for (let i = 0; i < ladenN; i++) nahMarkt[i].art = LADEN[i % LADEN.length];
+  for (const h of haeuser) if (!h.art) h.art = chance(0.08) ? 'scheune' : 'wohnhaus';
+
+  // ── Gebäude bauen und einrichten ──
+  const DACH_STADT = ['clay_roof_tiles', 'clay_roof_tiles_02', 'clay_roof_tiles_03', 'roof_slates_02', 'ceramic_roof_01', 'roof_planks'];
+  for (const h of haeuser) {
+    const prunk = ['rathaus', 'tempel', 'herrenhaus', 'bibliothek'].includes(h.art);
+    const floor = h.art === 'scheune' || h.art === 'stall' || h.art === 'lagerhaus' ? 'weathered_planks' : h.art === 'schmiede' ? 'rock_tile_floor' : prunk ? pick(['marble_01', 'monastery_stone_floor', 'slab_tiles']) : pick(['old_wood_floor', 'wood_floor_worn', 'dark_wooden_planks', 'brown_planks_05']);
+    shapes.push({ id: uid(6), op: 'add', kind: 'rect', pts: [h.x, h.y, h.x + h.w, h.y + h.h], tex: floor, roof: prunk ? 'roof_slates_02' : pick(DACH_STADT) });
+    const quer2 = h.tuer === 'n' || h.tuer === 's';
+    const off = h.tx != null ? clamp(quer2 ? h.tx - h.x : h.ty - h.y, 1, (quer2 ? h.w : h.h) - 2) : quer2 ? clamp(Math.floor(h.w / 2) + randInt(-1, 1), 1, h.w - 2) : clamp(Math.floor(h.h / 2) + randInt(-1, 1), 1, h.h - 2);
+    const dx = quer2 ? h.x + off + 0.5 : h.tuer === 'w' ? h.x : h.x + h.w;
+    const dy = quer2 ? (h.tuer === 'n' ? h.y : h.y + h.h) : h.y + off + 0.5;
+    const doppel = ['gasthaus', 'scheune', 'rathaus', 'tempel', 'lagerhaus', 'stall', 'kaserne'].includes(h.art);
+    objects.push(stampAt(doppel ? 'p:door2' : 'p:door', dx + (doppel && quer2 ? 0.5 : 0), dy + (doppel && !quer2 ? 0.5 : 0), { r: quer2 ? 0 : 90 }));
+    const R = { x: h.x, y: h.y, w: h.w, h: h.h };
+    const PH = new Platz(W, H).nurIn((x, y) => x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h);
+    PH.nimm([dx - 1.3, dy - 1.3, dx + 1.3, dy + 1.3]);
+    EINRICHTEN(h.art)(objects, PH, R, h.tuer);
+    // vor der Tür: Fass, Kisten, Laterne
+    const nahTuer = () => { const a = rnd(0, TAU); return { x: dx + Math.cos(a) * rnd(1.1, 1.9), y: dy + Math.sin(a) * rnd(1.1, 1.9) }; };
+    if (h.art !== 'wohnhaus' || chance(0.3)) streue(objects, P, nahTuer, [...FASS, ...KISTE, ...SACK], randInt(1, 2), { s: [1.1, 1.3], tries: 5 });
+    if (chance(h.art === 'wohnhaus' ? 0.25 : 0.6)) objects.push(stampAt('p:torch', dx + (quer2 ? 0.9 : 0), dy + (quer2 ? 0 : 0.9), { s: 1.4 }));
+    // Namen
+    const name = h.art !== 'wohnhaus' && h.art !== 'scheune' ? nimmName(h.art, namen) : null;
+    if (name) ort(name, h.x + h.w / 2, h.y + h.h / 2, prunk || h.art === 'gasthaus' ? 0.95 : 0.75);
+  }
+
+  // ── Hinterhöfe: Gärten, Brunnen, Holzstapel, Bäume in den Freiflächen der Stadt ──
+  const hof = () => {
+    const x = rnd(2, W - 2);
+    const y = rnd(2, H - 2);
+    if (!inStadt(x, y, mitMauer ? 0.92 : 0.98) || nass(x, y)) return null;
+    const i = idx(Math.floor(x), Math.floor(y));
+    return S[i] || G[i] ? null : { x, y };
+  };
+  const hofN = Math.round((Math.PI * rx * ry) / 110);
+  streue(objects, P, hof, [...ids(/^gemuesebeet$/), 'p:well', ...ids(/^(holzstapel|heuhaufen|kornsaecke|handkarren|bienenstoecke|huehnerstall)$/), 'ph:wooden_picnic_table', ...FASS], hofN, { s: [0.9, 1.1], tries: 12, pad: 0.3 });
+  streue(objects, P, hof, [...SETS.laubbaum.keys], Math.round(hofN * 0.6), { s: [0.55, 0.8], tries: 10, pad: 0.4 });
+  streue(objects, null, hof, [...SETS.busch.keys, ...SETS.blume.keys], hofN * 2, { s: [0.8, 1.6], tries: 4 });
+
+  // ── Markt: Brunnen, Stände, Zelte, Karren ──
+  const PP = new Platz(W, H);
+  for (const h of haeuser) PP.nimm([h.x - 0.5, h.y - 0.5, h.x + h.w + 0.5, h.y + h.h + 0.5]);
+  const brunnen = setze(objects, PP, 'ph:stadtbrunnen', mp.x, mp.y, { s: 1.1 }) || setze(objects, PP, 'p:fountain', mp.x, mp.y, { s: 1.2 });
+  void brunnen;
+  const amPlatz = (f0, f1) => () => { const a = rnd(0, TAU); const d = rnd(f0, f1) * pr; return { x: mp.x + Math.cos(a) * d, y: mp.y + Math.sin(a) * d * 0.85 }; };
+  const STAENDE = ['ph:stand_gemuese', 'ph:stand_brot', 'ph:stand_gewuerze', 'ph:stand_toepfer', ...ids(/^stand_(stoffe|fisch|waffen|fleisch)$/)];
+  for (let i = 0, n = clamp(Math.round(pr * 1.4), 4, 14); i < n; i++) {
+    for (let t = 0; t < 12; t++) {
+      const p = amPlatz(0.45, 0.88)();
+      if (setze(objects, PP, pick(STAENDE), p.x, p.y, { r: faceTo(mp.x - p.x, mp.y - p.y), s: 1, pad: 0.35 })) break;
+    }
+  }
+  streue(objects, PP, amPlatz(0.5, 0.9), ['ph:haendlerzelt'], clamp(Math.round(pr / 3), 1, 3), { s: [0.9, 1.05], rot: false, pad: 0.3 });
+  streue(objects, PP, amPlatz(0.3, 0.9), ['ph:handkarren', 'ph:kornsaecke', 'ph:kistenstapel', ...KISTE, ...FASS], Math.round(pr * 1.2), { s: [0.9, 1.2] });
+  streue(objects, PP, amPlatz(0.85, 1.05), ['ph:painted_wooden_bench'], randInt(2, 4), { s: [1.3, 1.4] });
+  for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + 0.4; objects.push(stampAt('p:torch', mp.x + Math.cos(a) * pr * 0.95, mp.y + Math.sin(a) * pr * 0.8, { s: 1.5 })); }
+  ort('Marktplatz', mp.x, mp.y - pr * 0.85 - 0.3, 1);
+
+  // ── Hafen: Stege, Boote ──
+  if (art === 'hafen') {
+    const n = clamp(Math.round(M / 18), 2, 6);
+    for (let i = 0; i < n; i++) {
+      const k = meer.pts[Math.floor(((i + 1) / (n + 1)) * meer.pts.length)];
+      const [ax, ay] = k;
+      const into = kuesteSeite === 'n' ? [0, -1] : kuesteSeite === 's' ? [0, 1] : kuesteSeite === 'w' ? [-1, 0] : [1, 0];
+      const L = rnd(5, 9);
+      const b = [ax + into[0] * L, ay + into[1] * L];
+      terrain.push({ id: uid(6), op: 'add', kind: 'brush', w: 1.8, mat: 'tex:wood_floor_deck', pts: flat([[ax - into[0] * 1.5, ay - into[1] * 1.5], b]) });
+      const rot = into[0] ? 90 : 0;
+      for (const sd of [-1, 1]) {
+        const bx = (ax + b[0]) / 2 + (into[1] ? sd * 2.4 : 0);
+        const by = (ay + b[1]) / 2 + (into[0] ? sd * 2.4 : 0);
+        if (chance(0.7)) objects.push(stampAt(chance(0.5) ? 'ph:segelboot' : 'p:rowboat', bx, by, { r: rot + (sd > 0 ? 0 : 180), s: chance(0.5) ? 1 : 0.9 }));
+      }
+      objects.push(stampAt(pick(FASS), b[0] - into[0] * 0.8 + (into[1] ? 0.5 : 0), b[1] - into[1] * 0.8 + (into[0] ? 0.5 : 0), { s: 1.2 }));
+    }
+    const k = meer.pts[Math.floor(meer.pts.length / 2)];
+    ort('Hafen', k[0], k[1] + (kuesteSeite === 'n' ? 2.5 : kuesteSeite === 's' ? -2.5 : 0), 1);
+  }
+  // ── Mühle am Fluss ──
+  if (fluss) {
+    for (let t = 0; t < 60; t++) {
+      const p = aufWeg(fluss.pts, rnd(0.15, 0.85));
+      const nx = -p.dy;
+      const ny = p.dx;
+      const d = fluss.w / 2 + 3.4;
+      const mx = Math.round(p.x + nx * d - 2.5);
+      const my = Math.round(p.y + ny * d - 2.5);
+      if (mx < 1 || my < 1 || mx + 5 > W - 1 || my + 5 > H - 1 || !P.frei([mx - 0.5, my - 0.5, mx + 5.5, my + 5.5])) continue;
+      P.nimm([mx - 0.5, my - 0.5, mx + 5.5, my + 5.5]);
+      shapes.push({ id: uid(6), op: 'add', kind: 'rect', pts: [mx, my, mx + 5, my + 5], tex: 'weathered_planks', roof: 'thatch_roof_angled' });
+      objects.push(stampAt('p:door', mx + 2.5, my + (ny > 0 ? 5 : 0), { r: 0 }));
+      HAUS_EINRICHTUNG.scheune(objects, new Platz(W, H).nurIn((x, y) => x >= mx && x < mx + 5 && y >= my && y < my + 5), { x: mx, y: my, w: 5, h: 5 }, 'n');
+      if (ids(/^wasserrad$/).length) objects.push(stampAt('ph:wasserrad', p.x + nx * (fluss.w / 2 - 0.4), p.y + ny * (fluss.w / 2 - 0.4), { r: Math.round((Math.atan2(p.dy, p.dx) * 180) / Math.PI), s: 0.9 }));
+      ort('Mühle', mx + 2.5, my + 2.5, 0.75);
+      break;
+    }
+  }
+
+  // ── Außerhalb: Felder, Windmühle, Friedhof, Bäume ──
+  const draussen = (x, y) => !inStadt(x, y, mitMauer ? 1.12 : 1.02);
+  const felder = clamp(Math.round(area / 1400), 1, 8);
+  for (let i = 0; i < felder; i++) {
+    for (let t = 0; t < 40; t++) {
+      const fw = randInt(6, 12);
+      const fh = randInt(5, 9);
+      const fx = randInt(1, W - fw - 1);
+      const fy = randInt(1, H - fh - 1);
+      if (!draussen(fx, fy) || !draussen(fx + fw, fy + fh) || !draussen(fx + fw, fy) || !draussen(fx, fy + fh)) continue;
+      if (!P.frei([fx - 0.5, fy - 0.5, fx + fw + 0.5, fy + fh + 0.5])) continue;
+      P.nimm([fx - 0.5, fy - 0.5, fx + fw + 0.5, fy + fh + 0.5]);
+      terrain.push({ id: uid(6), op: 'add', kind: 'rect', mat: pick(['tex:getreidefeld', 'tex:getreidefeld', 'tex:farm_soil', ...ids(/^gemuesefeld$/).map(() => 'tex:gemuesefeld')]), pts: [fx, fy, fx + fw, fy + fh] });
+      zaun(objects, fx, fy, fw - (fw % 2), fh - (fh % 2));
+      break;
+    }
+  }
+  if (ids(/^windmuehle$/).length) {
+    for (let t = 0; t < 60; t++) {
+      const x = rnd(4, W - 4);
+      const y = rnd(4, H - 4);
+      if (!draussen(x, y) || !P.frei([x - 3, y - 3, x + 3, y + 3])) continue;
+      P.nimm([x - 3, y - 3, x + 3, y + 3]);
+      objects.push(stampAt('ph:windmuehle', x, y, { r: randInt(0, 359) }));
+      ort('Windmühle', x, y - 2.6, 0.7);
+      break;
+    }
+  }
+  if (area >= 4000) {
+    for (let t = 0; t < 60; t++) {
+      const gw = randInt(6, 9);
+      const gh = randInt(5, 7);
+      const gx = randInt(2, W - gw - 2);
+      const gy = randInt(2, H - gh - 2);
+      if (!draussen(gx, gy) || !draussen(gx + gw, gy + gh) || !P.frei([gx - 0.5, gy - 0.5, gx + gw + 0.5, gy + gh + 0.5])) continue;
+      P.nimm([gx - 0.5, gy - 0.5, gx + gw + 0.5, gy + gh + 0.5]);
+      zaun(objects, gx, gy, gw - (gw % 2), gh - (gh % 2));
+      for (let yy = gy + 1.2; yy < gy + gh - 0.8; yy += 2) for (let xx = gx + 1.2; xx < gx + gw - 0.8; xx += 1.4) if (chance(0.75)) objects.push(stampAt(pick(['ph:grab_platte', ...ids(/^grab_huegel$/)]), xx, yy, { s: 0.75 }));
+      ort('Friedhof', gx + gw / 2, gy - 0.6, 0.7);
+      break;
+    }
+  }
+  // Natur
+  const frei = () => { const x = rnd(0, W); const y = rnd(0, H); return P.frei([x - 0.4, y - 0.4, x + 0.4, y + 0.4]) && !(meer && inPoly(flat(meer.poly), x, y)) ? { x, y } : null; };
+  baeume(objects, W, H, Math.round(area / 45), { min: 2.8, ok: (x, y) => P.frei([x - 0.9, y - 0.9, x + 0.9, y + 0.9]) && !(meer && inPoly(flat(meer.poly), x, y)), sets: [['laubbaum', 0.8], ['jungbaum', 0.2]], s: 0.85 });
+  streue(objects, null, frei, SETS.busch.keys, Math.round(area / 40), { s: [0.8, 1.4], tries: 3 });
+  streue(objects, null, frei, SETS.gras.keys, Math.round(area / 10), { s: [1.4, 2.6], tries: 2 });
+  streue(objects, null, frei, SETS.blume.keys, Math.round(area / 30), { s: [1.2, 2], tries: 2 });
+  return base({ shapes, terrain, objects, labels, outdoor: true, ground: 'leafy_grass', floorTex: 'old_wood_floor', wallTex: pick(['old_stone_wall', 'stone_wall', 'clay_plaster', 'castle_brick_01']), dark: 0.08, soft: 0.3 });
+}
+
 export const SCRAWL_GENERATORS = {
   leer: { label: 'Leer', fn: () => base({}) },
   dungeon: { label: 'Dungeon (Räume & Gänge)', fn: genDungeon },
@@ -1511,4 +2221,53 @@ export const SCRAWL_GENERATORS = {
   lichtung: { label: 'Waldlichtung mit Lager', fn: genClearing },
   wald: { label: 'Dichter Wald', fn: genForest },
   dorf: { label: 'Dorf', fn: genVillage },
+  stadt: { label: 'Stadt', fn: genCity },
 };
+
+// Optionen je Generator (Formular im Editor, „Neue Karte“ und MCP). Leer = der Generator entscheidet nach der Größe.
+// per = Fläche (Felder²), die eine Einheit braucht – daraus wächst die Karte, wenn mehr gewünscht ist, als passt.
+// min = Mindestgröße [Breite, Höhe] des Generators.
+export const GEN_OPTS = {
+  dungeon: { min: [16, 14], opts: [{ k: 'raeume', label: 'Räume', type: 'int', min: 2, max: 40, per: 75 }, { k: 'rundgang', label: 'Rundgänge', type: 'tri' }] },
+  hoehle: { min: [18, 16], opts: [{ k: 'kammern', label: 'Höhlenräume', type: 'int', min: 1, max: 30, per: 120 }, { k: 'see', label: 'Unterirdischer See', type: 'tri' }, { k: 'kluft', label: 'Kluft', type: 'tri' }] },
+  taverne: { min: [14, 12], opts: [{ k: 'separees', label: 'Séparées', type: 'int', min: 0, max: 8, per: 45, base: 280 }, { k: 'buehne', label: 'Bühne', type: 'tri' }, { k: 'lager', label: 'Lagerraum', type: 'tri' }] },
+  tempel: { min: [16, 14], opts: [{ k: 'art', label: 'Bauart', type: 'select', options: [['tempel', 'Tempel'], ['krypta', 'Krypta'], ['gruft', 'Gruft']] }] },
+  lichtung: { min: [20, 16], opts: [{ k: 'zelte', label: 'Zelte', type: 'int', min: 0, max: 12, per: 30, base: 250 }, { k: 'wasser', label: 'Wasser', type: 'select', options: [['bach', 'Bach'], ['teich', 'Teich'], ['keins', 'keins']] }] },
+  wald: { min: [16, 16], opts: [{ k: 'lichtungen', label: 'Lichtungen', type: 'int', min: 0, max: 10, per: 150 }, { k: 'weg', label: 'Weg', type: 'tri' }, { k: 'tuempel', label: 'Tümpel', type: 'tri' }, { k: 'dichte', label: 'Dichte', type: 'select', options: [['licht', 'licht'], ['mittel', 'mittel'], ['dicht', 'dicht']] }] },
+  dorf: { min: [30, 24], opts: [{ k: 'haeuser', label: 'Gebäude', type: 'int', min: 2, max: 60, per: 100 }, { k: 'fluss', label: 'Fluss', type: 'tri' }, { k: 'teich', label: 'Teich', type: 'tri' }, { k: 'pferch', label: 'Pferch', type: 'tri' }] },
+  stadt: { min: [STADT_MIN, STADT_MIN], opts: [{ k: 'art', label: 'Stadtart', type: 'select', options: Object.entries(STADT_ARTEN) }, { k: 'gebaeude', label: 'Gebäude', type: 'int', min: 12, max: 160, per: 120 }, { k: 'mauer', label: 'Stadtmauer', type: 'tri' }, { k: 'fluss', label: 'Fluss', type: 'tri' }] },
+};
+const gesetzt = (v) => v !== '' && v != null && Number.isFinite(Number(v));
+// Passende Kartengröße für Generator + Optionen: mindestens die Mindestgröße und groß genug für die gewünschten
+// Anzahlen (Seitenverhältnis bleibt, höchstens 200 × 200). → { w, h, grund } (grund = warum vergrößert wurde, sonst '')
+export function genSize(gen, W, H, opts = {}) {
+  const g = GEN_OPTS[gen];
+  let w = Math.round(W);
+  let h = Math.round(H);
+  let grund = '';
+  if (!g) return { w, h, grund };
+  if (w < g.min[0] || h < g.min[1]) {
+    w = Math.max(w, g.min[0]);
+    h = Math.max(h, g.min[1]);
+    grund = `Mindestgröße für „${SCRAWL_GENERATORS[gen]?.label || gen}“: ${g.min[0]} × ${g.min[1]} Felder`;
+  }
+  for (const o of g.opts) {
+    if (o.type !== 'int' || !o.per || !gesetzt(opts[o.k])) continue;
+    const n = Number(opts[o.k]);
+    const need = (o.base || 0) + n * o.per;
+    if (w * h >= need) continue;
+    const f = Math.sqrt(need / (w * h));
+    w = Math.ceil(w * f);
+    h = Math.ceil(h * f);
+    grund = `${n} ${o.label} brauchen etwa ${need} Felder Fläche`;
+  }
+  return { w: Math.min(200, w), h: Math.min(200, h), grund };
+}
+// Wie viele passen ungefähr auf diese Größe? (Richtwert im Formular)
+export const genFits = (o, W, H) => (o.per ? clamp(Math.floor((W * H - (o.base || 0)) / o.per), o.min || 0, o.max || 999) : null);
+// Generator mit Optionen ausführen – Größe vorher anpassen. → Kartenfelder inkl. w/h
+export function generate(gen, W, H, opts = {}) {
+  const g = SCRAWL_GENERATORS[gen] || SCRAWL_GENERATORS.leer;
+  const { w, h } = genSize(gen, W, H, opts);
+  return { ...g.fn(w, h, opts), w, h };
+}

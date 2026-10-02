@@ -7,6 +7,7 @@ import { db } from '../core/db.js';
 import { openView } from '../core/workspace.js';
 import {
   saveCombat, makeCombatant, combatantsFromMonsters, combatantFromCharacter, sortByInit, EMPTY_COMBAT, hpState, advanceTurn, applyHp as applyHpCore, resort, isOut, pushCharHp,
+  gmDocId, pubDocId, NO_MAP, INDEX_DOC, finishCombat,
 } from '../core/combat.js';
 import { sendEvent } from '../core/relay.js';
 import { makeCtx } from '../core/actions.js';
@@ -17,7 +18,7 @@ import { roll, modifier, fmtMod } from '../lib/dice.js';
 import { CONDITIONS, EXTRA_MARKERS } from '../data/rules5e.js';
 import { ViewFrame } from '../ui/frame.js';
 import { Icon, IconBtn, Btn, Field, Select, Toggle, Statblock, openMenu, openModal, promptDialog, confirmDialog, toast, Empty } from '../ui/components.js';
-import { useCol, useDoc } from '../core/hooks.js';
+import { useCol, useDoc, useVisibleCol } from '../core/hooks.js';
 import { CombatLogList } from '../ui/combatlog.js';
 import { now, debounce, fmtTime } from '../lib/util.js';
 
@@ -29,6 +30,29 @@ function hpClass(c) {
 export function CombatView(props) {
   const gm = useStore(app, (s) => s.role === 'gm' && !s.viewAsPlayer);
   return gm ? html`<${GmCombat} ...${props} />` : html`<${PlayerCombat} ...${props} />`;
+}
+
+// Je Karte läuft ein eigener Kampf: welcher wird angezeigt? params.mapId, sonst der zuletzt aktive aus dem Verzeichnis
+function useCombatChoice(params) {
+  const cid = useStore(app, (s) => s.cid);
+  const ix = useDoc(cid ? col('combat') : null, INDEX_DOC);
+  const maps = useVisibleCol('maps');
+  const [mapSel, setMapSel] = useState(params?.mapId || null);
+  const gewählt = useRef(!!params?.mapId || !!params?.tracker);
+  const entries = Object.entries(ix?.maps || {}).map(([m, v]) => ({ mapId: m === NO_MAP ? null : m, ...v })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  useEffect(() => {
+    if (gewählt.current || !ix) return;
+    const act = entries.find((e) => e.active);
+    if (act) { gewählt.current = true; setMapSel(act.mapId); }
+  }, [ix]);
+  const nameOf = (m) => (m ? (maps || []).find((x) => x.id === m)?.name || 'Karte' : 'Ohne Karte (nur Tracker)');
+  const options = [...new Set([mapSel, ...entries.map((e) => e.mapId)].map((m) => m || NO_MAP))].map((m) => {
+    const id = m === NO_MAP ? null : m;
+    const e = entries.find((x) => (x.mapId || NO_MAP) === m);
+    return { value: m, label: `${nameOf(id)}${e?.active ? ` · läuft (Runde ${e.round || 1})` : ''}` };
+  });
+  const pick = (v) => { gewählt.current = true; setMapSel(v === NO_MAP ? null : v); };
+  return { mapSel, pick, options, nameOf };
 }
 
 // ───────────────────────── SL-Ansicht ─────────────────────────
@@ -131,9 +155,10 @@ function CombatantRow({ c, current, selected, onSelect, onHp, onMenu, onInit, on
   </div>`;
 }
 
-function GmCombat({ tabId }) {
+function GmCombat({ tabId, params }) {
   const cid = useStore(app, (s) => s.cid);
-  const remote = useDoc(cid ? col('combat') : null, 'gm');
+  const wahl = useCombatChoice(params);
+  const remote = useDoc(cid ? col('combat') : null, gmDocId(wahl.mapSel));
   const [st, setSt] = useState(null);
   const [sel, setSel] = useState(null);
   const [showLog, setShowLog] = useState(false);
@@ -142,13 +167,14 @@ function GmCombat({ tabId }) {
   stRef.current = st;
   const saveDeb = useMemo(() => debounce((s) => saveCombat(s).then(() => { dirty.current = false; }).catch((e) => toast(`Speichern fehlgeschlagen: ${e.message}`, 'error')), 300), [cid]);
 
+  useEffect(() => { dirty.current = false; setSt(null); }, [wahl.mapSel]);
   useEffect(() => {
     if (remote === undefined) return;
-    if (!dirty.current) setSt(remote ? { ...EMPTY_COMBAT, ...remote } : { ...EMPTY_COMBAT });
+    if (!dirty.current) setSt(remote ? { ...EMPTY_COMBAT, ...remote, mapId: wahl.mapSel } : { ...EMPTY_COMBAT, mapId: wahl.mapSel });
   }, [remote]);
 
   const update = (fn) => setSt((cur) => {
-    const base = structuredClone(cur || EMPTY_COMBAT);
+    const base = structuredClone(cur || { ...EMPTY_COMBAT, mapId: wahl.mapSel });
     const next = fn(base) || base;
     next.log = (next.log || []).slice(-100);
     dirty.current = true;
@@ -223,15 +249,13 @@ function GmCombat({ tabId }) {
   const end = async () => {
     const removeDefeated = await confirmDialog('Kampf beenden. Besiegte Gegner aus der Liste entfernen?', { ok: 'Ja, entfernen', cancel: 'Nein, behalten' });
     update((x) => {
-      x.active = false;
+      finishCombat(x, ' (SL)');
       if (removeDefeated) x.combatants = x.combatants.filter((c) => !isOut(c));
-      x.turn = 0;
-      log(x, 'Kampf beendet');
       return x;
     });
   };
   const clearAll = async () => {
-    if (await confirmDialog('Alle Kämpfer entfernen und den Tracker zurücksetzen?', { danger: true, ok: 'Zurücksetzen' })) update(() => ({ ...EMPTY_COMBAT, log: [] }));
+    if (await confirmDialog('Alle Kämpfer entfernen und den Tracker zurücksetzen?', { danger: true, ok: 'Zurücksetzen' })) update(() => ({ ...EMPTY_COMBAT, mapId: wahl.mapSel, log: [] }));
   };
 
   const addMenu = (e) => openMenu(e, [
@@ -312,6 +336,7 @@ function GmCombat({ tabId }) {
       <${IconBtn} icon="trash" title="Zurücksetzen" onClick=${clearAll} />
     </div>`}>
     <div class="combat-head">
+      ${wahl.options.length > 1 ? html`<${Select} value=${wahl.mapSel || NO_MAP} options=${wahl.options} onChange=${wahl.pick} style="width:auto;max-width:260px" title="Je Karte läuft ein eigener Kampf" />` : html`<span class="small muted">${wahl.nameOf(wahl.mapSel)}</span>`}
       <span class="round-badge">Runde ${st.round || 1}</span>
       ${st.active
         ? html`<${Btn} kind="primary" icon="skip-forward" onClick=${nextTurn}>Nächster Zug<//><${IconBtn} icon="skip-back" title="Vorheriger Zug" onClick=${prevTurn} /><${Btn} kind="ghost" icon="stop" onClick=${end}>Beenden<//>`
@@ -319,7 +344,7 @@ function GmCombat({ tabId }) {
       <${Btn} icon="d20" onClick=${() => rollInit(false)}>NPC-Initiative<//>
       <${Btn} icon="plus" onClick=${addMenu}>Hinzufügen<//>
       <${Btn} icon="users" onClick=${sidesDialog} title="Wer kämpft gegen wen? (Spieler gegen Spieler)">Seiten<//>
-      ${st.mapId ? html`<${Btn} icon="map" onClick=${() => openView('map', { id: st.mapId })}>Kampfkarte<//>` : null}
+      ${st.mapId ? html`<${Btn} icon="map" onClick=${() => openView('map', { id: st.mapId, play: 1 })}>Kampfkarte<//>` : null}
       ${current ? html`<span class="grow"></span><span class="small muted">Am Zug: <b>${current.name}</b></span>` : null}
     </div>
     ${showLog ? html`<div class="card" style="margin:12px 16px 0"><div class="combat-log"><${CombatLogList} lines=${st.log || []} gm=${true} reverse=${true} time=${fmtTime} sideOf=${(id) => { const c = st.combatants.find((o) => o.id === id); return c ? c.team || (c.isPC || c.ally ? 'pc' : 'npc') : ''; }} /></div></div>` : null}
@@ -337,33 +362,35 @@ function GmCombat({ tabId }) {
 }
 
 // ───────────────────────── Spieler-Ansicht ─────────────────────────
-function PlayerCombat({ tabId }) {
+function PlayerCombat({ tabId, params }) {
   const cid = useStore(app, (s) => s.cid);
   const me = myUid();
-  const pub = useDoc(cid ? col('combat') : null, 'public');
+  const wahl = useCombatChoice(params);
+  const pub = useDoc(cid ? col('combat') : null, pubDocId(wahl.mapSel));
   const myChars = useCol(me ? `users/${me}/characters` : null);
   const list = pub?.list || [];
   const cur = list.find((c) => c.id === pub?.currentId);
   const mine = cur && cur.ownerUid === me;
   const myChar = (myChars || []).find((c) => c.campaignId === cid);
   const endTurn = async () => {
-    await sendEvent({ type: 'endTurn' });
+    await sendEvent({ type: 'endTurn', mapId: wahl.mapSel });
     toast('Zug beendet', 'success');
   };
   const sendInit = async () => {
     const bonus = modifier(myChar?.abilities?.dex ?? 10) + (Number(myChar?.initBonus) || 0);
-    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: myChar?.name });
-    if (r) await sendEvent({ type: 'init', value: r.total, charId: myChar?.id || null });
+    const r = doRoll(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { label: 'Initiative', character: myChar?.name, kind: 'init', combat: true });
+    if (r) await sendEvent({ type: 'init', value: r.total, charId: myChar?.id || null, mapId: wahl.mapSel });
   };
   return html`<${ViewFrame} tabId=${tabId} title="Kampf">
     <div class="page narrow stack lg">
+      ${wahl.options.length > 1 ? html`<${Select} value=${wahl.mapSel || NO_MAP} options=${wahl.options} onChange=${wahl.pick} />` : null}
       ${!pub?.active && !list.length ? html`<${Empty} icon="sword" title="Gerade kein Kampf">Sobald die Spielleitung einen Kampf startet, siehst du hier die Reihenfolge.<//>` : html`
         <div class=${`waiting-for${mine ? ' me' : ''}`} style="font-size:16px">
           <span class="round-badge">Runde ${pub?.round || 1}</span>
           ${mine ? html`<b>Du bist am Zug!</b><span class="grow"></span><${Btn} kind="primary" icon="check" onClick=${endTurn}>Zug beenden<//>` : html`<span>Am Zug: <b>${cur?.name || '…'}</b></span>`}
         </div>
         <div class="row"><${Btn} icon="d20" onClick=${sendInit}>Initiative würfeln & melden<//><${Btn} icon="user" disabled=${!myChar} onClick=${() => openView('character', { id: myChar.id, owner: me, title: myChar.name })}>Mein Bogen<//>
-          ${pub?.mapId ? html`<${Btn} kind="primary" icon="map" onClick=${() => openView('map', { id: pub.mapId })}>Zur Kampfkarte<//>` : null}</div>
+          ${pub?.mapId ? html`<${Btn} kind="primary" icon="map" onClick=${() => openView('map', { id: pub.mapId, play: 1 })}>Zur Kampfkarte<//>` : null}</div>
         <div class="combatants" style="padding:0">
           ${list.map((c) => html`<div class=${`cbt ${c.isPC ? 'pc' : 'npc'}${c.id === pub.currentId ? ' current' : ''}${c.down ? ' down' : ''}`} key=${c.id}>
             <div class="init">${c.init ?? '–'}</div>

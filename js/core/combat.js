@@ -1,5 +1,8 @@
-// Kampfzustand: vollständiger SL-Zustand (combat/gm) + öffentliche Projektion für Spieler (combat/public).
-// Gemeinsame Logik für Kampf-Tracker und Kampfkarte; die Regeln (Zugwechsel, Schaden, Zustände) stehen in engine.js.
+// Kampfzustand – ein Kampf je Karte: vollständiger SL-Zustand (combat/gm~<kartenId>) + öffentliche Projektion für
+// Spieler (combat/pub~<kartenId>). Ohne Karte (reiner Kampf-Tracker) steht „_“ statt der Karten-ID.
+// combat/public ist das Verzeichnis für alle Mitglieder: { maps: { <kartenId>: { active, round, name, updatedAt } },
+// prompts: [Rückfragen an Spieler] }. Gemeinsame Logik für Kampf-Tracker und Kampfkarte; die Regeln (Zugwechsel,
+// Schaden, Zustände) stehen in engine.js.
 import { db } from './db.js';
 import { app, col, bridge } from './app.js';
 import { uid, now } from '../lib/util.js';
@@ -8,8 +11,70 @@ import { normalizeMonster } from '../ui/statblock.js';
 
 export const EMPTY_COMBAT = { active: false, round: 1, turn: 0, combatants: [], log: [], mapId: null, zones: [], results: [], prompts: [] };
 
-export async function loadCombat() {
-  return (await db.get(col('combat'), 'gm')) || { ...EMPTY_COMBAT };
+export const NO_MAP = '_';
+const mk = (m) => (m && m !== NO_MAP ? String(m) : NO_MAP);
+export const gmDocId = (m) => `gm~${mk(m)}`;
+export const pubDocId = (m) => `pub~${mk(m)}`;
+export const INDEX_DOC = 'public';
+
+// Karte des Ereignisses, das gerade ausgewertet wird (relay.js setzt sie je Ereignis – die Ereignisse laufen
+// nacheinander). Alle anderen Aufrufer geben die Karte ausdrücklich mit.
+let curMap = null;
+export function setCombatMap(m) { curMap = m && m !== NO_MAP ? m : null; }
+export const combatMap = () => curMap;
+
+// Älterer Stand: ein einziges Dokument „gm“ für die ganze Kampagne → einmalig zur passenden Karte umziehen
+let legacyDone = null;
+async function fromLegacy(mapId) {
+  const cid = app.get().cid;
+  if (legacyDone === cid || app.get().role !== 'gm') return null;
+  const old = await db.get(col('combat'), 'gm').catch(() => null);
+  if (!old) { legacyDone = cid; return null; }
+  if (mk(old.mapId) !== mk(mapId)) return null;
+  legacyDone = cid;
+  const st = { ...old, mapId: mapId || null };
+  await db.set(col('combat'), gmDocId(mapId), clean(st)).catch(() => {});
+  await db.remove(col('combat'), 'gm').catch(() => {});
+  return st;
+}
+
+export async function loadCombat(mapId = curMap) {
+  const st = (await db.get(col('combat'), gmDocId(mapId))) || (await fromLegacy(mapId));
+  return st ? { ...EMPTY_COMBAT, ...st, mapId: mapId && mapId !== NO_MAP ? mapId : null } : { ...EMPTY_COMBAT, mapId: mapId && mapId !== NO_MAP ? mapId : null };
+}
+// Verzeichnis: auf welchen Karten läuft gerade ein Kampf? → [{ mapId, active, round, name }]
+export async function combatIndex() {
+  const ix = await db.get(col('combat'), INDEX_DOC).catch(() => null);
+  return Object.entries(ix?.maps || {}).map(([m, v]) => ({ mapId: m === NO_MAP ? null : m, ...v })).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+// ───────────────────────── Ausgang ─────────────────────────
+// Seiten: von der SL gesetzte Teams schlagen die Einteilung Helden ↔ Gegner; „n“ = unbeteiligt (zählt nicht)
+export const sideOfCombatant = (c) => c.team || (c.isPC || c.ally ? 'pc' : 'npc');
+// Steht eine Seite noch? (lebt oder macht noch Todesrettungswürfe)
+export const stillStanding = (c) => !c.dead && !c.vanish && !(c.hp != null && c.hp <= 0 && (c.stable || !c.isPC));
+// Ist der Kampf entschieden? → Seite, die übrig bleibt ('pc', 'npc', 'a' …), sonst null
+export function combatWinner(x) {
+  const list = (x.combatants || []).filter((c) => !c.vanish && sideOfCombatant(c) !== 'n');
+  const sides = [...new Set(list.map(sideOfCombatant))];
+  if (sides.length < 2) return null;
+  const left = sides.filter((s) => list.some((c) => sideOfCombatant(c) === s && stillStanding(c)));
+  if (left.length > 1) return null;
+  return left[0] || 'none';
+}
+const AUSGANG_MS = 3000;
+export function finishCombat(x, why = '') {
+  x.active = false;
+  x.turn = 0;
+  x.zones = [];
+  x.prompts = [];
+  // Der nächste Kampf beginnt mit neuer Initiative
+  for (const c of x.combatants || []) { c.eco = null; c.init = null; c.dsPending = null; }
+  const o = x.outcome;
+  x.outcome = null;
+  x.log = x.log || [];
+  x.log.push({ ts: now(), text: `🏁 Kampf beendet${why || (o ? (o.winner === 'pc' ? ' – Sieg' : o.winner === 'none' ? '' : ' – Niederlage') : '')}`, kind: 'round', e: { t: 'round', n: 0, end: true } });
+  return x;
 }
 
 export function hpState(c) {
@@ -63,13 +128,14 @@ export function projection(state, knownKeys = new Set()) {
       conditions: (c.conditions || []).map(condPub), effects: (c.effects || []).map(effPub), concentration: concPub(c),
       hpState: hpState(c), down: c.hp <= 0, dead: !!c.dead, stable: !!c.stable, surprised: !!c.surprised, color: c.color || null,
       eco: c.eco || null, reaction: c.reaction !== false, turnNo: c.turnNo || 0,
-      art: c.statblock ? { name: c.statblock.name, type: c.statblock.type || '', image: c.statblock.image || null, cr: c.statblock.cr ?? null } : null,
+      art: c.statblock ? { name: c.statblock.name, type: c.statblock.type || '', image: c.statblock.image || null, cr: c.statblock.cr ?? null, size: c.statblock.size || '', sizeKey: c.statblock.sizeKey || '' } : null,
       ...(c.isPC || c.showHp || knownIds.has(c.id) ? { hp: c.hp, maxHp: c.maxHp, tempHp: c.tempHp || 0 } : {}),
-      ...(c.isPC ? { ac: c.ac, deathSaves: c.deathSaves || { s: 0, f: 0 } } : knownIds.has(c.id) ? { ac: c.ac, known: true } : {}),
+      ...(c.isPC ? { ac: c.ac, deathSaves: c.deathSaves || { s: 0, f: 0 }, dsPending: c.dsPending || null } : knownIds.has(c.id) ? { ac: c.ac, known: true } : {}),
     })),
     zones: (state.zones || []).map((z) => ({ id: z.id, name: z.name, src: z.src || null, tpl: z.tpl, follow: z.follow || null, color: z.color || null, obscure: !!z.obscure, difficult: z.difficult || 0, silence: !!z.silence, barrier: !!z.barrier, opaque: !!z.opaque })),
     results: (state.results || []).slice(-10),
-    prompts: (state.prompts || []).filter((p) => (p.expires || 0) > t),
+    outcome: state.outcome || null,
+    startedAt: state.startedAt || null,
     // Rechenweg (tip) sehen alle – SL-Zusätze (gm, gtip: RK und TP von Monstern) nicht
     // RK/TP im Rechenweg nur, wenn das Ziel schon im Bestiarium der Spieler steht
     log: (state.log || []).slice(-80).map((l) => {
@@ -82,14 +148,27 @@ export function projection(state, knownKeys = new Set()) {
 }
 
 // Firestore kennt kein undefined – JSON räumt es weg (und kopiert dabei tief)
-const clean = (o) => JSON.parse(JSON.stringify(o));
+function clean(o) { return JSON.parse(JSON.stringify(o)); }
 
+const indexSeen = new Map();
 export async function saveCombat(state) {
-  const s = clean({ ...state, log: (state.log || []).slice(-150), results: (state.results || []).slice(-14), updatedAt: now() });
-  await db.batch([
-    { op: 'set', col: col('combat'), id: 'gm', data: s },
-    { op: 'set', col: col('combat'), id: 'public', data: projection(s, await knownKills()) },
-  ]);
+  const s = clean({ ...state, prompts: [], log: (state.log || []).slice(-150), results: (state.results || []).slice(-14), updatedAt: now() });
+  const ops = [
+    { op: 'set', col: col('combat'), id: gmDocId(s.mapId), data: s },
+    { op: 'set', col: col('combat'), id: pubDocId(s.mapId), data: projection(s, await knownKills()) },
+  ];
+  // Verzeichnis nur schreiben, wenn sich dort etwas ändert
+  const cur = s.combatants?.[s.turn];
+  const entry = { active: !!s.active, round: s.round || 1, n: (s.combatants || []).length, cur: s.active && cur && !cur.hidden ? cur.name : '',
+    // offene Todesrettungswürfe – würfelt ui/deathsave.js beim Besitzer, egal welche Ansicht offen ist
+    ds: (s.combatants || []).filter((c) => c.isPC && c.dsPending && !c.dead).map((c) => ({ id: c.id, owner: c.ownerUid || null, at: c.dsPending.at, adv: !!c.dsPending.adv, name: c.name })) };
+  const key = `${app.get().cid}|${mk(s.mapId)}`;
+  const sig = JSON.stringify(entry);
+  if (indexSeen.get(key) !== sig) {
+    indexSeen.set(key, sig);
+    ops.push({ op: 'set', col: col('combat'), id: INDEX_DOC, data: { maps: { [mk(s.mapId)]: { ...entry, updatedAt: now() } } }, merge: true });
+  }
+  await db.batch(ops);
   return s;
 }
 
@@ -98,13 +177,29 @@ export async function saveCombat(state) {
 let lock = Promise.resolve();
 const goneTokens = new Set();
 const sheetKey = (c) => `${c.hp}|${c.tempHp || 0}|${c.deathSaves?.s || 0}|${c.deathSaves?.f || 0}|${c.dead ? 1 : 0}|${c.concentration?.name || ''}`;
-export function mutateCombat(fn) {
+const ausgangUhr = new Map();
+export function mutateCombat(fn, mapId = curMap) {
   const run = lock.then(async () => {
-    const st = await loadCombat();
+    const st = await loadCombat(mapId);
     const base = { ...EMPTY_COMBAT, ...clean(st) };
     const before = new Map((st.combatants || []).map((c) => [c.id, sheetKey(c)]));
     const next = (await fn(base)) || base;
+    next.mapId = base.mapId;
+    // Kampf entschieden? 3 Sekunden „Gewonnen/Verloren“, dann endet er von selbst (zurück ins Erkunden)
+    if (next.active) {
+      const w = combatWinner(next);
+      if (!w) next.outcome = null;
+      else if (!next.outcome) next.outcome = { winner: w, at: now() };
+      if (next.outcome && now() - next.outcome.at > AUSGANG_MS + 1500) finishCombat(next);
+    } else next.outcome = null;
     const saved = await saveCombat(next);
+    const uhr = mk(saved.mapId);
+    if (saved.active && saved.outcome && !ausgangUhr.has(uhr)) {
+      ausgangUhr.set(uhr, setTimeout(() => {
+        ausgangUhr.delete(uhr);
+        mutateCombat((x) => (x.active && x.outcome ? finishCombat(x) : x), saved.mapId || NO_MAP).catch(() => {});
+      }, AUSGANG_MS + 200));
+    }
     for (const c of saved.combatants || []) if (c.isPC && before.has(c.id) && before.get(c.id) !== sheetKey(c)) pushCharHp(c);
     // Verschwundene Beschwörungen: Token von der Karte nehmen
     for (const c of saved.combatants || []) {
@@ -158,11 +253,12 @@ export function combatantFromCharacter({ owner, char }) {
   return c;
 }
 
-export async function addToCombat(list, text) {
-  const st = await loadCombat();
-  st.combatants = [...st.combatants, ...list];
-  st.log = [...(st.log || []), { ts: now(), text: text || `${list.length} Kämpfer hinzugefügt` }];
-  return saveCombat(st);
+export async function addToCombat(list, text, mapId = NO_MAP) {
+  return mutateCombat((st) => {
+    st.combatants = [...st.combatants, ...list];
+    st.log = [...(st.log || []), { ts: now(), text: text || `${list.length} Kämpfer hinzugefügt` }];
+    return st;
+  }, mapId);
 }
 
 export function sortByInit(list) {

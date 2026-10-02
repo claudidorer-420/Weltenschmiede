@@ -1,8 +1,10 @@
 // Was sehen die Spieler? Lichtkarte, Sichtfeld (Sichtlinie + Dunkelsicht) und erkundetes Gebiet.
-// Wird von der Kartenansicht benutzt: unerkundet = schwarz, erkundet aber gerade nicht sichtbar = 75 % dunkel.
+// Wird von der Kartenansicht benutzt: unerkundet = schwarz, erkundet aber gerade nicht sichtbar = 40 % dunkel (ERKUNDET_DUNKEL).
 import { pointInSight, rayFree, CELL_M } from './tactics.js';
 
 export const DARK_M = 18;                 // Dunkelsicht der meisten Völker: 18 m
+// Erkundet, aber gerade nicht im Blick: so stark abgedunkelt (0 = gar nicht, 1 = schwarz)
+export const ERKUNDET_DUNKEL = 0.4;
 export const cellsOf = (m) => (Number(m) || 0) / CELL_M;
 const idx = (w, x, y) => y * w + x;
 
@@ -54,6 +56,13 @@ export function lightMap(doc, grid, { glows = [] } = {}) {
 // Sicht nicht in Quadraten aus, sondern läuft an Kanten sauber entlang.
 const ZIELE = [[0.5, 0.5], [0.12, 0.12], [0.88, 0.12], [0.12, 0.88], [0.88, 0.88]];
 
+// viewer.dir (Grad, 0 = rechts) + viewer.fov (Grad): nur ein Kegel in Blickrichtung ist sichtbar – das eigene Feld immer
+const imKegel = (v, cx, cy, px, py) => {
+  if (v.dir == null || !v.fov || v.fov >= 360) return true;
+  const a = (Math.atan2(py - cy, px - cx) * 180) / Math.PI;
+  const diff = Math.abs((((a - v.dir) % 360) + 540) % 360 - 180);
+  return diff <= v.fov / 2 + 0.5;
+};
 export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
   const W = grid.w;
   const H = grid.h;
@@ -76,8 +85,8 @@ export function visibleCells(grid, licht, viewers, { limit = 0 } = {}) {
         if (d > max) continue;
         // Im Dunkeln reicht nur die Dunkelsicht; beleuchtete Felder sieht man, solange die Sicht frei ist
         if (!licht[i] && d > (v.dark || 0)) continue;
-        if (d <= 0.8) { out[i] = 1; continue; }
-        if (ZIELE.some(([fx, fy]) => rayFree(grid, cx, cy, x + fx, y + fy))) out[i] = 1;
+        if (d <= 0.8 || (x >= v.x && x < v.x + n && y >= v.y && y < v.y + n)) { out[i] = 1; continue; }
+        if (ZIELE.some(([fx, fy]) => imKegel(v, cx, cy, x + fx, y + fy) && rayFree(grid, cx, cy, x + fx, y + fy))) out[i] = 1;
       }
     }
   }

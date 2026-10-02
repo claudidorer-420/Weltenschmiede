@@ -1,0 +1,208 @@
+[
+ {
+  "id": "stand_stoffe",
+  "name": "Marktstand (gestreift)",
+  "en": "striped canvas market stall awning",
+  "look": "one flat rectangular canvas awning roof with broad deep blue and white stripes running front to back, a thin wooden pole tip at each of the four corners, a narrow strip of wooden counter with rolled bolts of crimson and saffron cloth visible along the front edge",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "stand_fisch",
+  "name": "Marktstand (grün)",
+  "en": "green canvas fishmonger stall awning",
+  "look": "one flat rectangular dark green canvas awning roof with a scalloped front hem, a wooden pole tip at each corner, a narrow wooden counter along the front edge holding a tray of silver fish on white crushed ice",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "stand_waffen",
+  "name": "Marktstand (Plane)",
+  "en": "grey canvas weapon stall awning",
+  "look": "one flat rectangular charcoal grey canvas awning roof with a wooden pole tip at each corner, a narrow wooden table along the front edge with steel swords and axes laid parallel and a round wooden shield",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "stand_fleisch",
+  "name": "Marktstand (Fleisch)",
+  "en": "red canvas butcher stall awning",
+  "look": "one flat rectangular dark red canvas awning roof with a wooden pole tip at each corner, a narrow thick wooden butcher block along the front edge with hams, sausages and a cleaver",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.5,
+  "block": 1
+ },
+ {
+  "id": "planwagen",
+  "name": "Planwagen",
+  "en": "covered wagon roof seen from above",
+  "look": "one long rounded rectangle of off-white canvas stretched over wooden hoops forming the wagon cover, four spoked wooden wheels peeking out at the four corners, a single long wooden shaft pointing forward from the front",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 3.4,
+  "block": 1
+ },
+ {
+  "id": "heuhaufen",
+  "name": "Heuhaufen",
+  "en": "round dome-shaped haystack",
+  "look": "one rounded dome of golden dry hay, a dense even surface of hay strands, slightly brighter at the top, soft irregular round outline",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.7,
+  "h": 1.7,
+  "rough": 1
+ },
+ {
+  "id": "heuballen",
+  "name": "Strohballen",
+  "en": "three rectangular straw bales",
+  "look": "exactly three rectangular golden straw bales lying side by side in one row, each tied with two strands of twine, nothing else",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 1,
+  "block": 1
+ },
+ {
+  "id": "holzstapel",
+  "name": "Brennholzstapel",
+  "en": "long woodpile of logs",
+  "look": "one long pile of bark-covered logs lying side by side, their lengths parallel, the rough brown bark tops visible from above, pale split faces in between",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2.4,
+  "h": 1,
+  "block": 1
+ },
+ {
+  "id": "amboss",
+  "name": "Amboss",
+  "en": "blacksmith anvil on a tree stump",
+  "look": "exactly one black iron anvil: its flat polished steel face and pointed horn, resting on a round wooden stump that shows its growth rings around the anvil, nothing else",
+  "kind": "object",
+  "cat": "werkzeug",
+  "w": 1,
+  "h": 1,
+  "block": 1
+ },
+ {
+  "id": "schmiedeesse",
+  "name": "Schmiedeesse",
+  "en": "square stone blacksmith forge",
+  "look": "one square hearth built of rough grey stones with a thick soot-blackened rim, a sunken bed of glowing orange and red coals in the middle, a brown leather bellows lying against one side",
+  "kind": "object",
+  "cat": "werkzeug",
+  "w": 1.8,
+  "h": 1.8,
+  "block": 1
+ },
+ {
+  "id": "denkmal",
+  "name": "Denkmal",
+  "en": "statue on a square stone plinth",
+  "look": "one square grey stone plinth with stepped edges seen from directly above, on its centre the top of a bronze statue: helmet, shoulders and an outstretched sword arm, green patina on the bronze",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 1.8,
+  "block": 1
+ },
+ {
+  "id": "laternenpfahl",
+  "name": "Laternenpfahl",
+  "en": "iron street lantern cap seen from above",
+  "look": "the square black iron pyramid cap of one street lantern seen from directly above, warm golden light glowing out around its four edges, a small round post base below",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 0.6,
+  "h": 0.6
+ },
+ {
+  "id": "bienenstoecke",
+  "name": "Bienenstöcke",
+  "en": "three straw bee skeps",
+  "look": "exactly three round domed straw bee skeps in a row on one wooden plank, their coiled straw spirals clearly visible from above, nothing else",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 0.8,
+  "rough": 1
+ },
+ {
+  "id": "huehnerstall",
+  "name": "Hühnerstall",
+  "en": "chicken coop roof and run seen from above",
+  "look": "the flat sloped wooden plank roof of one small chicken coop on the left and a small square fenced run of woven willow on the right with three white hens, strictly from above so that no walls are visible",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2,
+  "h": 1.6,
+  "block": 1
+ },
+ {
+  "id": "grab_huegel",
+  "name": "Grab mit Grabstein",
+  "en": "grave mound with a headstone",
+  "look": "one long narrow mound of dark earth covered with short grass, a small weathered grey headstone at the top end, a few small wild flowers",
+  "kind": "object",
+  "cat": "deko",
+  "w": 0.9,
+  "h": 1.7,
+  "rough": 1
+ },
+ {
+  "id": "wasserrad",
+  "name": "Wasserrad",
+  "en": "mill water wheel seen from above",
+  "look": "a long narrow rectangle made of many parallel wooden paddle boards between two thin wooden rims, a thick wooden axle crossing the middle, white water splashing along both long sides",
+  "kind": "object",
+  "cat": "bau",
+  "w": 1.4,
+  "h": 3.2,
+  "block": 1
+ },
+ {
+  "id": "fischernetz",
+  "name": "Fischernetz",
+  "en": "fishing net spread flat on the ground",
+  "look": "one large brown knotted fishing net spread completely flat in a rough rectangle, round cork floats along one edge, a coil of rope in a corner",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2.2,
+  "h": 2.2,
+  "layer": "floor"
+ },
+ {
+  "id": "glockenturm",
+  "name": "Glockenturm (Dach)",
+  "en": "square tower pyramid roof",
+  "look": "one square pyramid roof seen from directly above: four triangular faces of grey slate tiles meeting in the exact centre at a small iron finial, a square stone parapet rim around it",
+  "kind": "object",
+  "cat": "bau",
+  "w": 3,
+  "h": 3,
+  "block": 1
+ },
+ {
+  "id": "gemuesefeld",
+  "name": "Gemüsefeld",
+  "en": "vegetable farm field",
+  "look": "straight parallel rows of bright green cabbages and leafy crops with strips of dark brown soil between them, strong contrast, uniform cover",
+  "kind": "texture",
+  "cat": "gelaende",
+  "m": 4
+ }
+]

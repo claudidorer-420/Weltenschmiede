@@ -36,7 +36,7 @@ export function PromptHost() {
     // Gelegenheitsangriff: der Reagierende würfelt seinen Angriff selbst
     if (p.kind === 'oa' && choice === 'yes') {
       const A = await import('../core/actions.js');
-      A.reactionAttack(p.cb, p.target, p.pos || null).catch((e) => console.warn('[Reaktion]', e));
+      A.reactionAttack(p.cb, p.target, p.pos || null, p.mapId || null).catch((e) => console.warn('[Reaktion]', e));
     }
   };
   return html`<div class="pr-host">${items.map((p) => {

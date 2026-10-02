@@ -4,7 +4,7 @@
 // Elementen und Karteneinstellungen werden unverändert übernommen.
 import { STAMPS, TEXTURES } from '../../js/data/mapassets.js';
 import { PROC, FLUIDS, LEGACY, MAT_TEX } from '../../js/views/maprender.js';
-import { STYLES, MATS, SETS, SCRAWL_GENERATORS, scatter } from '../../js/views/mapgen.js';
+import { STYLES, MATS, SETS, SCRAWL_GENERATORS, GEN_OPTS, generate, scatter } from '../../js/views/mapgen.js';
 
 const now = () => Date.now();
 const low = (s) => String(s ?? '').toLowerCase();
@@ -100,7 +100,7 @@ function normalize(field, el, warn) {
     if (!o.text) throw new Error(`${label}: text fehlt.`);
     o.kind = o.kind === 'room' ? 'room' : o.kind || 'text';
     o.x = r2(o.x); o.y = r2(o.y);
-    o.size = r2(o.size ?? (o.kind === 'room' ? 0.65 : 0.7));
+    o.size = r2(o.size ?? (o.kind === 'room' ? 0.65 : o.kind === 'ort' ? 0.8 : 0.7));
   } else if (field === 'lights') {
     o.x = r2(o.x); o.y = r2(o.y);
     o.r = r2(o.r ?? 5);
@@ -198,7 +198,7 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
         klassisch: Object.entries(MATS).map(([k, f]) => ({ mat: k, name: f.label })),
         texturen: 'mat: "tex:<Textur-ID>" – alle Texturen aus bereich=texturen (kat gelaende/pflaster/boden)',
       };
-      case 'generatoren': return Object.entries(SCRAWL_GENERATORS).map(([k, g]) => ({ generator: k, name: g.label }));
+      case 'generatoren': return Object.entries(SCRAWL_GENERATORS).map(([k, g]) => ({ generator: k, name: g.label, ...(GEN_OPTS[k] ? { mindestgroesse: GEN_OPTS[k].min, optionen: GEN_OPTS[k].opts.map((o) => ({ name: o.k, bedeutung: o.label, art: o.type === 'tri' ? 'true/false (weglassen = Zufall)' : o.type === 'int' ? `Zahl ${o.min}–${o.max}, je Einheit ~${o.per || '–'} Felder Fläche (Karte wächst bei Bedarf)` : `eins von: ${o.options.map((x) => x[0]).join(', ')}` })) } : {}) }));
       case 'streusets': return Object.entries(SETS).map(([k, s]) => ({ set: k, name: s.label, stempel: s.keys.length, groesse: s.s }));
       case 'stile': return Object.entries(STYLES).map(([k, s]) => ({ stil: k, name: s.label, realistisch: !!s.real }));
       default: return {
@@ -215,7 +215,7 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
           raeume: '{ kind: rect|ellipse|poly|path|brush, pts, op?: add|sub (sub = ausschneiden), tex?: Bodentextur, roof?: Dachtextur, w?: Breite bei path/brush, wall?: 1 (dünne Wandlinie) } – Wände entstehen automatisch um Böden',
           gelaende: '{ kind: rect|ellipse|poly|brush|path, pts, mat: water|deepwater|swamp|lava|pit|blood|ice|difficult|tex:<id>, op?, w? }',
           objekte: '{ a: "p:door" | "ph:treasure_chest" | kurz "door", x, y, r?: Grad, s?: Größe (1 = echte Größe), fx?: 1 gespiegelt, layer?: floor|obj|top, z?: Reihenfolge in der Ebene (größer liegt oben), sh?: Schatten } – Türen auf die Raumkante setzen (r 0 = waagrechte Wand, 90 = senkrechte)',
-          beschriftungen: '{ kind: room|text, text, x, y, size? }',
+          beschriftungen: '{ kind: room (Raumnummer) | ort (Ortsname mit Raute, wie auf Stadtkarten) | text, text, x, y, size?, gm? (true = nur SL) }',
           lichter: '{ x, y, r: Radius in Feldern, color?: "rgba(255,190,110,.45)", i?: Stärke }',
         },
         tipps: [
@@ -271,8 +271,9 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
     breite: num('Breite in Feldern (neu: Standard 36)'), hoehe: num('Höhe in Feldern (neu: Standard 26)'),
     verschieben: { type: 'array', items: { type: 'number' }, description: '[dx, dy] – alle Elemente verschieben (z. B. beim Vergrößern nach links/oben)' },
     stil: str('Stil, z. B. real (Standard), klassisch, pergament, blaupause, dunkel'),
-    generator: str('Generator aus dem Katalog (dungeon, hoehle, taverne, tempel, lichtung, wald, dorf, leer …). Bei bestehenden Karten nur mit ersetzen=true'),
+    generator: str('Generator aus dem Katalog (dungeon, hoehle, taverne, tempel, lichtung, wald, dorf, stadt, leer …). Bei bestehenden Karten nur mit ersetzen=true'),
     gruppe: num('Gruppengröße (Zahl der Spielercharaktere) – die Waldlichtung stellt so viele Zelte auf; Standard 4'),
+    optionen: anyObj('Optionen des Generators (karten_katalog bereich=generatoren), z. B. { "art": "mauer", "gebaeude": 40, "fluss": true } für eine Stadt oder { "raeume": 12 } für einen Dungeon. Weggelassen = der Generator entscheidet; passt die Anzahl nicht, wächst die Karte.'),
     ersetzen: bool('true = bestehenden Inhalt komplett durch den Generator ersetzen'),
     sichtbarkeit: str('gm oder players', { enum: ['gm', 'players'] }),
     einstellungen: anyObj('Karteneinstellungen, z. B. { "dark": 0.5, "wallTex": "old_stone_wall", "floorTex": "worn_brick_floor", "ground": "dark_rock", "outdoor": false, "fog": { "enabled": true } } – unbekannte Felder werden übernommen'),
@@ -316,7 +317,7 @@ export function registerMapTools({ tool, S, str, num, bool, KAMPAGNE, RO, RW, ne
       if (!isNew && !a.ersetzen) throw new Error('Diese Karte hat schon Inhalt – für einen Generator ersetzen=true setzen.');
       const gw = Math.round(a.breite || W0);
       const gh = Math.round(a.hoehe || H0);
-      Object.assign(m, g.fn(gw, gh, { party: Number(a.gruppe) || 4 }), { w: gw, h: gh });
+      Object.assign(m, generate(a.generator, gw, gh, { party: Number(a.gruppe) || 4, ...(a.optionen || {}) }));
     }
 
     // 2. Einstellungen, Größe, Verschieben

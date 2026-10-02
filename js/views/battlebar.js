@@ -129,7 +129,7 @@ function spellRows(list) {
   return [...m.entries()].sort((a, b) => a[0] - b[0]);
 }
 
-export function BattleBar({ B, cb, char, acts, turn, speedM, movedLocal, pendingKey, portrait, onArm, onEnd, onGm, onEndConc }) {
+export function BattleBar({ B, cb, char, acts, turn, speedM, movedLocal, pendingKey, portrait, onArm, onEnd, onGm, onEndConc, onTurn }) {
   const [tab, setTab] = useState(null);
   const [tip, setTip] = useState(null);
   const [fix, setFix] = useState(false);      // „T“ hält den Infotext fest – dann lässt er sich scrollen
@@ -171,6 +171,11 @@ export function BattleBar({ B, cb, char, acts, turn, speedM, movedLocal, pending
         ${B.gm || cb.isPC || cb.known ? html`<span class="bb-ac" title="Rüstungsklasse"><${GameIcon} name="shield" size=${11} />${ac}</span>` : null}
         ${onGm ? html`<button type="button" class="bb-gm" title="SL: Trefferpunkte, Zustände, Statblock …" onClick=${onGm}><${Icon} name="settings" size=${13} /></button>` : null}
       </div>
+      ${onTurn ? html`<div class="bb-turn" title="Blickrichtung">
+        <button type="button" title="Drehen gegen den Uhrzeigersinn (Q)" onClick=${() => onTurn(-22.5)}><${Icon} name="rotate-ccw" size=${13} /></button>
+        <button type="button" title="Kehrtwende (W)" onClick=${() => onTurn(180)}><${Icon} name="flip" size=${13} /></button>
+        <button type="button" title="Drehen im Uhrzeigersinn (E)" onClick=${() => onTurn(22.5)}><${Icon} name="rotate-cw" size=${13} /></button>
+      </div>` : null}
       <${Vitals} cb=${cb} />
     </div>
     <div class="bb-mid">

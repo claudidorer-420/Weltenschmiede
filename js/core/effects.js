@@ -119,6 +119,26 @@ export const FX_TYPES = [
   { t: 'adv', label: 'Hinweis (wirkt nicht automatisch)', group: 'Hinweise', ex: 'Vorteil beim Aufspüren von Fallen', k: 'text' },
 ];
 export const FX_BY = Object.fromEntries(FX_TYPES.map((x) => [x.t, x]));
+// Startwerte je Wirkungsart (Editor „neue Wirkung“, Beispiele für den MCP-Server)
+export const FX_NEW = {
+  speed: { v: 10 }, speedSet: { v: 30 }, speedMul: { v: 2 }, move: { k: 'fly', v: 30 }, sense: { k: 'dark', v: 60 }, reach: { v: 5 },
+  ac: { v: 1 }, acFormula: { v: 13, k: ['dex'] }, acMin: { v: 16 }, dexCap: { v: 1 }, stealthOk: {},
+  resist: { k: [] }, immune: { k: [] }, vuln: { k: [] }, condImm: { k: [] }, dmgReduce: { v: 1, k: [] }, critImmune: {},
+  disAttackers: { on: 'all' }, retaliate: { on: 'melee', dice: '1d4', type: 'fire' }, evasion: {}, endure: { uses: '1', rest: 'long' }, aura: { k: 'save', v: 'mod:cha', min: 1, r: 10 },
+  hpLevel: { v: 1 }, hp: { v: 5 }, regen: { dice: '1d4' }, healSelf: { v: 2 }, tempStart: { v: 'mod:cha' }, healBonus: { v: 2 },
+  abil: { k: 'str', v: 1 }, abilSet: { k: 'str', v: 19 }, init: { v: 2 }, saveProf: { k: [] }, saveBonus: { v: 1 }, saveAdv: { k: [], vs: 'spell' },
+  checkBonus: { k: [], v: 1 }, checkAdv: { k: [] }, jack: {}, dice: { k: [] },
+  skill: { k: [] }, expertise: { k: [] }, weapon: { k: [] }, armor: { k: [] }, tool: { k: '' }, lang: { k: [] }, pick: { k: 'skill', n: 1 },
+  attack: { v: 1, k: 'all' }, damage: { v: 1, k: 'all' }, dmgExtra: { dice: '1d6', type: 'fire', on: 'weapon' }, crit: { v: 1, on: 'weapon' }, advAttack: { on: 'all', vs: '' },
+  onHit: { inflict: 'Vergiftet', save: 'con', dc: 'auto', rounds: 2, on: 'weapon' }, ignoreResist: { k: [] }, attacks: { v: 2 }, unarmed: { dice: '1d6', ab: 'best' }, style: { k: [] },
+  spell: { k: '', lv: 0, uses: 'will' }, spellDc: { v: 1 }, spellDmg: { v: 'mod:spell', on: 'cantrip' }, slots: { lv: 1, n: 1 },
+  res: { k: '', v: 1, rest: 'long' }, resMax: { k: '', v: 1 }, bonusAct: { k: ['dash', 'disengage', 'hide'] },
+  action: { k: '', kind: 'save', cost: 'action', ab: 'con', dice: '2d6', type: 'fire', save: 'dex', half: true, area: { shape: 'cone', size: 4.5 }, uses: 'pb', rest: 'long' },
+  adv: { k: 'Vorteil bei …' },
+  heavyOk: {}, healRecv: { v: 'mod:con' }, minRoll: { k: [], v: 10 }, rangedOk: { k: ['long'], on: 'weapon' }, autoCrit: { vsCond: 'surprised' }, concDis: {},
+  hitOpt: { k: '', dice: '1d8', pool: '', poolCost: 1, once: true, on: 'weapon' }, spellList: { cls: '', k: [] }, cantripHalf: {}, sculpt: { school: 'evocation' }, summonHp: { v: 30 },
+  resInit: { k: '', v: 1 },
+};
 export const MOVE_DE = { fly: 'Fliegen', swim: 'Schwimmen', climb: 'Klettern', burrow: 'Graben' };
 export const SENSE_DE = { dark: 'Dunkelsicht', blind: 'Blindsicht', tremor: 'Erschütterungssinn', true: 'Wahrer Blick' };
 // Worauf sich Angriffswirkungen beziehen
