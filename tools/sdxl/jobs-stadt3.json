@@ -1,0 +1,50 @@
+[
+ {
+  "id": "brennholz",
+  "name": "Brennholzstapel",
+  "en": "pile of firewood logs lying flat",
+  "look": "about eight long bark-covered logs lying flat side by side, all parallel, seen from directly above so the whole length of each log with its rough brown bark is visible, pale cut ends only at the two short sides",
+  "neg": "end grain wall, log ends facing the camera, stacked firewood front view, circles of tree rings filling the frame",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 2.4,
+  "h": 1.2,
+  "block": 1
+ },
+ {
+  "id": "bienenkorb",
+  "name": "Bienenkorb",
+  "en": "straw bee skep",
+  "look": "one single round dome-shaped straw bee skep seen from directly above: tight coiled straw rings forming concentric circles up to the top, warm golden straw colour",
+  "neg": "many baskets, bees, insects, wasps, open basket, bowl",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 0.8,
+  "h": 0.8,
+  "block": 1
+ },
+ {
+  "id": "obelisk",
+  "name": "Obelisk",
+  "en": "stone obelisk monument",
+  "look": "one square grey stone obelisk seen from directly above: four triangular faces of its pyramid tip meeting in the exact centre, a stepped square stone plinth with weathered edges around it",
+  "neg": "face, head, bust, relief, plaque, bronze, sphere",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.6,
+  "h": 1.6,
+  "block": 1
+ },
+ {
+  "id": "planwagen",
+  "name": "Planwagen",
+  "en": "covered wagon",
+  "look": "the long rounded rectangle of an off-white canvas wagon cover seen from directly above like an aerial drone photo, faint wooden hoop ribs running across it, the rims of four wooden wheels peeking out at the corners and one wooden drawbar pointing forward",
+  "neg": "spoked wheel seen from the side, side view of a wagon, horses, umbrella, parasol, round shape",
+  "kind": "object",
+  "cat": "stadt",
+  "w": 1.8,
+  "h": 3.4,
+  "block": 1
+ }
+]

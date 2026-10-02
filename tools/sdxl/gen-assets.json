@@ -302,6 +302,69 @@
    "w": 2.0,
    "h": 1.835,
    "block": 1
+  },
+  "heuhaufen": {
+   "id": "heuhaufen",
+   "src": "heuhaufen",
+   "name": "Heuhaufen",
+   "cat": "stadt",
+   "w": 1.698,
+   "h": 1.663,
+   "rough": 1
+  },
+  "heuballen": {
+   "id": "heuballen",
+   "src": "heuballen",
+   "name": "Strohballen",
+   "cat": "stadt",
+   "w": 1.8,
+   "h": 1.722,
+   "block": 1
+  },
+  "amboss": {
+   "id": "amboss",
+   "src": "amboss",
+   "name": "Amboss",
+   "cat": "werkzeug",
+   "w": 0.949,
+   "h": 1.0,
+   "block": 1
+  },
+  "schmiedeesse": {
+   "id": "schmiedeesse",
+   "src": "schmiedeesse",
+   "name": "Schmiedeesse",
+   "cat": "werkzeug",
+   "w": 1.753,
+   "h": 1.8,
+   "block": 1
+  },
+  "huehnerstall": {
+   "id": "huehnerstall",
+   "src": "huehnerstall",
+   "name": "Hühnerstall",
+   "cat": "stadt",
+   "w": 2.0,
+   "h": 1.341,
+   "block": 1
+  },
+  "fischernetz": {
+   "id": "fischernetz",
+   "src": "fischernetz",
+   "name": "Fischernetz",
+   "cat": "stadt",
+   "w": 2.2,
+   "h": 2.2,
+   "layer": "floor"
+  },
+  "bienenkorb": {
+   "id": "bienenkorb",
+   "src": "bienenkorb",
+   "name": "Bienenkorb",
+   "cat": "stadt",
+   "w": 0.773,
+   "h": 0.8,
+   "block": 1
   }
  },
  "textures": {
@@ -344,6 +407,12 @@
   "getreidefeld": {
    "id": "getreidefeld",
    "name": "Getreidefeld",
+   "cat": "gelaende",
+   "m": 4
+  },
+  "gemuesefeld": {
+   "id": "gemuesefeld",
+   "name": "Gemüsefeld",
    "cat": "gelaende",
    "m": 4
   }

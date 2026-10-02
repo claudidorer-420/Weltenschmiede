@@ -587,7 +587,7 @@ export const HOEHE = {
   'ph:stand_gemuese': 1, 'ph:stand_brot': 1, 'ph:stand_toepfer': 0.8, 'ph:stand_gewuerze': 0.9, 'ph:stand_stoffe': 2.4, 'ph:stand_fisch': 2.4, 'ph:stand_waffen': 2.4, 'ph:stand_fleisch': 2.4,
   'ph:haendlerzelt': 3, 'ph:handkarren': 1, 'ph:planwagen': 2.6, 'ph:kornsaecke': 0.8, 'ph:kistenstapel': 1.2, 'ph:hackklotz': 0.6, 'ph:pferdetraenke': 0.8, 'ph:stadtbrunnen': 1.4,
   'ph:gemuesebeet': 0.3, 'ph:grab_platte': 0.1, 'ph:grab_huegel': 0.6, 'ph:windmuehle': 10, 'ph:segelboot': 1.5, 'ph:pavillon': 3.5, 'ph:heuhaufen': 1.8, 'ph:heuballen': 1, 'ph:holzstapel': 1.2,
-  'ph:amboss': 0.9, 'ph:schmiedeesse': 1.1, 'ph:denkmal': 3.5, 'ph:laternenpfahl': 3, 'ph:bienenstoecke': 0.7, 'ph:huehnerstall': 1.5, 'ph:wasserrad': 3, 'ph:glockenturm': 12,
+  'ph:amboss': 0.9, 'ph:schmiedeesse': 1.1, 'ph:denkmal': 3.5, 'ph:laternenpfahl': 3, 'ph:bienenstoecke': 0.7, 'ph:bienenkorb': 0.7, 'ph:fischernetz': 0.05, 'ph:huehnerstall': 1.5, 'ph:wasserrad': 3, 'ph:glockenturm': 12,
   'p:pillar': 3.5, 'p:pillarSq': 3.5, 'p:altar': 1, 'p:well': 1, 'p:fountain': 1.2, 'p:sarcophagus': 1, 'p:fireplace': 2.2, 'p:bookshelf': 2, 'p:counter': 1.1, 'p:tent': 2.2,
 };
 export const DURCHSICHTIG = new Set(['ph:large_iron_gate', 'ph:modular_chainlink_fence', 'ph:galgen', 'ph:katapult', 'p:fence', 'ph:pavillon', 'ph:laternenpfahl']);

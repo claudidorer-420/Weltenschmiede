@@ -1,7 +1,7 @@
 // Kartenwerkstatt ohne Oberfläche: Stile, Geländematerialien, Stempel-Sets und Generatoren.
 // Wird vom Karten-Editor und vom MCP-Server (mcp/) gemeinsam genutzt – hier darf beim Laden nichts das DOM anfassen.
 import { uid, randInt, clamp } from '../lib/util.js';
-import { STAMPS } from '../data/mapassets.js';
+import { STAMPS, TEXTURES } from '../data/mapassets.js';
 import { REAL_INK, PROC } from './maprender.js';
 
 export const STYLES = {
@@ -1276,7 +1276,17 @@ const HAUS_EINRICHTUNG = {
     for (let i = 0; i < 3; i++) inEcke(o, P, R, pick(FASS), { s: 1.3 });
   },
   schmiede(o, P, R, tuer) {
-    anWand(o, P, R, 'ph:stone_fire_pit', { seite: GEGEN[tuer], s: 1.1 });
+    const esse = anWand(o, P, R, ids(/^schmiedeesse$/)[0] || 'ph:stone_fire_pit', { seite: GEGEN[tuer], s: ids(/^schmiedeesse$/).length ? 0.9 : 1.1 });
+    if (esse && ids(/^amboss$/).length) {
+      // Amboss ein gutes Feld vor der Esse, Richtung Raummitte
+      const dx = R.x + R.w / 2 - esse.x;
+      const dy = R.y + R.h / 2 - esse.y;
+      const d = Math.hypot(dx, dy) || 1;
+      let am = null;
+      for (const a of [1.9, 2.3, 2.7]) if ((am = setze(o, P, 'ph:amboss', esse.x + (dx / d) * a, esse.y + (dy / d) * a, { s: 0.9, r: randInt(-15, 15) }))) break;
+      // kleine Schmiede: dann eben mitten im Raum oder an einer Wand
+      if (!am) am = setze(o, P, 'ph:amboss', R.x + R.w / 2, R.y + R.h / 2, { s: 0.85 }) || anWand(o, P, R, 'ph:amboss', { s: 0.85 });
+    }
     anWand(o, P, R, 'ph:waffenstaender', { s: 0.75 });
     anWand(o, P, R, 'ph:tool_cart', { s: 1.1 });
     inEcke(o, P, R, 'ph:wooden_bucket_02_a', { s: 1.4 });
@@ -1289,6 +1299,7 @@ const HAUS_EINRICHTUNG = {
   },
   scheune(o, P, R) {
     for (let i = 0; i < 3; i++) { const e = inEcke(o, P, R, pick(KISTE), { s: 1.4 }); if (e) haufen(o, P, e.x, e.y, [...KISTE, ...FASS], 2, { s: [1.3, 1.5], rad: 0.9 }); }
+    for (const k of ids(/^(heuballen|heuhaufen)$/)) anWand(o, P, R, k, { s: 0.9 });
     anWand(o, P, R, 'ph:wooden_ladder', { s: 1.3 });
     haufen(o, P, R.x + R.w / 2, R.y + R.h / 2, SETS.reisig.keys, randInt(3, 6), { s: [1.5, 2.5], rad: 1.2 });
   },
@@ -1710,6 +1721,7 @@ const STADT_EINRICHTUNG = {
   },
   stall(o, P, R) {
     anWand(o, P, R, 'ph:pferdetraenke', { s: 0.9 });
+    for (const k of ids(/^(heuballen|heuhaufen)$/)) inEcke(o, P, R, k, { s: 0.85 });
     for (let i = 0; i < 2; i++) inEcke(o, P, R, 'ph:kornsaecke', { s: 1 });
     haufen(o, P, R.x + R.w / 2, R.y + R.h / 2, SETS.reisig.keys, randInt(4, 7), { s: [1.6, 2.6], rad: 1.4 });
     anWand(o, P, R, 'ph:wooden_ladder', { s: 1.3 });
@@ -2097,7 +2109,7 @@ function genCity(W, H, opts = {}) {
     return S[i] || G[i] ? null : { x, y };
   };
   const hofN = Math.round((Math.PI * rx * ry) / 110);
-  streue(objects, P, hof, [...ids(/^gemuesebeet$/), 'p:well', ...ids(/^(holzstapel|heuhaufen|kornsaecke|handkarren|bienenstoecke|huehnerstall)$/), 'ph:wooden_picnic_table', ...FASS], hofN, { s: [0.9, 1.1], tries: 12, pad: 0.3 });
+  streue(objects, P, hof, [...ids(/^gemuesebeet$/), 'p:well', ...ids(/^(holzstapel|heuhaufen|heuballen|kornsaecke|handkarren|bienenkorb|huehnerstall)$/), 'ph:wooden_picnic_table', ...FASS], hofN, { s: [0.9, 1.1], tries: 12, pad: 0.3 });
   streue(objects, P, hof, [...SETS.laubbaum.keys], Math.round(hofN * 0.6), { s: [0.55, 0.8], tries: 10, pad: 0.4 });
   streue(objects, null, hof, [...SETS.busch.keys, ...SETS.blume.keys], hofN * 2, { s: [0.8, 1.6], tries: 4 });
 
@@ -2137,6 +2149,14 @@ function genCity(W, H, opts = {}) {
         if (chance(0.7)) objects.push(stampAt(chance(0.5) ? 'ph:segelboot' : 'p:rowboat', bx, by, { r: rot + (sd > 0 ? 0 : 180), s: chance(0.5) ? 1 : 0.9 }));
       }
       objects.push(stampAt(pick(FASS), b[0] - into[0] * 0.8 + (into[1] ? 0.5 : 0), b[1] - into[1] * 0.8 + (into[0] ? 0.5 : 0), { s: 1.2 }));
+      if (ids(/^fischernetz$/).length && chance(0.75)) {
+        // zum Trocknen an Land neben dem Steg – erste freie Stelle in Ufernähe
+        for (let t = 0; t < 14; t++) {
+          const sd = rnd(-5, 5);
+          const ab = rnd(1.8, 4.5);
+          if (setze(objects, P, 'ph:fischernetz', ax - into[0] * ab + (into[1] ? sd : 0), ay - into[1] * ab + (into[0] ? sd : 0), { s: rnd(0.75, 0.95), r: randInt(0, 359) })) break;
+        }
+      }
     }
     const k = meer.pts[Math.floor(meer.pts.length / 2)];
     ort('Hafen', k[0], k[1] + (kuesteSeite === 'n' ? 2.5 : kuesteSeite === 's' ? -2.5 : 0), 1);
@@ -2173,7 +2193,7 @@ function genCity(W, H, opts = {}) {
       if (!draussen(fx, fy) || !draussen(fx + fw, fy + fh) || !draussen(fx + fw, fy) || !draussen(fx, fy + fh)) continue;
       if (!P.frei([fx - 0.5, fy - 0.5, fx + fw + 0.5, fy + fh + 0.5])) continue;
       P.nimm([fx - 0.5, fy - 0.5, fx + fw + 0.5, fy + fh + 0.5]);
-      terrain.push({ id: uid(6), op: 'add', kind: 'rect', mat: pick(['tex:getreidefeld', 'tex:getreidefeld', 'tex:farm_soil', ...ids(/^gemuesefeld$/).map(() => 'tex:gemuesefeld')]), pts: [fx, fy, fx + fw, fy + fh] });
+      terrain.push({ id: uid(6), op: 'add', kind: 'rect', mat: pick(['tex:getreidefeld', 'tex:getreidefeld', 'tex:farm_soil', ...(TEXTURES.some((t) => t.id === 'gemuesefeld') ? ['tex:gemuesefeld'] : [])]), pts: [fx, fy, fx + fw, fy + fh] });
       zaun(objects, fx, fy, fw - (fw % 2), fh - (fh % 2));
       break;
     }

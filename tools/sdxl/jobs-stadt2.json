@@ -107,7 +107,8 @@
   "cat": "werkzeug",
   "w": 1.8,
   "h": 1.8,
-  "block": 1
+  "block": 1,
+  "fill": true
  },
  {
   "id": "denkmal",

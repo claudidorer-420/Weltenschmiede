@@ -13,3 +13,4 @@ tools/sdxl/*.png
 .deploy/
 .wrangler/
 tools/sdxl/*.err
+tools/sdxl/__pycache__/

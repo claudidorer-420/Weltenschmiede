@@ -8,6 +8,8 @@
 #
 # Aufruf (aus tools/sdxl):
 #   .venv\Scripts\python.exe gen.py --jobs jobs.json --out out --steps 60 --cands 6 --hires 1536
+# Nach der Sichtung einen anderen Kandidaten fertigstellen (Detaildurchgang + Freistellen, ohne neu zu würfeln):
+#   .venv\Scripts\python.exe gen.py --jobs jobs.json --waehle amboss:5,schmiedeesse:3
 #
 # jobs.json: [{ "id": …, "name": …, "en": …, "look": "objektgenauer Satz", "kind": "object"|"texture" }]
 import argparse
@@ -83,8 +85,10 @@ def matting():
     return _SESSION
 
 
-def cutout(img: Image.Image):
-    """Objekt freistellen, Alpha säubern, zuschneiden. Gibt (Bild, Kennzahlen) zurück."""
+def cutout(img: Image.Image, fill: bool = False):
+    """Objekt freistellen, Alpha säubern, zuschneiden. Gibt (Bild, Kennzahlen) zurück.
+    fill = Löcher im Inneren schließen (Esse mit Glut, Brunnen mit Wasser … – sonst hält das Freistellen
+    die dunkle Mitte für Hintergrund)."""
     from rembg import remove
     im = remove(
         img.convert("RGB"), session=matting(), alpha_matting=True,
@@ -93,6 +97,14 @@ def cutout(img: Image.Image):
     ).convert("RGBA")
     a = im.getchannel("A")
     a = a.point(lambda v: 0 if v < 24 else (255 if v > 232 else v))
+    if fill:
+        from PIL import ImageDraw, ImageOps
+        # Hintergrund = alles, was vom Rand aus erreichbar ist; der Rest gehört zum Objekt
+        m = ImageOps.expand(a.point(lambda v: 255 if v > 127 else 0), border=1, fill=0)
+        ImageDraw.floodfill(m, (0, 0), 128)
+        innen = m.crop((1, 1, m.width - 1, m.height - 1)).point(lambda v: 255 if v == 0 else 0)
+        a = Image.fromarray(np.maximum(np.asarray(a), np.asarray(innen)))
+        im = img.convert("RGBA")   # Originalfarben, auch in der zuvor ausgeschnittenen Mitte
     a = a.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.5))
     im.putalpha(a)
     obj = np.asarray(a).astype(np.float32) / 255 > 0.4
@@ -204,10 +216,16 @@ def main():
     ap.add_argument("--no-refiner", action="store_true")
     ap.add_argument("--only", default="")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--waehle", default="", help="id:kandidat,… – diesen Kandidaten aus out/kandidaten fertigstellen")
     args = ap.parse_args()
 
     jobs = json.loads(Path(args.jobs).read_text(encoding="utf-8"))
-    pick = set(x.strip() for x in args.only.split(",") if x.strip())
+    waehle = {}
+    for x in args.waehle.split(","):
+        if ":" in x:
+            k, v = x.strip().rsplit(":", 1)
+            waehle[k] = int(v)
+    pick = set(x.strip() for x in args.only.split(",") if x.strip()) or set(waehle)
     if pick:
         jobs = [j for j in jobs if j["id"] in pick]
     if args.limit:
@@ -257,11 +275,18 @@ def main():
         tmpl = TEX_PROMPT if kind == "texture" else OBJ_PROMPT
         prompt = job.get("prompt") or tmpl.format(en=en, look=look)
         neg = NEG_TEX if kind == "texture" else NEG_OBJ
+        if job.get("neg"):
+            neg += ", " + job["neg"]   # Auftrag-eigene Verbote (was SDXL hier gern falsch macht)
         cfg = job.get("cfg", 5.5 if kind == "texture" else 7.0)
         anz = args.cands_tex if kind == "texture" else args.cands
         set_tiling([base, ref], kind == "texture")
 
         roh, cuts, punkte = [], [], []
+        if job["id"] in waehle:
+            # gesichteten Kandidaten übernehmen statt neu zu würfeln
+            anz = 0
+            roh = [Image.open(out / "kandidaten" / f"{job['id']}_{waehle[job['id']]}.png").convert("RGB")]
+            punkte = [(0.0, 0.0, 0.0)]
         for c in range(anz):
             seed = job.get("seed", abs(hash(job["id"])) % (2 ** 31)) + c * 7919
             gen = torch.Generator("cuda").manual_seed(seed)
@@ -282,7 +307,7 @@ def main():
                 ).images[0]
             roh.append(img)
             if kind == "object":
-                cut, st = cutout(img)
+                cut, st = cutout(img, job.get("fill", False))
                 cuts.append((cut, st))
                 punkte.append((clip.score(cut.convert("RGB"), en, kind), sharpness(cut), geom_score(kind, img, st)))
             else:
@@ -296,6 +321,9 @@ def main():
         w = (0.5, 0.5, 0.0) if kind == "texture" else (0.6, 0.15, 0.25)
         gesamt = [w[0] * rc[i] + w[1] * rs[i] + w[2] * rg[i] for i in range(len(punkte))]
         beste = max(range(len(gesamt)), key=lambda i: gesamt[i])
+        if job["id"] in waehle:
+            beste = 0
+            anz = len(list((out / "kandidaten").glob(f"{job['id']}_*.png")))
 
         img = roh[beste]
         if args.hires:
@@ -313,7 +341,7 @@ def main():
             ).images[0]
 
         if kind == "object":
-            fertig, st = cutout(img)
+            fertig, st = cutout(img, job.get("fill", False))
             fertig.save(out / "object" / f"{job['id']}.png")
             info = f"{fertig.width}×{fertig.height}"
         else:
@@ -321,7 +349,7 @@ def main():
             info = f"{img.width}×{img.height}"
         per = (time.time() - t0) / n
         print(
-            f"[{n}/{len(jobs)}] {kind}: {name} → Kandidat {beste + 1}/{anz} "
+            f"[{n}/{len(jobs)}] {kind}: {name} → Kandidat {waehle.get(job['id'], beste) + 1}/{anz} "
             f"(CLIP {punkte[beste][0]:.2f}, Aufbau {punkte[beste][2]:.2f}) {info} · {per:.0f}s/Auftrag",
             flush=True,
         )
