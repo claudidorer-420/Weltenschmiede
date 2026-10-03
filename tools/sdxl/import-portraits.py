@@ -3,7 +3,8 @@
 #   assets/portraits/q/<id>.webp      quadratischer Ausschnitt (Kopfbereich) für Token und Initiativleiste
 #   js/data/portraits.js              Liste der vorhandenen Bilder (damit die App nicht raten muss)
 #
-# Aufruf (aus tools/sdxl):  .venv\Scripts\python.exe import-portraits.py [--only id1,id2] [--force]
+# Aufruf (aus tools/sdxl):  .venv\Scripts\python.exe import-portraits.py [--jobs x.json] [--only id1,id2] [--force]
+#                           [--src <auftragsordner>/fertig]   (liest dort portrait/<id>.png, sonst out/portrait)
 import argparse
 import hashlib
 import json
@@ -27,11 +28,12 @@ def save_webp(img: Image.Image, path: Path, quality: int = 84):
     img.save(path, "WEBP", quality=quality, method=5)
 
 
-def quadrat(img: Image.Image) -> Image.Image:
-    """Kopf und Schultern aus dem Hochformat schneiden."""
+def quadrat(img: Image.Image, mitte: bool = False) -> Image.Image:
+    """Kopf und Schultern aus dem Hochformat schneiden – bei ganz gemalten Gestalten (Schlangen, Elementare, Schleime …)
+    den mittleren Ausschnitt, dort steht das Wesen nicht oben im Bild."""
     w, h = img.size
     seite = min(w, h)
-    oben = int(min(max(0, h * KOPF), h - seite))
+    oben = (h - seite) // 2 if mitte else int(min(max(0, h * KOPF), h - seite))
     links = (w - seite) // 2
     return img.crop((links, oben, links + seite, oben + seite)).resize((QUAD, QUAD), Image.LANCZOS)
 
@@ -41,7 +43,9 @@ def main():
     ap.add_argument("--jobs", default="portraits.json")
     ap.add_argument("--only", default="")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--src", default="", help="Auftragsordner …/fertig (darin portrait/<id>.png)")
     args = ap.parse_args()
+    quelle = (Path(args.src) / "portrait") if args.src else OUT
     jobs = json.loads(Path(args.jobs).read_text(encoding="utf-8"))
     pick = {x.strip() for x in args.only.split(",") if x.strip()}
 
@@ -50,7 +54,7 @@ def main():
         jid = job["id"]
         if pick and jid not in pick:
             continue
-        src = OUT / f"{jid}.png"
+        src = quelle / f"{jid}.png"
         if not src.exists():
             continue
         ziel = ZIEL / f"{jid}.webp"
@@ -61,7 +65,7 @@ def main():
         k = HOCH / img.height
         hoch = img.resize((max(1, round(img.width * k)), HOCH), Image.LANCZOS)
         save_webp(hoch, ziel, 84)
-        save_webp(quadrat(img), ZIEL / "q" / f"{jid}.webp", 82)
+        save_webp(quadrat(img, "whole" in str(job.get("rahmen", ""))), ZIEL / "q" / f"{jid}.webp", 82)
         fertig.append(jid)
         print(f"Porträt: {job.get('name', jid)}")
 

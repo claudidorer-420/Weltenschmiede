@@ -18,10 +18,8 @@ Maschinenlesbare Aufbereitung des SRD 5.1: openrpg.de. Ergänzende Metadaten (Kl
 - Symbole: game-icons.net (Lorc, Delapouite und weitere), CC BY 3.0 – https://creativecommons.org/licenses/by/3.0/.
   Für die App verkleinert und eingefärbt.
 - Texturen und 3D-Modelle der Kartenbausteine: Poly Haven (https://polyhaven.com), CC0.
-- Eigene Kartenobjekte und Bodentexturen: eigene Erzeugnisse mit FLUX.2 klein 4B (Black Forest Labs, Apache 2.0 –
-  https://huggingface.co/black-forest-labs/FLUX.2-klein-4B).
-- Monsterporträts: eigene Erzeugnisse mit Stable Diffusion XL 1.0 (Stability AI,
-  CreativeML Open RAIL++-M).
+- Eigene Kartenobjekte, Bodentexturen und Monsterporträts: eigene Erzeugnisse mit FLUX.2 klein 4B (Black Forest Labs,
+  Apache 2.0 – https://huggingface.co/black-forest-labs/FLUX.2-klein-4B).
 
 ## Bibliotheken (zur Laufzeit von CDNs geladen)
 
