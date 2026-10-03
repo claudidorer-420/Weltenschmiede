@@ -105,9 +105,19 @@ export function monsterIconName(m) {
 }
 // Gemalte Porträts der SRD-Monster (assets/portraits) – werden beim ersten Gebrauch nachgeladen
 let PORTRAITS = null;
+let PORTRAIT_V = {};
 export function loadPortraits() {
   if (PORTRAITS) return Promise.resolve(PORTRAITS);
-  return import('../data/portraits.js').then((m) => { PORTRAITS = m.PORTRAITS; return PORTRAITS; }).catch(() => { PORTRAITS = new Set(); return PORTRAITS; });
+  return import('../data/portraits.js').then((m) => { PORTRAITS = m.PORTRAITS; PORTRAIT_V = m.PORTRAIT_V || {}; return PORTRAITS; }).catch(() => { PORTRAITS = new Set(); return PORTRAITS; });
+}
+// Porträt-Adresse mit Fingerabdruck (?v=): der Service Worker hält Bilder dauerhaft im Cache – ohne ?v= käme ein
+// ausgetauschtes Porträt nie an. Wirkt auch auf alte, an Tokens gespeicherte Pfade (t.pic).
+const PORTRAIT_RE = /^(.*assets\/portraits\/(?:q\/)?([^/?]+)\.webp)(?:\?.*)?$/;
+export function frischesBild(url) {
+  const m = PORTRAIT_RE.exec(String(url || ''));
+  if (!m) return url;
+  const v = PORTRAIT_V[m[2]];
+  return v ? `${m[1]}?v=${v}` : m[1];
 }
 const refKey = (m) => String(m?.portraitId || m?.srdId || m?.id || '');
 // Hochformat für Bögen und Kompendium, quadratischer Ausschnitt für Token und Initiativleiste
@@ -115,7 +125,7 @@ export function portraitOf(m, { square = false } = {}) {
   if (m?.image) return m.image;
   const k = refKey(m);
   if (!k || !PORTRAITS?.has(k)) return null;
-  return square ? `assets/portraits/q/${k}.webp` : `assets/portraits/${k}.webp`;
+  return frischesBild(square ? `assets/portraits/q/${k}.webp` : `assets/portraits/${k}.webp`);
 }
 function usePortraits() {
   const [, force] = useState(0);

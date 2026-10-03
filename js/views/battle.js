@@ -19,7 +19,7 @@ import { CONDITIONS } from '../data/rules5e.js';
 import {
   CELL_M, sizeCells, cellDistance, pointCellDistance, tokenCenter, reachable, pathTo, templateFor, inArea, tokensInArea, monsterSpeed, fmtMeters, lineOfSight, pointInSight, areaReaches,
 } from '../core/tactics.js';
-import { MonsterArt, creatureType, monsterIconName, giImage, portraitOf, loadPortraits } from '../ui/art.js';
+import { MonsterArt, creatureType, monsterIconName, giImage, portraitOf, loadPortraits, frischesBild } from '../ui/art.js';
 import { Icon, IconBtn, Btn, Statblock, toast, openModal, openMenu, promptDialog, confirmDialog } from '../ui/components.js';
 import { now, initials, clamp } from '../lib/util.js';
 import { BattleBar, ROMAN } from './battlebar.js';
@@ -1155,7 +1155,7 @@ export function tokenPic(B, t, { tall = false, cb = null } = {}) {
   const gemalt = portraitOf(st || (t?.mref?.src === 'srd' ? { id: t.mref.id } : null), { square: !tall });
   if (gemalt) return gemalt;
   // Beim Platzieren gemerktes Bild (steht auch Spielern zur Verfügung)
-  if (t?.pic) return tall && t.pic.startsWith(QDIR) ? t.pic.replace(QDIR, 'assets/portraits/') : t.pic;
+  if (t?.pic) return frischesBild(tall && t.pic.startsWith(QDIR) ? t.pic.replace(QDIR, 'assets/portraits/') : t.pic);
   return null;
 }
 

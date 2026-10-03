@@ -5,6 +5,7 @@
 #
 # Aufruf (aus tools/sdxl):  .venv\Scripts\python.exe import-portraits.py [--only id1,id2] [--force]
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -66,13 +67,27 @@ def main():
 
     # Vorhandene Bilder erfassen (auch die aus früheren Läufen)
     alle = sorted(p.stem for p in ZIEL.glob("*.webp"))
+    # Fingerabdruck je Porträt: Der Service Worker hält Bilder unter /assets/ dauerhaft im Cache – die App hängt ?v= an,
+    # damit ein ausgetauschtes Porträt (gleicher Dateiname) bei allen Geräten ankommt
+    def fingerabdruck(jid):
+        h = hashlib.md5()
+        for p in (ZIEL / f"{jid}.webp", ZIEL / "q" / f"{jid}.webp"):
+            if p.exists():
+                h.update(p.read_bytes())
+        return h.hexdigest()[:8]
+    versionen = {jid: fingerabdruck(jid) for jid in alle}
     kopf = (
         "// Erzeugt von tools/sdxl/import-portraits.py – nicht von Hand ändern.\n"
         "// Monsterporträts im Hochformat (assets/portraits/<id>.webp) plus quadratischer\n"
         "// Ausschnitt für Token und Initiativleiste (assets/portraits/q/<id>.webp).\n"
-        "// Lokal mit Stable Diffusion XL erzeugt; die Bilder gehören zur Weltenschmiede.\n"
+        "// Lokal erzeugt (FLUX.2 klein 4B bzw. früher SDXL 1.0); die Bilder gehören zur Weltenschmiede.\n"
+        "// PORTRAIT_V = Fingerabdruck des Bildinhalts (Adresse bekommt ?v=, siehe ui/art.js).\n"
     )
-    js = kopf + "export const PORTRAITS = new Set(" + json.dumps(alle, ensure_ascii=False) + ");\n"
+    js = (
+        kopf
+        + "export const PORTRAITS = new Set(" + json.dumps(alle, ensure_ascii=False) + ");\n"
+        + "export const PORTRAIT_V = " + json.dumps(versionen, ensure_ascii=False) + ";\n"
+    )
     (ROOT / "js" / "data" / "portraits.js").write_text(js, encoding="utf-8")
     print(f"\n{len(fertig)} Porträts übernommen, {len(alle)} insgesamt in assets/portraits.")
 
