@@ -16,7 +16,7 @@ import torch
 
 # Kurz halten: beide Text-Encoder von SDXL schneiden nach 77 Token ab.
 # Reihenfolge = Wichtigkeit: Wesen, Aussehen laut Statblock, Bildausschnitt, Stil.
-PROMPT = "portrait of a {en}, {frame}, {art}, {look}, dark stone background, dramatic light, fantasy monster manual painting, highly detailed"
+PROMPT = "portrait of a {en}, {frame}, {art}, {look}, dark stone background, dramatic light, painted fantasy bestiary illustration, highly detailed"
 NEG = (
     "text, watermark, signature, frame, border, multiple creatures, collage, photograph, modern clothing, "
     "cartoon, blurry, low quality, deformed, extra limbs, extra heads, cropped head, full body, tiny figure"
