@@ -9,7 +9,7 @@ für Urheber- und Markenrecht die rot markierten Punkte und den Produktnamen bes
 | Ampel | Bereich | Zustand | Aufwand bis verkaufsfähig |
 |---|---|---|---|
 | 🟢 | Zauber, Monster, magische Gegenstände, Zustände | nur SRD 5.1/5.2.1 (CC-BY-4.0) | Namensnennung korrigiert (erledigt) |
-| 🟢 | Monsterporträts, eigene Kartenbausteine | lokal erzeugt: FLUX.2 klein 4B (Apache 2.0, Kartenobjekte ab Runde 19), SDXL 1.0 (OpenRAIL++-M, Porträts und 8 Bodentexturen) | – |
+| 🟢 | Monsterporträts, eigene Kartenbausteine | lokal erzeugt: FLUX.2 klein 4B (Apache 2.0, Kartenobjekte und 8 Bodentexturen ab Runde 19), SDXL 1.0 (OpenRAIL++-M, Monsterporträts) | – |
 | 🟢 | Texturen/3D-Modelle Karten | Poly Haven (CC0) | – |
 | 🟢 | Symbole | game-icons.net (CC BY 3.0) | Namensnennung vorhanden |
 | 🟢 | Bibliotheken | Preact (MIT), htm (Apache 2.0), Firebase SDK (Apache 2.0), Anthropic SDK (MIT) | in `LIZENZEN.md` gelistet |
@@ -137,7 +137,7 @@ Lorewright, Questsmith, Sagaforge (KI-Spielleiter), Mythwright, Tomewright, Lore
   (maschinenlesbar aufbereitet von openrpg.de).
 - **Bilder**: Eigene Kartenobjekte (seit Runde 19, die 41 Stempel aus `tools/sdxl/jobs-flux-objekte.json`) wurden
   lokal mit FLUX.2 klein 4B (Black Forest Labs, Apache 2.0 – nur die 4B-Fassung; 9B und dev sind nicht kommerziell)
-  erzeugt, Monsterporträts und 8 Bodentexturen mit Stable Diffusion XL 1.0 (Stability AI, Lizenz CreativeML Open
+  erzeugt, ebenso die 8 eigenen Bodentexturen (`tools/sdxl/jobs-flux-texturen.json`); die Monsterporträts stammen noch aus Stable Diffusion XL 1.0 (Stability AI, Lizenz CreativeML Open
   RAIL++-M). Beide Lizenzen erlauben die kommerzielle Nutzung der Ergebnisse; die Prompts nennen keine Künstler, Marken
   oder fremden Werke (Sperrliste im Skill `bildschmiede`, Herkunftsnachweis je Bild in `KI-Bilder\auftraege`).
   Hinweis: KI-Bilder sind in der EU in der Regel nicht urheberrechtlich geschützt – Mitbewerber dürften sie also

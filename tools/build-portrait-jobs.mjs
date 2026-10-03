@@ -33,7 +33,7 @@ const WORT = {
   'sukkubus/inkubus': 'succubus incubus', nachtmahr: 'nightmare horse', höllenhund: 'hell hound',
   // Himmlische und Feen
   deva: 'deva angel', planetar: 'planetar angel', solar: 'solar angel', couatl: 'couatl', einhorn: 'unicorn',
-  pegasus: 'pegasus', dryade: 'dryad', satyr: 'satyr', feengeist: 'sprite', drinne: 'sprite', baumhirte: 'treant',
+  pegasus: 'pegasus', dryade: 'dryad', satyr: 'satyr', feengeist: 'sprite', drinne: 'drider', baumhirte: 'treant',
   'erwachter baum': 'awakened tree', 'erwachter busch': 'awakened shrub', dschinni: 'djinni', ifriti: 'efreeti',
   // Humanoide
   adeliger: 'noble', akolyth: 'acolyte', assassine: 'assassin', bandit: 'bandit', banditenhauptmann: 'bandit captain',
@@ -42,7 +42,7 @@ const WORT = {
   schläger: 'thug', späher: 'scout', spion: 'spy', stammeskrieger: 'tribal warrior', veteran: 'veteran', wache: 'guard',
   goblin: 'goblin', hobgoblin: 'hobgoblin', kobold: 'kobold', gnoll: 'gnoll', ork: 'orc', oger: 'ogre', seeoger: 'merrow',
   troll: 'troll', ettin: 'ettin', duergar: 'duergar dwarf', 'drow (elf)': 'drow dark elf', echsenmensch: 'lizardfolk',
-  meervolk: 'merfolk', sahuagin: 'sahuagin', grimlock: 'grimlock', bullywug: 'bullywug', grottenschrat: 'kuo-toa',
+  meervolk: 'merfolk', sahuagin: 'sahuagin', grimlock: 'grimlock', bullywug: 'bullywug', grottenschrat: 'bugbear',
   'gnom, tiefengnom (svirfneblin)': 'deep gnome svirfneblin', zentaur: 'centaur', minotaurus: 'minotaur',
   medusa: 'medusa', harpyie: 'harpy', lamia: 'lamia', oni: 'oni ogre mage', 'grüne vettel': 'green hag',
   seevettel: 'sea hag', nachtvettel: 'night hag', doppelgänger: 'doppelganger', werbär: 'werebear',
@@ -82,7 +82,7 @@ const WORT = {
   homunkulus: 'homunculus', schildwächter: 'shield guardian', eisengolem: 'iron golem', lehmgolem: 'clay golem',
   fleischgolem: 'flesh golem', steingolem: 'stone golem', 'belebte rüstung': 'animated armor',
   'fliegendes schwert': 'flying sword', 'teppich des erstickens': 'rug of smothering',
-  'plapperndes hundertmaul': 'flameskull', 'modernder schlurfer': 'shambling mound', kreischer: 'shrieker fungus',
+  'plapperndes hundertmaul': 'gibbering mouther', 'modernder schlurfer': 'shambling mound', kreischer: 'shrieker fungus',
   'violetter pilz': 'violet fungus', gallertwürfel: 'gelatinous cube', grauschlick: 'gray ooze',
   ockergallerte: 'ochre jelly', 'schwarzer blob': 'black pudding',
 };

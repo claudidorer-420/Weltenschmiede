@@ -442,7 +442,7 @@
  {
   "id": "drinne",
   "name": "Drinne",
-  "en": "sprite",
+  "en": "drider",
   "size": "Groß",
   "type": "Monstrosität",
   "look": "with thick scaled hide",
@@ -1013,7 +1013,7 @@
  {
   "id": "grottenschrat",
   "name": "Grottenschrat",
-  "en": "kuo-toa",
+  "en": "bugbear",
   "size": "Mittelgroß",
   "type": "Humanoide (Goblinoide)",
   "look": "in fur and hide armour",
@@ -1884,7 +1884,7 @@
  {
   "id": "plapperndes-hundertmaul",
   "name": "Plapperndes Hundertmaul",
-  "en": "flameskull",
+  "en": "gibbering mouther",
   "size": "Mittelgroß",
   "type": "Aberration",
   "look": "in simple peasant clothes",
