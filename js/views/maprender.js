@@ -9,8 +9,11 @@ import { userAssetInfo, userAssetImage, userThumb, onUserAssets } from '../core/
 const ASSETS = (() => { try { return new URL('../../assets/', import.meta.url).href; } catch { return 'assets/'; } })();
 export const STAMP_BY_ID = new Map(STAMPS.map((s) => [s.id, s]));
 export const TEX_BY_ID = new Map(ALL_TEXTURES.map((t) => [t.id, t]));
-export const texUrl = (id, thumb = false) => `${ASSETS}tex/${thumb ? 't/' : ''}${id}.webp`;
-export const stampUrl = (id, thumb = false) => `${ASSETS}stamps/${thumb ? 't/' : ''}${id}.webp`;
+// v = Fingerabdruck des Bildinhalts (nur bei selbst erzeugten Bildern): der Service Worker hält Bilder dauerhaft im
+// Cache – ein ausgetauschtes Bild mit gleichem Namen käme sonst nie bei den Geräten an
+const mitV = (e) => (e?.v ? `?v=${e.v}` : '');
+export const texUrl = (id, thumb = false) => `${ASSETS}tex/${thumb ? 't/' : ''}${id}.webp${mitV(TEX_BY_ID.get(id))}`;
+export const stampUrl = (id, thumb = false) => `${ASSETS}stamps/${thumb ? 't/' : ''}${id}.webp${mitV(STAMP_BY_ID.get(id))}`;
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 

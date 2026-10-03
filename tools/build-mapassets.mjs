@@ -1,6 +1,7 @@
 // Erzeugt js/data/mapassets.js aus tools/mapassets.gen.json (Ergebnis des Stempel-Studios) und
 // tools/mapassets.src.json (Reihenfolge, Kategorien). Aufruf: node tools/build-mapassets.mjs
 import { readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 const src = JSON.parse(await readFile(new URL('./mapassets.src.json', import.meta.url), 'utf8'));
 const gen = JSON.parse(await readFile(new URL('./mapassets.gen.json', import.meta.url), 'utf8'));
@@ -9,6 +10,8 @@ let extra = { stamps: {}, textures: {} };
 try {
   extra = JSON.parse(await readFile(new URL('./sdxl/gen-assets.json', import.meta.url), 'utf8'));
 } catch { /* keine eigenen Erzeugnisse */ }
+// Selbst erzeugte Bilder können ausgetauscht werden: Fingerabdruck des Inhalts als v (die App hängt ?v= an die Adresse)
+const fingerabdruck = async (pfad) => { try { return createHash('md5').update(await readFile(new URL(pfad, import.meta.url))).digest('hex').slice(0, 8); } catch { return null; } };
 const order = new Map(src.models.map((m, i) => [m.id, i]));
 const torder = new Map(src.textures.map((t, i) => [t.id, i]));
 
@@ -23,10 +26,12 @@ const stamps = [...Object.values(gen.stamps || {}), ...Object.values(extra.stamp
     if (s.layer) r.layer = s.layer;
     return r;
   });
+for (const r of stamps) if (extra.stamps?.[r.id]) { const v = await fingerabdruck(`../assets/stamps/${r.id}.webp`); if (v) r.v = v; }
 const textures = [...Object.values(gen.textures || {}), ...Object.values(extra.textures || {})]
   .filter((t) => torder.has(t.id) || extra.textures?.[t.id])
   .sort((a, b) => (torder.get(a.id) ?? 1e6) - (torder.get(b.id) ?? 1e6))
   .map((t) => ({ id: t.id, name: t.name, cat: t.cat, m: t.m }));
+for (const t of textures) if (extra.textures?.[t.id]) { const v = await fingerabdruck(`../assets/tex/${t.id}.webp`); if (v) t.v = v; }
 
 const js = `// Generiert von tools/build-mapassets.mjs – nicht von Hand bearbeiten.
 // Stempel: 3D-Modelle von Poly Haven (CC0, polyhaven.com), von oben gerendert (tools/stamp-studio.html).

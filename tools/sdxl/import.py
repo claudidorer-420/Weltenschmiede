@@ -2,7 +2,7 @@
 # Texturen → assets/tex, Objekte → assets/stamps (jeweils WebP + Vorschau),
 # dazu tools/sdxl/gen-assets.json, das build-mapassets.mjs mit einliest.
 #
-# Aufruf (aus tools/sdxl):  .venv\Scripts\python.exe import.py [--only id1,id2]
+# Aufruf (aus tools/sdxl):  .venv\Scripts\python.exe import.py [--jobs x.json] [--only id1,id2] [--src out-mal]
 import argparse
 import json
 from pathlib import Path
@@ -10,7 +10,6 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT = Path(__file__).resolve().parent / "out"
 PPC = 255  # Pixel pro Feld (1,5 m bei 170 px/m) – wie im Stempel-Studio
 MAXPX = 1024
 THUMB = 96
@@ -25,7 +24,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jobs", default="jobs.json")
     ap.add_argument("--only", default="")
+    ap.add_argument("--src", default="out", help="Ordner mit den Ergebnissen (z. B. out-mal)")
     args = ap.parse_args()
+    out = Path(__file__).resolve().parent / args.src
     jobs = json.loads(Path(args.jobs).read_text(encoding="utf-8"))
     pick = set(x.strip() for x in args.only.split(",") if x.strip())
 
@@ -39,7 +40,7 @@ def main():
         if pick and jid not in pick:
             continue
         kind = job.get("kind", "object")
-        src = OUT / kind / f"{jid}.png"
+        src = out / kind / f"{jid}.png"
         if not src.exists():
             print(f"fehlt: {src.name}")
             continue

@@ -47,12 +47,12 @@ NEG_OBJ = NEG_COMMON + (
     "frame, border, vignette, drop shadow, cropped, cut off, out of frame"
 )
 # Gemalter Stil (Standard seit Runde 18): passt zu den übrigen Kartenobjekten und gemalten Karten – Fotos fielen heraus
-# Wichtig: CLIP liest nur 77 Token – deshalb Stil, Hintergrund und Draufsicht zuerst, die Objektbeschreibung zuletzt
-# (wird sie abgeschnitten, fehlen nur Einzelheiten, nicht der Stil oder der weiße Hintergrund fürs Freistellen)
+# Wichtig: CLIP liest nur 77 Token. Das Objekt steht zuerst (mit „battle map“ vorn malte SDXL ganze Kartenausschnitte
+# statt eines Gegenstands), danach kurz Stil und weißer Hintergrund, die Einzelheiten aus look zuletzt.
+# Neue Bilder entstehen inzwischen über den nutzerweiten Skill „bildschmiede“ (mehrere Modelle) – dies bleibt für alte Listen.
 OBJ_PROMPT_MAL = (
-    "hand-painted top-down fantasy battle map asset, digital painting, soft brush strokes, muted natural colours, "
-    "gentle shading, thin dark outline, isolated on plain white background, seen straight from above: "
-    "exactly one {en}, {look}"
+    "exactly one {en}, a single isolated object seen straight from above, hand-painted game asset, digital painting, "
+    "muted natural colours, soft shading, thin dark outline, plain white background: {look}"
 )
 NEG_MAL = (
     "text, watermark, signature, logo, caption, people, person, hands, blurry, low quality, jpeg artifacts, "
