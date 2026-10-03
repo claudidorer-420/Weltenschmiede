@@ -1,5 +1,5 @@
 # Kontaktbogen zur Sichtung: alle Ergebnisse eines Auftrags (Objekte auf dunklem Grund, Texturen 2×2 gekachelt).
-# Aufruf: .venv\Scripts\python.exe sheet.py jobs-stadt.json uebersicht-stadt.png [--cands id]
+# Aufruf: .venv\Scripts\python.exe sheet.py jobs-stadt.json uebersicht-stadt.png [ordner, Standard out]
 import json
 import sys
 from pathlib import Path
@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 jobs = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 dest = sys.argv[2]
+quelle = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("out")
 CELL = 300
 COLS = 6
 font = ImageFont.load_default(size=16) if hasattr(ImageFont, "load_default") else None
@@ -16,7 +17,7 @@ sheet = Image.new("RGB", (COLS * CELL, rows * (CELL + 24)), (34, 32, 40))
 d = ImageDraw.Draw(sheet)
 for i, j in enumerate(jobs):
     kind = j.get("kind", "object")
-    p = Path("out") / kind / f"{j['id']}.png"
+    p = quelle / kind / f"{j['id']}.png"
     x = (i % COLS) * CELL
     y = (i // COLS) * (CELL + 24)
     # Untergrund wie auf der Karte: Steinboden-artig grau-braun

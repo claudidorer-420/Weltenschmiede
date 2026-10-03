@@ -5,17 +5,16 @@
    "src": "folterbank",
    "name": "Folterbank",
    "cat": "dungeon",
-   "w": 1.6,
-   "h": 1.298,
-   "rough": 1
+   "w": 1.435,
+   "h": 1.596
   },
   "opferaltar": {
    "id": "opferaltar",
    "src": "opferaltar",
    "name": "Blutopfer-Altar",
    "cat": "dungeon",
-   "w": 2.0,
-   "h": 1.953,
+   "w": 1.886,
+   "h": 2.0,
    "block": 1
   },
   "hexenkessel_feuer": {
@@ -23,17 +22,16 @@
    "src": "hexenkessel_feuer",
    "name": "Hexenkessel über Feuer",
    "cat": "dungeon",
-   "w": 1.016,
-   "h": 1.098,
-   "rough": 1
+   "w": 1.09,
+   "h": 1.098
   },
   "skelett_boden": {
    "id": "skelett_boden",
    "src": "skelett_boden",
    "name": "Skelett am Boden",
    "cat": "dungeon",
-   "w": 1.4,
-   "h": 1.314,
+   "w": 1.38,
+   "h": 1.4,
    "layer": "floor"
   },
   "juwelentruhe": {
@@ -41,26 +39,24 @@
    "src": "juwelentruhe",
    "name": "Juwelentruhe",
    "cat": "behaelter",
-   "w": 0.824,
-   "h": 1.0,
-   "rough": 1
+   "w": 0.945,
+   "h": 1.0
   },
   "waffenstaender": {
    "id": "waffenstaender",
    "src": "waffenstaender",
    "name": "Waffenständer",
    "cat": "werkzeug",
-   "w": 1.988,
-   "h": 2.0,
-   "rough": 1
+   "w": 2.0,
+   "h": 1.09
   },
   "katapult": {
    "id": "katapult",
    "src": "katapult",
    "name": "Katapult",
    "cat": "werkzeug",
-   "w": 2.165,
-   "h": 2.4,
+   "w": 2.4,
+   "h": 1.824,
    "block": 1
   },
   "rammbock": {
@@ -68,9 +64,8 @@
    "src": "rammbock",
    "name": "Rammbock",
    "cat": "werkzeug",
-   "w": 3.0,
-   "h": 2.961,
-   "rough": 1
+   "w": 1.792,
+   "h": 3.0
   },
   "baerenfalle": {
    "id": "baerenfalle",
@@ -78,22 +73,22 @@
    "name": "Bärenfalle",
    "cat": "dungeon",
    "w": 0.8,
-   "h": 0.718
+   "h": 0.773
   },
   "kerzenleuchter_boden": {
    "id": "kerzenleuchter_boden",
    "src": "kerzenleuchter_boden",
    "name": "Bodenleuchter",
    "cat": "licht",
-   "w": 0.6,
-   "h": 0.565
+   "w": 0.545,
+   "h": 0.6
   },
   "galgen": {
    "id": "galgen",
    "src": "galgen",
    "name": "Galgen",
    "cat": "dungeon",
-   "w": 1.659,
+   "w": 2.0,
    "h": 2.0,
    "block": 1
   },
@@ -103,8 +98,7 @@
    "name": "Pranger",
    "cat": "dungeon",
    "w": 1.6,
-   "h": 1.243,
-   "rough": 1
+   "h": 1.533
   },
   "zauberbuch": {
    "id": "zauberbuch",
@@ -112,14 +106,14 @@
    "name": "Aufgeschlagenes Zauberbuch",
    "cat": "moebel",
    "w": 0.8,
-   "h": 0.714
+   "h": 0.659
   },
   "kristallkugel": {
    "id": "kristallkugel",
    "src": "kristallkugel",
    "name": "Kristallkugel",
    "cat": "moebel",
-   "w": 0.486,
+   "w": 0.557,
    "h": 0.6
   },
   "goldhaufen": {
@@ -127,8 +121,8 @@
    "src": "goldhaufen",
    "name": "Goldhaufen",
    "cat": "behaelter",
-   "w": 0.98,
-   "h": 1.0,
+   "w": 1.0,
+   "h": 0.969,
    "layer": "floor"
   },
   "stand_gemuese": {
@@ -136,8 +130,8 @@
    "src": "stand_gemuese",
    "name": "Gemüseauslage",
    "cat": "stadt",
-   "w": 1.698,
-   "h": 1.631,
+   "w": 1.643,
+   "h": 1.698,
    "block": 1
   },
   "stand_brot": {
@@ -145,8 +139,8 @@
    "src": "stand_brot",
    "name": "Brotauslage",
    "cat": "stadt",
-   "w": 1.596,
-   "h": 1.561,
+   "w": 1.541,
+   "h": 1.6,
    "block": 1
   },
   "stand_toepfer": {
@@ -154,8 +148,8 @@
    "src": "stand_toepfer",
    "name": "Töpferwaren",
    "cat": "stadt",
-   "w": 1.4,
-   "h": 1.6,
+   "w": 1.553,
+   "h": 1.596,
    "block": 1
   },
   "stand_gewuerze": {
@@ -164,7 +158,7 @@
    "name": "Gewürzauslage",
    "cat": "stadt",
    "w": 1.498,
-   "h": 1.247,
+   "h": 1.388,
    "block": 1
   },
   "haendlerzelt": {
@@ -172,7 +166,7 @@
    "src": "haendlerzelt",
    "name": "Händlerzelt (rund)",
    "cat": "stadt",
-   "w": 2.463,
+   "w": 2.533,
    "h": 2.6,
    "block": 1
   },
@@ -181,8 +175,8 @@
    "src": "handkarren",
    "name": "Handkarren",
    "cat": "stadt",
-   "w": 2.2,
-   "h": 1.322,
+   "w": 1.325,
+   "h": 2.2,
    "block": 1
   },
   "kornsaecke": {
@@ -190,8 +184,8 @@
    "src": "kornsaecke",
    "name": "Kornsäcke",
    "cat": "stadt",
-   "w": 1.298,
-   "h": 1.275,
+   "w": 1.239,
+   "h": 1.298,
    "rough": 1
   },
   "kistenstapel": {
@@ -199,8 +193,8 @@
    "src": "kistenstapel",
    "name": "Kisten",
    "cat": "stadt",
-   "w": 1.8,
-   "h": 1.773,
+   "w": 1.761,
+   "h": 1.8,
    "block": 1
   },
   "hackklotz": {
@@ -208,8 +202,8 @@
    "src": "hackklotz",
    "name": "Hackklotz",
    "cat": "werkzeug",
-   "w": 0.898,
-   "h": 0.824,
+   "w": 0.894,
+   "h": 0.898,
    "rough": 1
   },
   "pferdetraenke": {
@@ -218,7 +212,7 @@
    "name": "Holztrog",
    "cat": "stadt",
    "w": 1.8,
-   "h": 1.722,
+   "h": 0.667,
    "block": 1
   },
   "stadtbrunnen": {
@@ -226,8 +220,8 @@
    "src": "stadtbrunnen",
    "name": "Stadtbrunnen",
    "cat": "stadt",
-   "w": 2.6,
-   "h": 2.557,
+   "w": 2.584,
+   "h": 2.6,
    "block": 1
   },
   "gemuesebeet": {
@@ -235,8 +229,8 @@
    "src": "gemuesebeet",
    "name": "Salatbeet",
    "cat": "natur",
-   "w": 1.796,
-   "h": 1.8,
+   "w": 1.404,
+   "h": 1.796,
    "rough": 1,
    "layer": "floor"
   },
@@ -245,8 +239,8 @@
    "src": "grab_platte",
    "name": "Grabplatte (bemoost)",
    "cat": "deko",
-   "w": 1.4,
-   "h": 1.373,
+   "w": 1.067,
+   "h": 1.4,
    "layer": "floor"
   },
   "windmuehle": {
@@ -254,8 +248,8 @@
    "src": "windmuehle",
    "name": "Windmühle",
    "cat": "bau",
-   "w": 3.988,
-   "h": 4.016,
+   "w": 3.671,
+   "h": 4.0,
    "block": 1
   },
   "segelboot": {
@@ -263,8 +257,8 @@
    "src": "segelboot",
    "name": "Segelboot",
    "cat": "bau",
-   "w": 1.184,
-   "h": 4.016,
+   "w": 1.267,
+   "h": 4.0,
    "block": 1
   },
   "pavillon": {
@@ -273,7 +267,7 @@
    "name": "Pavillon",
    "cat": "bau",
    "w": 3.0,
-   "h": 2.965,
+   "h": 2.8,
    "block": 1
   },
   "stand_stoffe": {
@@ -281,8 +275,8 @@
    "src": "stand_stoffe",
    "name": "Marktstand (gestreift)",
    "cat": "stadt",
-   "w": 1.898,
-   "h": 2.0,
+   "w": 2.0,
+   "h": 1.463,
    "block": 1
   },
   "stand_fisch": {
@@ -290,7 +284,7 @@
    "src": "stand_fisch",
    "name": "Marktstand (grün)",
    "cat": "stadt",
-   "w": 1.804,
+   "w": 1.671,
    "h": 2.0,
    "block": 1
   },
@@ -300,7 +294,7 @@
    "name": "Marktstand (Plane)",
    "cat": "stadt",
    "w": 2.0,
-   "h": 1.835,
+   "h": 1.745,
    "block": 1
   },
   "heuhaufen": {
@@ -308,8 +302,8 @@
    "src": "heuhaufen",
    "name": "Heuhaufen",
    "cat": "stadt",
-   "w": 1.698,
-   "h": 1.663,
+   "w": 1.639,
+   "h": 1.698,
    "rough": 1
   },
   "heuballen": {
@@ -318,7 +312,7 @@
    "name": "Strohballen",
    "cat": "stadt",
    "w": 1.8,
-   "h": 1.722,
+   "h": 0.808,
    "block": 1
   },
   "amboss": {
@@ -326,8 +320,8 @@
    "src": "amboss",
    "name": "Amboss",
    "cat": "werkzeug",
-   "w": 0.949,
-   "h": 1.0,
+   "w": 1.0,
+   "h": 0.992,
    "block": 1
   },
   "schmiedeesse": {
@@ -335,8 +329,8 @@
    "src": "schmiedeesse",
    "name": "Schmiedeesse",
    "cat": "werkzeug",
-   "w": 1.753,
-   "h": 1.8,
+   "w": 1.8,
+   "h": 1.675,
    "block": 1
   },
   "huehnerstall": {
@@ -345,7 +339,7 @@
    "name": "Hühnerstall",
    "cat": "stadt",
    "w": 2.0,
-   "h": 1.341,
+   "h": 1.184,
    "block": 1
   },
   "fischernetz": {
@@ -354,7 +348,7 @@
    "name": "Fischernetz",
    "cat": "stadt",
    "w": 2.2,
-   "h": 2.2,
+   "h": 2.129,
    "layer": "floor"
   },
   "bienenkorb": {
@@ -362,8 +356,8 @@
    "src": "bienenkorb",
    "name": "Bienenkorb",
    "cat": "stadt",
-   "w": 0.773,
-   "h": 0.8,
+   "w": 0.8,
+   "h": 0.788,
    "block": 1
   }
  },
